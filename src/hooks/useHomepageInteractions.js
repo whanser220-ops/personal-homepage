@@ -5,7 +5,6 @@ import { initHeroAnim, playIntro } from "../modules/hero.js";
 import { initHighlightsAnim } from "../modules/highlights.js";
 import { initNav } from "../modules/nav.js";
 import { initRevealAnim } from "../modules/reveal.js";
-import { initScoreAnim } from "../modules/score.js";
 
 function runCleanup(cleanup) {
   if (typeof cleanup === "function") {
@@ -21,7 +20,6 @@ export function useHomepageInteractions() {
     const rippleCleanup = initButtonRipples();
     const highlights = initHighlightsAnim({ playIntro });
     const cardsCleanup = initCardsAnim({ updateProgress: highlights.updateProgress });
-    const scoreCleanup = initScoreAnim();
 
     playIntro();
 
@@ -32,7 +30,6 @@ export function useHomepageInteractions() {
       runCleanup(rippleCleanup);
       runCleanup(highlights.cleanup);
       runCleanup(cardsCleanup);
-      runCleanup(scoreCleanup);
     };
   }, []);
 }
