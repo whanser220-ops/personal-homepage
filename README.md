@@ -2,6 +2,18 @@
 
 这是一个从零开始学习全栈开发的静态网页案例。当前版本只使用 HTML、CSS 和 JavaScript，适合先理解浏览器、静态资源、GitHub 托管和 Nginx 部署流程。
 
+线上地址：
+
+```text
+http://1.117.232.198/
+```
+
+GitHub 仓库：
+
+```text
+https://github.com/whanser220-ops/personal-homepage
+```
+
 ## 项目结构
 
 ```text
@@ -9,8 +21,10 @@
 ├── index.html
 ├── styles.css
 ├── script.js
-└── assets/
-    └── hero-workspace.png
+├── assets/
+│   └── hero-workspace.png
+└── deploy/
+    └── nginx-personal-homepage.conf
 ```
 
 ## 本地预览
@@ -44,7 +58,7 @@ http://localhost:8080
 ```nginx
 server {
     listen 80;
-    server_name _;
+    server_name 1.117.232.198;
     root /var/www/personal-homepage;
     index index.html;
 
