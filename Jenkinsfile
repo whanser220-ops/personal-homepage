@@ -38,7 +38,7 @@ for attempt in 1 2 3; do
         -o ServerAliveInterval=10 \
         -o ServerAliveCountMax=3 \
         "$DEPLOY_SSH_USER@$DEPLOY_HOST" \
-        "cd '$DEPLOY_PATH' && BRANCH='$DEPLOY_BRANCH' bash deploy/deploy-from-git.sh"; then
+        "cd '$DEPLOY_PATH' && git fetch origin '$DEPLOY_BRANCH' && git checkout '$DEPLOY_BRANCH' && git pull --ff-only origin '$DEPLOY_BRANCH' && BRANCH='$DEPLOY_BRANCH' bash deploy/deploy-from-git.sh"; then
         exit 0
     fi
 
