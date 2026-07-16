@@ -20,7 +20,16 @@ https://github.com/whanser220-ops/personal-homepage
 .
 ├── index.html
 ├── styles.css
-├── script.js
+├── js/
+│   ├── anime.js
+│   ├── buttons.js
+│   ├── cards.js
+│   ├── hero.js
+│   ├── highlights.js
+│   ├── main.js
+│   ├── nav.js
+│   ├── reveal.js
+│   └── score.js
 ├── assets/
 │   └── hero-workspace.png
 └── deploy/
@@ -71,6 +80,7 @@ server {
 ## 当前 JavaScript 实现点
 
 - 使用 Anime.js 做首页入场动画、滚动出现动画、卡片 hover 动效和按钮点击涟漪。
-- 使用 Module CDN 在 `script.js` 中导入 `animate` 和 `stagger`。
+- 使用 Module CDN 在 `js/anime.js` 和 `js/score.js` 中导入 Anime.js 能力。
+- 使用 `js/main.js` 作为入口文件，按导航、卡片、亮点、按钮等功能拆分模块。
 - 使用 IntersectionObserver 维护当前导航高亮和滚动触发动画。
 - 使用 DOM 事件更新“亮点”区的进度条、计数器和主页状态。
