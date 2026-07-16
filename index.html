@@ -16,6 +16,7 @@
       <nav class="site-nav" aria-label="主导航">
         <a href="#about">关于</a>
         <a href="#stack">技术栈</a>
+        <a href="#lab">动画实验</a>
         <a href="#projects">项目</a>
         <a href="#contact">联系</a>
       </nav>
@@ -65,26 +66,114 @@
           <h2>当前学习内容</h2>
         </div>
         <div class="card-grid">
-          <article class="info-card">
+          <article
+            class="info-card"
+            data-topic="html"
+            data-progress="30"
+            role="button"
+            tabindex="0"
+            aria-label="关注 HTML 学习进度"
+          >
             <span class="card-index">01</span>
             <h3>HTML</h3>
             <p>组织网页结构，理解标题、段落、链接、图片和语义化标签。</p>
           </article>
-          <article class="info-card">
+          <article
+            class="info-card"
+            data-topic="css"
+            data-progress="48"
+            role="button"
+            tabindex="0"
+            aria-label="关注 CSS 学习进度"
+          >
             <span class="card-index">02</span>
             <h3>CSS</h3>
             <p>控制页面排版、颜色、响应式布局和不同屏幕尺寸下的显示效果。</p>
           </article>
-          <article class="info-card">
+          <article
+            class="info-card"
+            data-topic="js"
+            data-progress="64"
+            role="button"
+            tabindex="0"
+            aria-label="关注 JavaScript 学习进度"
+          >
             <span class="card-index">03</span>
             <h3>JavaScript</h3>
             <p>添加少量交互，例如动态年份、导航状态和后续的表单逻辑。</p>
           </article>
-          <article class="info-card">
+          <article
+            class="info-card"
+            data-topic="deploy"
+            data-progress="82"
+            role="button"
+            tabindex="0"
+            aria-label="关注部署学习进度"
+          >
             <span class="card-index">04</span>
             <h3>部署</h3>
             <p>用 GitHub 保存代码，用 Nginx 把服务器上的静态文件返回给访问者。</p>
           </article>
+        </div>
+      </section>
+
+      <section id="lab" class="section lab-section">
+        <div class="section-heading">
+          <p class="eyebrow">Animation lab</p>
+          <h2>把 JavaScript 变成可见的交互练习</h2>
+        </div>
+        <div class="lab-layout">
+          <div class="lab-panel">
+            <p class="lab-label">当前学习进度</p>
+            <div class="progress-summary">
+              <strong id="progressValue">42%</strong>
+              <span id="progressLabel" aria-live="polite">静态页面与部署基础</span>
+            </div>
+            <div
+              class="progress-track"
+              role="progressbar"
+              aria-label="全栈学习进度"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="42"
+            >
+              <span id="progressFill" class="progress-fill"></span>
+            </div>
+            <div class="metric-grid" aria-label="学习数据">
+              <div class="metric">
+                <strong data-counter data-target="4">0</strong>
+                <span>模块</span>
+              </div>
+              <div class="metric">
+                <strong data-counter data-target="12">0</strong>
+                <span>交互点</span>
+              </div>
+              <div class="metric">
+                <strong data-counter data-target="100">0</strong>
+                <span>静态部署</span>
+              </div>
+            </div>
+          </div>
+          <div class="lab-panel">
+            <div class="lab-actions">
+              <button class="button primary" id="playIntro" type="button">重播入场</button>
+              <button class="button secondary" id="shuffleFocus" type="button">切换重点</button>
+            </div>
+            <div class="focus-list" aria-label="学习重点">
+              <button class="focus-item is-active" type="button" data-focus="静态页面与部署基础" data-progress="42">
+                <span>当前</span>
+                <strong>HTML / CSS / Nginx</strong>
+              </button>
+              <button class="focus-item" type="button" data-focus="增加浏览器端交互" data-progress="64">
+                <span>进行中</span>
+                <strong>JavaScript / Anime.js</strong>
+              </button>
+              <button class="focus-item" type="button" data-focus="下一阶段接入后端接口" data-progress="76">
+                <span>下一步</span>
+                <strong>表单 / API / 数据库</strong>
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -131,6 +220,6 @@
       <span>Static site served by Nginx</span>
     </footer>
 
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
   </body>
 </html>
