@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Huang 的个人主页，一个用于学习 HTML、CSS、JavaScript、GitHub 和 Nginx 部署的静态网页案例。"
+      content="Huang 的个人主页，展示个人介绍、能力方向、项目作品和联系方式。"
     />
     <title>Huang 的个人主页</title>
     <link rel="stylesheet" href="styles.css" />
@@ -15,8 +15,8 @@
       <a class="brand" href="#home" aria-label="返回首页">Huang</a>
       <nav class="site-nav" aria-label="主导航">
         <a href="#about">关于</a>
-        <a href="#stack">技术栈</a>
-        <a href="#lab">动画实验</a>
+        <a href="#stack">能力</a>
+        <a href="#lab">亮点</a>
         <a href="#projects">项目</a>
         <a href="#contact">联系</a>
       </nav>
@@ -25,14 +25,14 @@
     <main id="home">
       <section class="hero">
         <div class="hero-content">
-          <p class="eyebrow">Full-stack learning path</p>
-          <h1>你好，我正在用一个个人主页学习全栈开发。</h1>
+          <p class="eyebrow">Personal homepage</p>
+          <h1>Huang，专注把想法做成清晰可用的 Web 体验。</h1>
           <p class="hero-copy">
-            这个网站从最基础的静态页面开始：先写 HTML、CSS 和 JavaScript，
-            再把代码托管到 GitHub，最后部署到云服务器上的 Nginx。
+            我关注界面表达、交互细节和代码结构，希望每个作品都能被快速理解、
+            顺畅使用，并在后续迭代中持续变得更完整。
           </p>
           <div class="hero-actions">
-            <a class="button primary" href="#projects">查看学习项目</a>
+            <a class="button primary" href="#projects">查看项目</a>
             <a class="button secondary" href="#contact">联系我</a>
           </div>
         </div>
@@ -47,15 +47,16 @@
       <section id="about" class="section">
         <div class="section-heading">
           <p class="eyebrow">About</p>
-          <h2>从静态网页理解 Web 的入口</h2>
+          <h2>关于我</h2>
         </div>
         <div class="split-layout">
           <p>
-            我会把这个主页当作一个长期练习项目：每学会一个新知识，就给网站增加一个小功能。
-            当前版本只包含静态资源，浏览器打开 `index.html` 就能运行。
+            我是一名正在持续积累作品的开发者，喜欢把想法拆成清晰的页面、
+            可操作的功能和可以长期维护的代码。
           </p>
           <p>
-            后续可以逐步加入表单、接口、数据库、登录、后台管理和自动化部署，让它从静态页面演进成完整应用。
+            这个主页会随着项目经验不断更新：从个人介绍、作品展示，到更完整的交互、
+            内容管理和线上服务能力，逐步形成一个真正可用的个人入口。
           </p>
         </div>
       </section>
@@ -63,86 +64,86 @@
       <section id="stack" class="section muted">
         <div class="section-heading">
           <p class="eyebrow">Stack</p>
-          <h2>当前学习内容</h2>
+          <h2>能力方向</h2>
         </div>
         <div class="card-grid">
           <article
             class="info-card"
-            data-topic="html"
+            data-topic="interface"
             data-progress="30"
             role="button"
             tabindex="0"
-            aria-label="关注 HTML 学习进度"
+            aria-label="查看界面表达能力"
           >
             <span class="card-index">01</span>
-            <h3>HTML</h3>
-            <p>组织网页结构，理解标题、段落、链接、图片和语义化标签。</p>
+            <h3>界面表达</h3>
+            <p>用清晰的层级、排版和视觉节奏，把信息组织成容易阅读的页面。</p>
           </article>
           <article
             class="info-card"
-            data-topic="css"
+            data-topic="interaction"
             data-progress="48"
             role="button"
             tabindex="0"
-            aria-label="关注 CSS 学习进度"
+            aria-label="查看交互实现能力"
           >
             <span class="card-index">02</span>
-            <h3>CSS</h3>
-            <p>控制页面排版、颜色、响应式布局和不同屏幕尺寸下的显示效果。</p>
+            <h3>交互实现</h3>
+            <p>用 JavaScript 和动画增强反馈，让页面状态变化更自然、更可感知。</p>
           </article>
           <article
             class="info-card"
-            data-topic="js"
+            data-topic="engineering"
             data-progress="64"
             role="button"
             tabindex="0"
-            aria-label="关注 JavaScript 学习进度"
+            aria-label="查看工程结构能力"
           >
             <span class="card-index">03</span>
-            <h3>JavaScript</h3>
-            <p>添加少量交互，例如动态年份、导航状态和后续的表单逻辑。</p>
+            <h3>工程结构</h3>
+            <p>把页面、样式、脚本和部署配置分层管理，保持项目容易扩展。</p>
           </article>
           <article
             class="info-card"
-            data-topic="deploy"
+            data-topic="delivery"
             data-progress="82"
             role="button"
             tabindex="0"
-            aria-label="关注部署学习进度"
+            aria-label="查看上线交付能力"
           >
             <span class="card-index">04</span>
-            <h3>部署</h3>
-            <p>用 GitHub 保存代码，用 Nginx 把服务器上的静态文件返回给访问者。</p>
+            <h3>上线交付</h3>
+            <p>把代码托管、服务器部署和线上验证串起来，让作品可以被访问。</p>
           </article>
         </div>
       </section>
 
       <section id="lab" class="section lab-section">
         <div class="section-heading">
-          <p class="eyebrow">Animation lab</p>
-          <h2>把 JavaScript 变成可见的交互练习</h2>
+          <p class="eyebrow">Highlights</p>
+          <h2>当前主页状态</h2>
         </div>
         <div class="lab-layout">
           <div class="lab-panel">
-            <p class="lab-label">当前学习进度</p>
+            <p class="lab-label">作品集完善度</p>
             <div class="progress-summary">
               <strong id="progressValue">42%</strong>
-              <span id="progressLabel" aria-live="polite">静态页面与部署基础</span>
+              <span id="progressLabel" aria-live="polite">正在整理个人介绍</span>
             </div>
             <div
               class="progress-track"
               role="progressbar"
-              aria-label="全栈学习进度"
+              aria-label="作品集完善度"
               aria-valuemin="0"
               aria-valuemax="100"
               aria-valuenow="42"
             >
               <span id="progressFill" class="progress-fill"></span>
             </div>
-            <div class="metric-grid" aria-label="学习数据">
+            <div class="metric-grid" aria-label="主页数据">
               <div class="metric">
                 <strong data-counter data-target="4">0</strong>
-                <span>模块</span>
+                <span>版块</span>
               </div>
               <div class="metric">
                 <strong data-counter data-target="12">0</strong>
@@ -150,27 +151,27 @@
               </div>
               <div class="metric">
                 <strong data-counter data-target="100">0</strong>
-                <span>静态部署</span>
+                <span>可访问</span>
               </div>
             </div>
           </div>
           <div class="lab-panel">
             <div class="lab-actions">
               <button class="button primary" id="playIntro" type="button">重播入场</button>
-              <button class="button secondary" id="shuffleFocus" type="button">切换重点</button>
+              <button class="button secondary" id="shuffleFocus" type="button">切换状态</button>
             </div>
-            <div class="focus-list" aria-label="学习重点">
-              <button class="focus-item is-active" type="button" data-focus="静态页面与部署基础" data-progress="42">
+            <div class="focus-list" aria-label="主页状态">
+              <button class="focus-item is-active" type="button" data-focus="正在整理个人介绍" data-progress="42">
                 <span>当前</span>
-                <strong>HTML / CSS / Nginx</strong>
+                <strong>个人简介与视觉风格</strong>
               </button>
-              <button class="focus-item" type="button" data-focus="增加浏览器端交互" data-progress="64">
+              <button class="focus-item" type="button" data-focus="正在补充作品案例" data-progress="64">
                 <span>进行中</span>
-                <strong>JavaScript / Anime.js</strong>
+                <strong>项目展示与交互反馈</strong>
               </button>
-              <button class="focus-item" type="button" data-focus="下一阶段接入后端接口" data-progress="76">
+              <button class="focus-item" type="button" data-focus="准备接入更多内容入口" data-progress="76">
                 <span>下一步</span>
-                <strong>表单 / API / 数据库</strong>
+                <strong>联系表单与内容管理</strong>
               </button>
             </div>
           </div>
@@ -180,23 +181,23 @@
       <section id="projects" class="section">
         <div class="section-heading">
           <p class="eyebrow">Projects</p>
-          <h2>学习路线</h2>
+          <h2>项目作品</h2>
         </div>
-        <div class="timeline" aria-label="学习路线">
+        <div class="timeline" aria-label="项目作品">
           <div class="timeline-item">
-            <span>已完成</span>
-            <h3>静态个人主页</h3>
-            <p>使用 HTML、CSS 和 JavaScript 搭建第一版页面。</p>
+            <span>线上</span>
+            <h3>个人主页</h3>
+            <p>一个用于展示个人介绍、能力方向和项目入口的响应式网站。</p>
           </div>
           <div class="timeline-item">
-            <span>下一步</span>
-            <h3>表单与后端接口</h3>
-            <p>添加留言表单，并使用后端接口保存数据。</p>
+            <span>整理中</span>
+            <h3>Web 工具雏形</h3>
+            <p>把常用流程做成小工具，强调明确输入、即时反馈和稳定输出。</p>
           </div>
           <div class="timeline-item">
             <span>计划中</span>
-            <h3>数据库与登录</h3>
-            <p>接入数据库，练习用户认证、权限和管理后台。</p>
+            <h3>内容管理后台</h3>
+            <p>为作品、文章和联系信息准备一个更容易维护的管理入口。</p>
           </div>
         </div>
       </section>
@@ -204,9 +205,9 @@
       <section id="contact" class="section contact-section">
         <div>
           <p class="eyebrow">Contact</p>
-          <h2>欢迎一起交流学习过程</h2>
+          <h2>保持联系</h2>
           <p>
-            你可以把这里替换成自己的邮箱、GitHub、博客或作品集链接。
+            如果你想交流项目、合作机会或作品反馈，可以先通过 GitHub 找到我。
           </p>
         </div>
         <a class="button primary" href="https://github.com/whanser220-ops" rel="noreferrer" target="_blank">
@@ -217,7 +218,7 @@
 
     <footer class="site-footer">
       <span>© <span id="year"></span> Huang</span>
-      <span>Static site served by Nginx</span>
+      <span>Built with HTML, CSS and JavaScript</span>
     </footer>
 
     <script type="module" src="script.js"></script>

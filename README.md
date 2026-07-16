@@ -1,6 +1,6 @@
 # 个人主页
 
-这是一个从零开始学习全栈开发的静态网页案例。当前版本使用 HTML、CSS、JavaScript 和 Anime.js，适合先理解浏览器、静态资源、GitHub 托管和 Nginx 部署流程。
+这是 Huang 的个人主页项目。页面本身用于展示个人介绍、能力方向、项目作品和联系方式；仓库的迭代过程用于观察一个 Web 项目如何逐步扩展工程结构、交互脚本和部署流程。
 
 线上地址：
 
@@ -68,9 +68,9 @@ server {
 }
 ```
 
-## 当前 JavaScript 练习点
+## 当前 JavaScript 实现点
 
 - 使用 Anime.js 做首页入场动画、滚动出现动画、卡片 hover 动效和按钮点击涟漪。
 - 使用 Module CDN 在 `script.js` 中导入 `animate` 和 `stagger`。
 - 使用 IntersectionObserver 维护当前导航高亮和滚动触发动画。
-- 使用 DOM 事件更新“动画实验”区的进度条、计数器和学习重点。
+- 使用 DOM 事件更新“亮点”区的进度条、计数器和主页状态。

@@ -159,7 +159,7 @@ const updateProgress = (targetProgress, label) => {
 
 const setFocus = (item) => {
   const nextProgress = Number.parseInt(item.dataset.progress ?? "42", 10);
-  const nextLabel = item.dataset.focus ?? "静态页面与部署基础";
+  const nextLabel = item.dataset.focus ?? "正在整理个人介绍";
 
   focusItems.forEach((button) => button.classList.remove("is-active"));
   item.classList.add("is-active");
@@ -200,7 +200,7 @@ const setupInfoCardInteractions = () => {
   infoCards.forEach((card) => {
     const focusCard = () => {
       const cardProgress = Number.parseInt(card.dataset.progress ?? "42", 10);
-      const cardTitle = card.querySelector("h3")?.textContent ?? "学习模块";
+      const cardTitle = card.querySelector("h3")?.textContent ?? "能力模块";
       updateProgress(cardProgress, `正在关注 ${cardTitle}`);
     };
 
