@@ -3,17 +3,17 @@ import { animate, stagger } from "animejs";
 
 const canAnimate = typeof animate === "function";
 const canStagger = typeof stagger === "function";
-const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-document.documentElement.dataset.anime = canAnimate ? "ready" : "fallback";
-document.documentElement.dataset.motion = reduceMotion ? "reduced" : "enhanced";
 
 function staggerDelay(step) {
   return canStagger ? stagger(step) : (_, index) => index * step;
 }
 
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 function runAnimation(target, params) {
-  if (!canAnimate || reduceMotion) {
+  if (!canAnimate || prefersReducedMotion()) {
     return null;
   }
 
@@ -25,7 +25,7 @@ function animateNumber(element, toValue, suffix = "") {
     return;
   }
 
-  if (!canAnimate || reduceMotion) {
+  if (!canAnimate || prefersReducedMotion()) {
     element.textContent = `${toValue}${suffix}`;
     return;
   }
@@ -149,7 +149,7 @@ function initRevealAnim() {
 function initHeroAnim() {
   const heroImage = document.querySelector(".hero-media img");
 
-  if (!heroImage || reduceMotion) {
+  if (!heroImage || prefersReducedMotion()) {
     return undefined;
   }
 
@@ -198,7 +198,7 @@ function initHeroAnim() {
 function initButtonRipples() {
   const subscriptions = [...document.querySelectorAll(".button")].map((button) => {
     const handleClick = (event) => {
-      if (!canAnimate || reduceMotion) {
+      if (!canAnimate || prefersReducedMotion()) {
         return;
       }
 
@@ -247,7 +247,7 @@ function initHighlightsAnim() {
       return;
     }
 
-    if (!canAnimate || reduceMotion) {
+    if (!canAnimate || prefersReducedMotion()) {
       progressFill.style.width = `${targetProgress}%`;
       return;
     }
@@ -373,6 +373,9 @@ function initCardsAnim({ updateProgress } = {}) {
 
 export function useHomepageInteractions() {
   useEffect(() => {
+    document.documentElement.dataset.anime = canAnimate ? "ready" : "fallback";
+    document.documentElement.dataset.motion = prefersReducedMotion() ? "reduced" : "enhanced";
+
     const navCleanup = initNav();
     const heroCleanup = initHeroAnim();
     const revealCleanup = initRevealAnim();

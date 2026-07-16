@@ -3,6 +3,7 @@ set -euo pipefail
 
 BRANCH="${BRANCH:-main}"
 WEB_ROOT="${WEB_ROOT:-/var/www/personal-homepage}"
+BUILD_OUTPUT="${BUILD_OUTPUT:-out}"
 
 cd "$(dirname "$0")/.."
 
@@ -15,7 +16,7 @@ npm run build
 
 sudo install -d -m 0755 -o www-data -g www-data "$WEB_ROOT"
 sudo find "$WEB_ROOT" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
-sudo cp -a dist/. "$WEB_ROOT"/
+sudo cp -a "$BUILD_OUTPUT"/. "$WEB_ROOT"/
 sudo chown -R www-data:www-data "$WEB_ROOT"
 
 echo "Deployed $(git rev-parse --short HEAD) to $WEB_ROOT"
