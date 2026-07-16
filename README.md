@@ -71,13 +71,69 @@ npm run build
 
 服务器上的 Nginx 监听 80 端口。浏览器访问服务器 IP 时，请求先到达 Nginx，Nginx 根据站点配置里的 `root` 找到网页目录，再把 `index.html`、CSS、JS 和图片返回给浏览器。
 
-本项目部署目录：
+本项目在服务器上使用两个目录：
+
+```text
+/opt/personal-homepage
+```
+
+Git 工作副本，负责 `git pull`、安装依赖和构建。
 
 ```text
 /var/www/personal-homepage
 ```
 
-部署时上传 Vite 生成的 `dist/` 内容。
+Nginx 静态站点根目录，只保存 `npm run build` 生成的 `dist/` 内容。
+
+## 标准开发流程
+
+本项目后续按分支和 PR 流程推进：
+
+```powershell
+git switch -c codex/feature-name
+npm install
+npm run dev
+npm run build
+git add -A
+git commit -m "Describe the change"
+git push -u origin codex/feature-name
+```
+
+然后在 GitHub 创建 Pull Request，检查无误后合并到 `main`。
+
+## 服务器拉代码部署
+
+首次在服务器准备 Git 工作副本：
+
+```bash
+sudo install -d -m 0755 -o ubuntu -g ubuntu /opt/personal-homepage
+git clone https://github.com/whanser220-ops/personal-homepage.git /opt/personal-homepage
+cd /opt/personal-homepage
+```
+
+每次 PR 合并后，在服务器执行：
+
+```bash
+cd /opt/personal-homepage
+bash deploy/deploy-from-git.sh
+```
+
+脚本会执行：
+
+```text
+git fetch origin main
+git checkout main
+git pull --ff-only origin main
+npm ci
+npm run build
+copy dist/ to /var/www/personal-homepage
+```
+
+Nginx 站点目录：
+
+```text
+/var/www/personal-homepage
+```
 
 对应的 Nginx 配置核心逻辑：
 
