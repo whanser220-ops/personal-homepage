@@ -19,37 +19,52 @@ https://github.com/whanser220-ops/personal-homepage
 ```text
 .
 ├── index.html
-├── styles.css
-├── js/
-│   ├── anime.js
-│   ├── buttons.js
-│   ├── cards.js
-│   ├── hero.js
-│   ├── highlights.js
+├── package.json
+├── src/
 │   ├── main.js
-│   ├── nav.js
-│   ├── reveal.js
-│   └── score.js
-├── assets/
-│   └── hero-workspace.png
+│   ├── styles.css
+│   └── modules/
+│       ├── anime.js
+│       ├── buttons.js
+│       ├── cards.js
+│       ├── hero.js
+│       ├── highlights.js
+│       ├── nav.js
+│       ├── reveal.js
+│       └── score.js
+├── public/
+│   └── assets/
+│       └── hero-workspace.png
 └── deploy/
     └── nginx-personal-homepage.conf
 ```
 
 ## 本地预览
 
-推荐通过本地 HTTP 服务预览，这样 Module CDN 脚本和静态资源的加载方式更接近线上环境。
+推荐通过 Vite 开发服务器预览，这样模块导入、依赖解析和静态资源路径都更接近现代前端项目。
 
-如果想通过本地 HTTP 服务预览，可以运行：
+安装依赖：
 
 ```powershell
-python -m http.server 8080
+npm install
+```
+
+启动开发服务器：
+
+```powershell
+npm run dev
 ```
 
 然后访问：
 
 ```text
-http://localhost:8080
+http://localhost:5173
+```
+
+构建生产版本：
+
+```powershell
+npm run build
 ```
 
 ## Nginx 部署思路
@@ -61,6 +76,8 @@ http://localhost:8080
 ```text
 /var/www/personal-homepage
 ```
+
+部署时上传 Vite 生成的 `dist/` 内容。
 
 对应的 Nginx 配置核心逻辑：
 
@@ -80,7 +97,8 @@ server {
 ## 当前 JavaScript 实现点
 
 - 使用 Anime.js 做首页入场动画、滚动出现动画、卡片 hover 动效和按钮点击涟漪。
-- 使用 Module CDN 在 `js/anime.js` 和 `js/score.js` 中导入 Anime.js 能力。
-- 使用 `js/main.js` 作为入口文件，按导航、卡片、亮点、按钮等功能拆分模块。
+- 使用 Vite 管理开发服务器、模块解析和生产构建。
+- 使用 npm 依赖在 `src/modules/anime.js` 和 `src/modules/score.js` 中导入 Anime.js 能力。
+- 使用 `src/main.js` 作为入口文件，按导航、卡片、亮点、按钮等功能拆分模块。
 - 使用 IntersectionObserver 维护当前导航高亮和滚动触发动画。
 - 使用 DOM 事件更新“亮点”区的进度条、计数器和主页状态。
