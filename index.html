@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Huang 的个人主页，一个用于学习 HTML、CSS、JavaScript、GitHub 和 Nginx 部署的静态网页案例。"
+    />
+    <title>Huang 的个人主页</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#home" aria-label="返回首页">Huang</a>
+      <nav class="site-nav" aria-label="主导航">
+        <a href="#about">关于</a>
+        <a href="#stack">技术栈</a>
+        <a href="#projects">项目</a>
+        <a href="#contact">联系</a>
+      </nav>
+    </header>
+
+    <main id="home">
+      <section class="hero">
+        <div class="hero-content">
+          <p class="eyebrow">Full-stack learning path</p>
+          <h1>你好，我正在用一个个人主页学习全栈开发。</h1>
+          <p class="hero-copy">
+            这个网站从最基础的静态页面开始：先写 HTML、CSS 和 JavaScript，
+            再把代码托管到 GitHub，最后部署到云服务器上的 Nginx。
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#projects">查看学习项目</a>
+            <a class="button secondary" href="#contact">联系我</a>
+          </div>
+        </div>
+        <figure class="hero-media">
+          <img
+            src="assets/hero-workspace.png"
+            alt="一张现代开发者工作台插画，桌上有电脑、笔记本和绿植。"
+          />
+        </figure>
+      </section>
+
+      <section id="about" class="section">
+        <div class="section-heading">
+          <p class="eyebrow">About</p>
+          <h2>从静态网页理解 Web 的入口</h2>
+        </div>
+        <div class="split-layout">
+          <p>
+            我会把这个主页当作一个长期练习项目：每学会一个新知识，就给网站增加一个小功能。
+            当前版本只包含静态资源，浏览器打开 `index.html` 就能运行。
+          </p>
+          <p>
+            后续可以逐步加入表单、接口、数据库、登录、后台管理和自动化部署，让它从静态页面演进成完整应用。
+          </p>
+        </div>
+      </section>
+
+      <section id="stack" class="section muted">
+        <div class="section-heading">
+          <p class="eyebrow">Stack</p>
+          <h2>当前学习内容</h2>
+        </div>
+        <div class="card-grid">
+          <article class="info-card">
+            <span class="card-index">01</span>
+            <h3>HTML</h3>
+            <p>组织网页结构，理解标题、段落、链接、图片和语义化标签。</p>
+          </article>
+          <article class="info-card">
+            <span class="card-index">02</span>
+            <h3>CSS</h3>
+            <p>控制页面排版、颜色、响应式布局和不同屏幕尺寸下的显示效果。</p>
+          </article>
+          <article class="info-card">
+            <span class="card-index">03</span>
+            <h3>JavaScript</h3>
+            <p>添加少量交互，例如动态年份、导航状态和后续的表单逻辑。</p>
+          </article>
+          <article class="info-card">
+            <span class="card-index">04</span>
+            <h3>部署</h3>
+            <p>用 GitHub 保存代码，用 Nginx 把服务器上的静态文件返回给访问者。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="projects" class="section">
+        <div class="section-heading">
+          <p class="eyebrow">Projects</p>
+          <h2>学习路线</h2>
+        </div>
+        <div class="timeline" aria-label="学习路线">
+          <div class="timeline-item">
+            <span>已完成</span>
+            <h3>静态个人主页</h3>
+            <p>使用 HTML、CSS 和 JavaScript 搭建第一版页面。</p>
+          </div>
+          <div class="timeline-item">
+            <span>下一步</span>
+            <h3>表单与后端接口</h3>
+            <p>添加留言表单，并使用后端接口保存数据。</p>
+          </div>
+          <div class="timeline-item">
+            <span>计划中</span>
+            <h3>数据库与登录</h3>
+            <p>接入数据库，练习用户认证、权限和管理后台。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="contact" class="section contact-section">
+        <div>
+          <p class="eyebrow">Contact</p>
+          <h2>欢迎一起交流学习过程</h2>
+          <p>
+            你可以把这里替换成自己的邮箱、GitHub、博客或作品集链接。
+          </p>
+        </div>
+        <a class="button primary" href="https://github.com/whanser220-ops" rel="noreferrer" target="_blank">
+          访问 GitHub
+        </a>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>© <span id="year"></span> Huang</span>
+      <span>Static site served by Nginx</span>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>

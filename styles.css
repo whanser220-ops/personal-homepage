@@ -1,0 +1,376 @@
+:root {
+  --bg: #f6f3ed;
+  --surface: #ffffff;
+  --surface-muted: #eaf1ef;
+  --text: #1e2528;
+  --muted: #607071;
+  --line: #d8dedb;
+  --teal: #0f766e;
+  --teal-dark: #0b4f4a;
+  --amber: #c9822b;
+  --graphite: #253033;
+  --shadow: 0 18px 45px rgba(31, 41, 45, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Microsoft YaHei", sans-serif;
+  line-height: 1.6;
+}
+
+img {
+  display: block;
+  width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 72px;
+  padding: 0 6vw;
+  background: rgba(246, 243, 237, 0.88);
+  border-bottom: 1px solid rgba(216, 222, 219, 0.9);
+  backdrop-filter: blur(18px);
+}
+
+.brand {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  color: var(--teal-dark);
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 3vw, 34px);
+  color: var(--muted);
+  font-size: 0.96rem;
+}
+
+.site-nav a {
+  border-bottom: 2px solid transparent;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.site-nav a:hover,
+.site-nav a.is-active {
+  color: var(--teal-dark);
+  border-color: var(--amber);
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+  gap: clamp(28px, 5vw, 72px);
+  align-items: center;
+  min-height: calc(100vh - 72px);
+  padding: clamp(48px, 7vw, 96px) 6vw clamp(44px, 6vw, 80px);
+}
+
+.hero-content {
+  max-width: 690px;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: var(--amber);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3,
+p {
+  overflow-wrap: anywhere;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.16;
+}
+
+h1 {
+  max-width: 760px;
+  font-size: clamp(2.4rem, 6vw, 5.3rem);
+}
+
+h2 {
+  font-size: clamp(1.85rem, 3.4vw, 3.25rem);
+}
+
+h3 {
+  font-size: 1.15rem;
+}
+
+.hero-copy {
+  max-width: 640px;
+  margin: 24px 0 0;
+  color: var(--muted);
+  font-size: clamp(1rem, 1.45vw, 1.2rem);
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 34px;
+}
+
+.button {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  border: 1px solid var(--teal-dark);
+  border-radius: 8px;
+  font-weight: 760;
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.button:hover {
+  transform: translateY(-2px);
+}
+
+.button.primary {
+  background: var(--teal-dark);
+  color: #ffffff;
+}
+
+.button.secondary {
+  background: transparent;
+  color: var(--teal-dark);
+}
+
+.hero-media {
+  margin: 0;
+}
+
+.hero-media img {
+  aspect-ratio: 16 / 11;
+  min-height: 360px;
+  object-fit: cover;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.section {
+  padding: clamp(62px, 8vw, 112px) 6vw;
+}
+
+.section.muted {
+  background: var(--surface-muted);
+}
+
+.section-heading {
+  max-width: 760px;
+  margin-bottom: clamp(28px, 5vw, 46px);
+}
+
+.split-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(24px, 5vw, 64px);
+  color: var(--muted);
+  font-size: 1.08rem;
+}
+
+.split-layout p,
+.contact-section p {
+  margin: 0;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.info-card {
+  min-height: 230px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid rgba(216, 222, 219, 0.9);
+  border-radius: 8px;
+}
+
+.card-index {
+  display: inline-block;
+  margin-bottom: 34px;
+  color: var(--amber);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.info-card p {
+  margin: 14px 0 0;
+  color: var(--muted);
+}
+
+.timeline {
+  display: grid;
+  gap: 16px;
+  max-width: 980px;
+}
+
+.timeline-item {
+  display: grid;
+  grid-template-columns: 120px minmax(170px, 260px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  padding: 22px 0;
+  border-top: 1px solid var(--line);
+}
+
+.timeline-item:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.timeline-item span {
+  color: var(--amber);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.timeline-item p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.contact-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  background: var(--graphite);
+  color: #ffffff;
+}
+
+.contact-section p {
+  max-width: 680px;
+  color: #c9d3d0;
+}
+
+.contact-section .button {
+  flex: 0 0 auto;
+  border-color: #ffffff;
+}
+
+.contact-section .button.primary {
+  background: #ffffff;
+  color: var(--graphite);
+}
+
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 26px 6vw;
+  color: var(--muted);
+  background: #ffffff;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 980px) {
+  .hero {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .hero-media {
+    order: -1;
+  }
+
+  .card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .timeline-item {
+    grid-template-columns: 96px 1fr;
+  }
+
+  .timeline-item p {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 680px) {
+  .site-header {
+    position: static;
+    align-items: flex-start;
+    flex-direction: column;
+    padding-top: 18px;
+    padding-bottom: 18px;
+  }
+
+  .site-nav {
+    width: 100%;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.9rem;
+  }
+
+  .hero,
+  .section,
+  .contact-section {
+    padding-right: 22px;
+    padding-left: 22px;
+  }
+
+  .hero-media img {
+    min-height: 260px;
+  }
+
+  .split-layout,
+  .card-grid,
+  .timeline-item,
+  .contact-section {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-section {
+    display: grid;
+  }
+
+  .timeline-item p {
+    grid-column: auto;
+  }
+
+  .button {
+    width: 100%;
+  }
+}
