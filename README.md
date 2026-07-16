@@ -28,8 +28,7 @@ https://github.com/whanser220-ops/personal-homepage
 │   ├── styles.css
 │   ├── components/
 │   ├── data/
-│   ├── hooks/
-│   └── modules/
+│   └── hooks/
 ├── public/
 │   └── assets/
 └── deploy/
@@ -63,7 +62,7 @@ npm run build
 - 使用 Vite 处理开发服务器、模块解析和生产构建。
 - 使用 Anime.js 维护入场动画、滚动出现动画、卡片 hover、按钮点击反馈和数字动画。
 - 使用 `src/data/homepage.js` 管理页面展示数据。
-- 使用 `src/hooks/useHomepageInteractions.js` 把 DOM 动画模块接入 React 生命周期。
+- 使用 `src/hooks/useHomepageInteractions.js` 集中管理页面交互和动画生命周期。
 
 ## 标准开发流程
 
