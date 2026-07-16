@@ -29,18 +29,18 @@ export function initHeroAnim() {
   const heroImage = document.querySelector(".hero-media img");
 
   if (!heroImage || reduceMotion) {
-    return;
+    return undefined;
   }
 
-  heroImage.addEventListener("mouseenter", () => {
+  const handleMouseEnter = () => {
     runAnimation(heroImage, {
       scale: { to: 1.025 },
       duration: 320,
       ease: "outCubic",
     });
-  });
+  };
 
-  heroImage.addEventListener("mousemove", (event) => {
+  const handleMouseMove = (event) => {
     const rect = heroImage.getBoundingClientRect();
     const offsetX = (event.clientX - rect.left) / rect.width - 0.5;
     const offsetY = (event.clientY - rect.top) / rect.height - 0.5;
@@ -51,9 +51,9 @@ export function initHeroAnim() {
       duration: 420,
       ease: "outCubic",
     });
-  });
+  };
 
-  heroImage.addEventListener("mouseleave", () => {
+  const handleMouseLeave = () => {
     runAnimation(heroImage, {
       rotateX: { to: 0 },
       rotateY: { to: 0 },
@@ -61,5 +61,15 @@ export function initHeroAnim() {
       duration: 520,
       ease: "outCubic",
     });
-  });
+  };
+
+  heroImage.addEventListener("mouseenter", handleMouseEnter);
+  heroImage.addEventListener("mousemove", handleMouseMove);
+  heroImage.addEventListener("mouseleave", handleMouseLeave);
+
+  return () => {
+    heroImage.removeEventListener("mouseenter", handleMouseEnter);
+    heroImage.removeEventListener("mousemove", handleMouseMove);
+    heroImage.removeEventListener("mouseleave", handleMouseLeave);
+  };
 }

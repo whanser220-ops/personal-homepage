@@ -2,6 +2,7 @@ import { runAnimation } from "./anime.js";
 
 export function initCardsAnim({ updateProgress } = {}) {
   const infoCards = [...document.querySelectorAll(".info-card")];
+  const subscriptions = [];
 
   infoCards.forEach((card) => {
     const focusCard = () => {
@@ -10,7 +11,7 @@ export function initCardsAnim({ updateProgress } = {}) {
       updateProgress?.(cardProgress, `正在关注 ${cardTitle}`);
     };
 
-    card.addEventListener("mouseenter", () => {
+    const handleMouseEnter = () => {
       card.classList.add("is-spotlight");
       runAnimation(card, {
         translateY: { to: "-0.45rem" },
@@ -18,9 +19,9 @@ export function initCardsAnim({ updateProgress } = {}) {
         duration: 260,
         ease: "outCubic",
       });
-    });
+    };
 
-    card.addEventListener("mouseleave", () => {
+    const handleMouseLeave = () => {
       card.classList.remove("is-spotlight");
       runAnimation(card, {
         translateY: { to: 0 },
@@ -28,17 +29,29 @@ export function initCardsAnim({ updateProgress } = {}) {
         duration: 320,
         ease: "outCubic",
       });
-    });
+    };
 
-    card.addEventListener("click", focusCard);
-
-    card.addEventListener("keydown", (event) => {
+    const handleKeyDown = (event) => {
       if (event.key !== "Enter" && event.key !== " ") {
         return;
       }
 
       event.preventDefault();
       focusCard();
+    };
+
+    card.addEventListener("mouseenter", handleMouseEnter);
+    card.addEventListener("mouseleave", handleMouseLeave);
+    card.addEventListener("click", focusCard);
+    card.addEventListener("keydown", handleKeyDown);
+
+    subscriptions.push(() => {
+      card.removeEventListener("mouseenter", handleMouseEnter);
+      card.removeEventListener("mouseleave", handleMouseLeave);
+      card.removeEventListener("click", focusCard);
+      card.removeEventListener("keydown", handleKeyDown);
     });
   });
+
+  return () => subscriptions.forEach((cleanup) => cleanup());
 }

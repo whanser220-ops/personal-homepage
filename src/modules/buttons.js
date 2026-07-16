@@ -1,8 +1,8 @@
 import { animate, canAnimate, reduceMotion } from "./anime.js";
 
 export function initButtonRipples() {
-  document.querySelectorAll(".button").forEach((button) => {
-    button.addEventListener("click", (event) => {
+  const subscriptions = [...document.querySelectorAll(".button")].map((button) => {
+    const handleClick = (event) => {
       if (!canAnimate || reduceMotion) {
         return;
       }
@@ -21,6 +21,11 @@ export function initButtonRipples() {
         ease: "outCubic",
         onComplete: () => ripple.remove(),
       });
-    });
+    };
+
+    button.addEventListener("click", handleClick);
+    return () => button.removeEventListener("click", handleClick);
   });
+
+  return () => subscriptions.forEach((cleanup) => cleanup());
 }
