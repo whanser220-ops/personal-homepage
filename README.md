@@ -18,12 +18,10 @@ https://github.com/whanser220-ops/personal-homepage
 
 ```text
 .
-├── index.html
-├── package.json
-├── vite.config.js
-├── Jenkinsfile
+├── app/
+│   ├── layout.jsx
+│   └── page.jsx
 ├── src/
-│   ├── main.jsx
 │   ├── App.jsx
 │   ├── styles.css
 │   ├── components/
@@ -31,9 +29,13 @@ https://github.com/whanser220-ops/personal-homepage
 │   └── hooks/
 ├── public/
 │   └── assets/
-└── deploy/
-    ├── deploy-from-git.sh
-    └── nginx-personal-homepage.conf
+├── deploy/
+│   ├── deploy-from-git.sh
+│   └── nginx-personal-homepage.conf
+├── Jenkinsfile
+├── next.config.mjs
+├── package.json
+└── package-lock.json
 ```
 
 ## 本地开发
@@ -50,16 +52,18 @@ npm install
 npm run dev
 ```
 
-构建生产版本：
+构建静态站点：
 
 ```powershell
 npm run build
 ```
 
+Next.js 配置了 `output: "export"`，构建结果会输出到 `out/`。
+
 ## 当前前端实现
 
+- 使用 Next.js App Router 管理页面入口和 metadata。
 - 使用 React 组织页面组件。
-- 使用 Vite 处理开发服务器、模块解析和生产构建。
 - 使用 Anime.js 维护入场动画、滚动出现动画、卡片 hover、按钮点击反馈和数字动画。
 - 使用 `src/data/homepage.js` 管理页面展示数据。
 - 使用 `src/hooks/useHomepageInteractions.js` 集中管理页面交互和动画生命周期。
@@ -102,7 +106,7 @@ git checkout main
 git pull --ff-only origin main
 npm ci
 npm run build
-copy dist/ to /var/www/personal-homepage
+copy out/ to /var/www/personal-homepage
 ```
 
 ## Nginx 部署思路
@@ -121,4 +125,4 @@ Git 工作副本，负责 `git pull`、安装依赖和构建。
 /var/www/personal-homepage
 ```
 
-Nginx 静态站点根目录，只保存 `npm run build` 生成的 `dist/` 内容。
+Nginx 静态站点根目录，只保存 `npm run build` 生成的 `out/` 内容。

@@ -4,7 +4,7 @@ export function Footer() {
       <span>
         © <span id="year">{new Date().getFullYear()}</span> Huang
       </span>
-      <span>Built with React, Vite and Anime.js</span>
+      <span>Built with Next.js, React and Anime.js</span>
     </footer>
   );
 }
