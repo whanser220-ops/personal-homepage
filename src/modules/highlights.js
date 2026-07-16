@@ -8,6 +8,7 @@ export function initHighlightsAnim({ playIntro } = {}) {
   const replayButton = document.querySelector("#playIntro");
   const shuffleButton = document.querySelector("#shuffleFocus");
   let focusIndex = 0;
+  const subscriptions = [];
 
   const updateProgress = (targetProgress, label) => {
     if (progressLabel) {
@@ -49,28 +50,42 @@ export function initHighlightsAnim({ playIntro } = {}) {
   };
 
   focusItems.forEach((item) => {
-    item.addEventListener("click", () => setFocus(item));
+    const handleClick = () => setFocus(item);
+    item.addEventListener("click", handleClick);
+    subscriptions.push(() => item.removeEventListener("click", handleClick));
   });
 
-  shuffleButton?.addEventListener("click", () => {
+  const handleShuffleClick = () => {
     const nextIndex = (focusIndex + 1) % focusItems.length;
     setFocus(focusItems[nextIndex]);
-  });
+  };
 
-  replayButton?.addEventListener("click", () => {
+  const handleReplayClick = () => {
     playIntro?.();
     runAnimation(".metric", {
       scale: [{ to: 1.04, duration: 160 }, { to: 1, duration: 260 }],
       delay: staggerDelay(80),
       ease: "outCubic",
     });
-  });
+  };
+
+  shuffleButton?.addEventListener("click", handleShuffleClick);
+  replayButton?.addEventListener("click", handleReplayClick);
+
+  if (shuffleButton) {
+    subscriptions.push(() => shuffleButton.removeEventListener("click", handleShuffleClick));
+  }
+
+  if (replayButton) {
+    subscriptions.push(() => replayButton.removeEventListener("click", handleReplayClick));
+  }
 
   document.querySelectorAll("[data-counter]").forEach((counter) => {
     animateNumber(counter, Number.parseInt(counter.dataset.target ?? "0", 10));
   });
 
   return {
+    cleanup: () => subscriptions.forEach((cleanup) => cleanup()),
     updateProgress,
   };
 }

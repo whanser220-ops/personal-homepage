@@ -5,10 +5,16 @@ export function initScoreAnim() {
   var scoreEl = document.querySelector("[data-score]");
   if (!btn || !scoreEl) return;
 
-  btn.addEventListener("click", function () {
+  var handleClick = function () {
     animate(scoreEl, {
       innerHTML: scrambleText({ chars: "0-9" }),
       duration: 1500,
     });
-  });
+  };
+
+  btn.addEventListener("click", handleClick);
+
+  return function () {
+    btn.removeEventListener("click", handleClick);
+  };
 }

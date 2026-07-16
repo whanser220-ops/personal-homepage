@@ -1,0 +1,28 @@
+export function Hero() {
+  return (
+    <section className="hero">
+      <div className="hero-content">
+        <p className="eyebrow">Personal homepage</p>
+        <h1>Huang，专注把想法做成清晰可用的 Web 体验。</h1>
+        <p className="hero-copy">
+          我关注界面表达、交互细节和代码结构，希望每个作品都能被快速理解、顺畅使用，
+          并在后续迭代中持续变得更完整。
+        </p>
+        <div className="hero-actions">
+          <a className="button primary" href="#projects">
+            查看项目
+          </a>
+          <a className="button secondary" href="#contact">
+            联系我
+          </a>
+        </div>
+      </div>
+      <figure className="hero-media">
+        <img
+          src="/assets/hero-workspace.png"
+          alt="一张现代开发者工作台插画，桌上有电脑、笔记本和绿植。"
+        />
+      </figure>
+    </section>
+  );
+}

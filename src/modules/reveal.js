@@ -33,4 +33,6 @@ export function initRevealAnim() {
   );
 
   revealTargets.forEach((target) => revealObserver.observe(target));
+
+  return () => revealObserver.disconnect();
 }

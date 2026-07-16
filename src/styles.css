@@ -31,6 +31,10 @@ body {
   overflow-x: hidden;
 }
 
+#root {
+  min-height: 100vh;
+}
+
 img {
   display: block;
   width: 100%;
