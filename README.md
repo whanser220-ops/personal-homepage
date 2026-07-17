@@ -5,7 +5,13 @@
 线上地址：
 
 ```text
-http://1.117.232.198/
+http://warmhanser.com/
+```
+
+服务器 IP：
+
+```text
+1.117.232.198
 ```
 
 GitHub 仓库：
@@ -111,7 +117,7 @@ copy out/ to /var/www/personal-homepage
 
 ## Nginx 部署思路
 
-服务器上的 Nginx 监听 80 端口。浏览器访问服务器 IP 时，请求先到达 Nginx，Nginx 根据站点配置里的 `root` 找到静态站点目录，再把 `index.html`、CSS、JS 和图片返回给浏览器。
+服务器上的 Nginx 监听 80 端口。浏览器访问 `warmhanser.com` 或服务器 IP 时，请求先到达 Nginx，Nginx 根据站点配置里的 `server_name` 和 `root` 找到静态站点目录，再把 `index.html`、CSS、JS 和图片返回给浏览器。
 
 服务器目录：
 
