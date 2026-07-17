@@ -1,9 +1,10 @@
 export const navItems = [
-  { href: "#about", label: "关于" },
-  { href: "#stack", label: "能力" },
-  { href: "#lab", label: "亮点" },
-  { href: "#projects", label: "项目" },
-  { href: "#contact", label: "联系" },
+  { href: "/#about", label: "关于" },
+  { href: "/#stack", label: "能力" },
+  { href: "/#lab", label: "亮点" },
+  { href: "/#projects", label: "项目" },
+  { href: "/bundle-report", label: "构建报告" },
+  { href: "/#contact", label: "联系" },
 ];
 
 export const abilityCards = [
@@ -71,9 +72,11 @@ export const projects = [
     body: "一个用于展示个人介绍、能力方向和项目入口的响应式网站。",
   },
   {
-    status: "整理中",
-    title: "Web 工具雏形",
-    body: "把常用流程做成小工具，强调明确输入、即时反馈和稳定输出。",
+    status: "已整合",
+    title: "YooAsset 构建分析报告",
+    body: "把 Unity 构建产物分析整合到同一个个人主页项目中，通过独立路由查看 Bundle 体积、重复资源和依赖深度。",
+    href: "/bundle-report",
+    linkLabel: "打开报告",
   },
   {
     status: "计划中",

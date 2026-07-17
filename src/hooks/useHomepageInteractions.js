@@ -85,7 +85,9 @@ function initNav() {
   }
 
   const setActiveNav = (id) => {
-    const activeLink = document.querySelector(`.site-nav a[href="#${id}"]`);
+    const activeLink = document.querySelector(
+      `.site-nav a[href="#${id}"], .site-nav a[href="/#${id}"]`,
+    );
     navLinks.forEach((link) => link.classList.remove("is-active"));
     activeLink?.classList.add("is-active");
   };
