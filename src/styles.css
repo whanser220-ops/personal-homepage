@@ -198,6 +198,10 @@ h3 {
   perspective: 1100px;
 }
 
+.hero-media picture {
+  display: block;
+}
+
 .hero-media img {
   aspect-ratio: 16 / 11;
   min-height: 360px;

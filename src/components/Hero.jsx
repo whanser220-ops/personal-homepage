@@ -18,10 +18,13 @@ export function Hero() {
         </div>
       </div>
       <figure className="hero-media">
-        <img
-          src="/assets/hero-workspace.png"
-          alt="一张现代开发者工作台插画，桌上有电脑、笔记本和绿植。"
-        />
+        <picture>
+          <source srcSet="/assets/hero-workspace.webp" type="image/webp" />
+          <img
+            src="/assets/hero-workspace.png"
+            alt="一张现代开发者工作台插画，桌上有电脑、笔记本和绿植。"
+          />
+        </picture>
       </figure>
     </section>
   );
