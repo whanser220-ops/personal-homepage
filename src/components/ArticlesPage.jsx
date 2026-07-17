@@ -1,4 +1,4 @@
-import { AnimatedCat } from "./AnimatedCat.jsx";
+import { DashboardVisual } from "./DashboardVisual.jsx";
 import { Badge } from "./ui/badge.jsx";
 
 const articles = [
@@ -28,7 +28,7 @@ export function ArticlesPage() {
           <h1>文章</h1>
           <p>这里会逐步放技术笔记、项目复盘和页面交互实验记录。</p>
         </div>
-        <AnimatedCat className="content-cat" tone="pink" />
+        <DashboardVisual className="content-visual" title="Article" />
       </section>
       <section className="section content-section">
         <div className="timeline" aria-label="文章列表">
