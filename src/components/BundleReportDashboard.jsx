@@ -348,8 +348,9 @@ function ReportShell({
       <header className="report-topbar">
         <div className="report-topbar-inner">
           <div className="report-brand">
-            <a href="/" className="report-home-link">
-              Huang
+            <a href="/" className="report-home-link" aria-label="返回首页">
+              <img src="/assets/site-logo.webp" alt="" width="34" height="34" />
+              <span>Huang</span>
             </a>
             <div>
               <h1>{title}</h1>

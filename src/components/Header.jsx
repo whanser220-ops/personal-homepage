@@ -4,7 +4,8 @@ export function Header() {
   return (
     <header className="site-header">
       <a className="brand" href="/" aria-label="返回首页">
-        Huang
+        <img className="brand-logo" src="/assets/site-logo.webp" alt="" width="42" height="42" />
+        <span>Huang</span>
       </a>
       <nav className="site-nav" aria-label="主导航">
         {navItems.map((item) => (
