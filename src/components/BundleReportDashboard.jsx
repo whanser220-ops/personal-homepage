@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Button as AntButton, Card as AntCard, Input as AntInput, Select as AntSelect, Tag as AntTag } from "antd";
 
 const dataBasePath = "/bundle-report-data";
 const pageSize = 50;
@@ -200,7 +201,7 @@ export function BundleReportDashboard() {
       isLoading={isLoading}
       onSelectReport={selectReport}
     >
-      {loadError && <p className="report-tag report-tag-danger">报告加载失败：{loadError}</p>}
+      {loadError && <AntTag color="error">报告加载失败：{loadError}</AntTag>}
 
       <section className="report-summary-grid" aria-label="概览">
         <SummaryStat label="Bundle 总数" value={formatInteger(report.summary.bundleCount)} />
@@ -244,37 +245,29 @@ export function BundleReportDashboard() {
       <section className="report-filters" aria-label="筛选">
         <div className="report-filter">
           <label htmlFor="moduleFilter">模块</label>
-          <select
+          <AntSelect
             id="moduleFilter"
-            value={filters.moduleOwner}
-            onChange={(event) => updateFilter("moduleOwner", event.target.value)}
-          >
-            <option value="">全部模块</option>
-            {modules.map((moduleOwner) => (
-              <option key={moduleOwner} value={moduleOwner}>
-                {moduleOwner}
-              </option>
-            ))}
-          </select>
+            allowClear
+            placeholder="全部模块"
+            value={filters.moduleOwner || undefined}
+            onChange={(value) => updateFilter("moduleOwner", value || "")}
+            options={modules.map((moduleOwner) => ({ label: moduleOwner, value: moduleOwner }))}
+          />
         </div>
         <div className="report-filter">
           <label htmlFor="typeFilter">资源类型</label>
-          <select
+          <AntSelect
             id="typeFilter"
-            value={filters.assetType}
-            onChange={(event) => updateFilter("assetType", event.target.value)}
-          >
-            <option value="">全部类型</option>
-            {assetTypes.map((assetType) => (
-              <option key={assetType} value={assetType}>
-                {assetType}
-              </option>
-            ))}
-          </select>
+            allowClear
+            placeholder="全部类型"
+            value={filters.assetType || undefined}
+            onChange={(value) => updateFilter("assetType", value || "")}
+            options={assetTypes.map((assetType) => ({ label: assetType, value: assetType }))}
+          />
         </div>
         <div className="report-filter">
           <label htmlFor="bundleSearch">资源路径 / Bundle 名称</label>
-          <input
+          <AntInput
             id="bundleSearch"
             value={filters.query}
             onChange={(event) => updateFilter("query", event.target.value)}
@@ -283,11 +276,11 @@ export function BundleReportDashboard() {
         </div>
         <div className="report-filter">
           <label>当前报告</label>
-          <input value={report.summary.reportId} readOnly />
+          <AntInput value={report.summary.reportId} readOnly />
         </div>
-        <button type="button" onClick={resetFilters}>
+        <AntButton type="default" onClick={resetFilters}>
           清空筛选
-        </button>
+        </AntButton>
       </section>
 
       <ReportSection title="重复资源表" subtitle={`${filteredDuplicates.length} / ${report.duplicateAssets.length} 项`}>
@@ -359,19 +352,20 @@ function ReportShell({
           </div>
           <div className="report-build-select">
             <label htmlFor="reportSelect">历史报告</label>
-            <select
+            <AntSelect
               id="reportSelect"
               value={selectedReportId}
               disabled={isLoading || reportIndex.reports.length === 0}
-              onChange={(event) => onSelectReport?.(event.target.value)}
-            >
-              {reportIndex.reports.length === 0 && <option value="">暂无报告</option>}
-              {reportIndex.reports.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  #{entry.packageVersion} · {entry.buildTarget} · {formatDate(entry.generatedAt)}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => onSelectReport?.(value)}
+              options={
+                reportIndex.reports.length === 0
+                  ? [{ label: "暂无报告", value: "" }]
+                  : reportIndex.reports.map((entry) => ({
+                      label: `#${entry.packageVersion} · ${entry.buildTarget} · ${formatDate(entry.generatedAt)}`,
+                      value: entry.id,
+                    }))
+              }
+            />
           </div>
         </div>
       </header>
@@ -394,10 +388,10 @@ function ReportSection({ title, subtitle, children }) {
 
 function SummaryStat({ label, value, tone }) {
   return (
-    <div className={`report-stat ${tone ? `report-stat-${tone}` : ""}`}>
+    <AntCard className={`report-stat ${tone ? `report-stat-${tone}` : ""}`} variant="outlined">
       <span>{label}</span>
       <strong>{value}</strong>
-    </div>
+    </AntCard>
   );
 }
 
@@ -431,9 +425,9 @@ function DuplicateAssetsTable({ rows }) {
               <td>
                 <div className="report-tags">
                   {asset.bundles.map((bundle) => (
-                    <span className="report-tag" key={`${asset.assetPath}-${bundle.bundleName}`}>
+                    <AntTag key={`${asset.assetPath}-${bundle.bundleName}`}>
                       {bundle.bundleName} · {formatBytes(bundle.copySizeBytes)}
-                    </span>
+                    </AntTag>
                   ))}
                 </div>
               </td>
@@ -481,8 +475,8 @@ function BundlesTable({ rows, compact = false }) {
               <td className="report-number">{formatBytes(bundle.uncompressedSizeBytes)}</td>
               <td className="report-number">
                 {formatBytes(bundle.compressedSizeBytes)}
-                {bundle.isLarge && <span className="report-tag report-tag-danger">超大</span>}
-                {bundle.isSmall && <span className="report-tag report-tag-warn">小包</span>}
+                {bundle.isLarge && <AntTag color="error">超大</AntTag>}
+                {bundle.isSmall && <AntTag color="warning">小包</AntTag>}
               </td>
               <td className="report-number">{bundle.assetCount}</td>
               <td className="report-number">{bundle.directAssetCount}</td>
@@ -552,9 +546,9 @@ function ListCell({ values, tag = false }) {
     return (
       <div className="report-tags">
         {values.map((value) => (
-          <span key={value} className="report-tag">
+          <AntTag key={value}>
             {value}
-          </span>
+          </AntTag>
         ))}
       </div>
     );
@@ -585,15 +579,15 @@ function Pager({ page, totalPages, onPrev, onNext }) {
 
   return (
     <div className="report-pager">
-      <button type="button" disabled={page <= 1} onClick={onPrev}>
+      <AntButton type="default" disabled={page <= 1} onClick={onPrev}>
         上一页
-      </button>
+      </AntButton>
       <span>
         {page} / {totalPages}
       </span>
-      <button type="button" disabled={page >= totalPages} onClick={onNext}>
+      <AntButton type="default" disabled={page >= totalPages} onClick={onNext}>
         下一页
-      </button>
+      </AntButton>
     </div>
   );
 }

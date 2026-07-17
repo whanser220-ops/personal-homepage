@@ -1,3 +1,7 @@
+import { ArrowRight, GitBranch } from "lucide-react";
+
+import { Button } from "./ui/button.jsx";
+
 export function Hero() {
   return (
     <section className="hero">
@@ -9,12 +13,18 @@ export function Hero() {
           并在后续迭代中持续变得更完整。
         </p>
         <div className="hero-actions">
-          <a className="button primary" href="#projects">
-            查看项目
-          </a>
-          <a className="button secondary" href="#contact">
-            联系我
-          </a>
+          <Button asChild>
+            <a href="#projects">
+              <span>查看项目</span>
+              <ArrowRight aria-hidden="true" size={18} />
+            </a>
+          </Button>
+          <Button asChild variant="secondary">
+            <a href="#contact">
+              <GitBranch aria-hidden="true" size={18} />
+              <span>联系我</span>
+            </a>
+          </Button>
         </div>
       </div>
       <figure className="hero-media">
