@@ -1,10 +1,7 @@
 export const navItems = [
-  { href: "/#about", label: "关于" },
-  { href: "/#stack", label: "能力" },
-  { href: "/#lab", label: "亮点" },
-  { href: "/#projects", label: "项目" },
-  { href: "/bundle-report", label: "构建报告" },
-  { href: "/#contact", label: "联系" },
+  { href: "/about", label: "关于我" },
+  { href: "/articles", label: "文章" },
+  { href: "/projects", label: "项目" },
 ];
 
 export const abilityCards = [
