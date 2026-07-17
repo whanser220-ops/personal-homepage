@@ -3,7 +3,7 @@ import { navItems } from "../data/homepage.js";
 export function Header() {
   return (
     <header className="site-header">
-      <a className="brand" href="#home" aria-label="返回首页">
+      <a className="brand" href="/" aria-label="返回首页">
         Huang
       </a>
       <nav className="site-nav" aria-label="主导航">

@@ -11,6 +11,11 @@ export function Projects() {
             <span>{project.status}</span>
             <h3>{project.title}</h3>
             <p>{project.body}</p>
+            {project.href && (
+              <a className="inline-link" href={project.href}>
+                {project.linkLabel}
+              </a>
+            )}
           </div>
         ))}
       </div>
