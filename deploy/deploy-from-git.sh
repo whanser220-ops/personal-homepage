@@ -4,23 +4,12 @@ set -euo pipefail
 BRANCH="${BRANCH:-main}"
 WEB_ROOT="${WEB_ROOT:-/var/www/personal-homepage}"
 BUILD_OUTPUT="${BUILD_OUTPUT:-out}"
-REPORT_DATA_SOURCE="${BUNDLE_REPORT_DATA_SOURCE:-/var/www/unity6-bundle-report/data}"
-REPORT_DATA_PUBLIC="public/bundle-report-data"
 
 cd "$(dirname "$0")/.."
 
 git fetch origin "$BRANCH"
 git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"
-
-if [ -d "$REPORT_DATA_SOURCE" ]; then
-    rm -rf "$REPORT_DATA_PUBLIC"
-    mkdir -p "$REPORT_DATA_PUBLIC"
-    cp -a "$REPORT_DATA_SOURCE"/. "$REPORT_DATA_PUBLIC"/
-    echo "Synced bundle report data from $REPORT_DATA_SOURCE"
-else
-    echo "Bundle report data source not found: $REPORT_DATA_SOURCE"
-fi
 
 npm ci
 npm run build
