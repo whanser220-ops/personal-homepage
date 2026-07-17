@@ -1,4 +1,5 @@
 import { BundleReportDashboard } from "../../src/components/BundleReportDashboard.jsx";
+import { AntdProvider } from "../../src/components/AntdProvider.jsx";
 
 export const metadata = {
   title: "Unity6 YooAsset 构建分析报告",
@@ -6,5 +7,9 @@ export const metadata = {
 };
 
 export default function BundleReportPage() {
-  return <BundleReportDashboard />;
+  return (
+    <AntdProvider>
+      <BundleReportDashboard />
+    </AntdProvider>
+  );
 }

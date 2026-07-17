@@ -1,5 +1,6 @@
 import { projects } from "../data/homepage.js";
 import { SectionHeading } from "./SectionHeading.jsx";
+import { Badge } from "./ui/badge.jsx";
 
 export function Projects() {
   return (
@@ -8,7 +9,7 @@ export function Projects() {
       <div className="timeline" aria-label="项目作品">
         {projects.map((project) => (
           <div className="timeline-item" key={project.title}>
-            <span>{project.status}</span>
+            <Badge>{project.status}</Badge>
             <h3>{project.title}</h3>
             <p>{project.body}</p>
             {project.href && (

@@ -1,5 +1,7 @@
 import { abilityCards } from "../data/homepage.js";
 import { SectionHeading } from "./SectionHeading.jsx";
+import { Badge } from "./ui/badge.jsx";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card.jsx";
 
 export function Stack() {
   return (
@@ -7,7 +9,7 @@ export function Stack() {
       <SectionHeading eyebrow="Stack" title="能力方向" />
       <div className="card-grid">
         {abilityCards.map((card) => (
-          <article
+          <Card
             className="info-card"
             data-topic={card.topic}
             data-progress={card.progress}
@@ -16,10 +18,14 @@ export function Stack() {
             tabIndex={0}
             aria-label={`查看${card.title}能力`}
           >
-            <span className="card-index">{card.index}</span>
-            <h3>{card.title}</h3>
-            <p>{card.body}</p>
-          </article>
+            <CardHeader>
+              <Badge className="card-index">{card.index}</Badge>
+              <CardTitle>{card.title}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p>{card.body}</p>
+            </CardContent>
+          </Card>
         ))}
       </div>
     </section>
