@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { animate, stagger } from "animejs";
 import { ArrowRight } from "lucide-react";
+import { AnimatedCat } from "./AnimatedCat.jsx";
 
 const navCards = [
   {
@@ -10,7 +11,6 @@ const navCards = [
     title: "关于我",
     label: "About",
     copy: "个人介绍、能力方向和联系方式。",
-    cat: "/assets/cat-about.webp",
     tone: "blue",
   },
   {
@@ -18,7 +18,6 @@ const navCards = [
     title: "文章",
     label: "Articles",
     copy: "记录想法、技术笔记和阶段总结。",
-    cat: "/assets/cat-articles.webp",
     tone: "pink",
   },
   {
@@ -26,7 +25,6 @@ const navCards = [
     title: "项目",
     label: "Projects",
     copy: "个人主页、构建报告和后续作品入口。",
-    cat: "/assets/cat-projects.webp",
     tone: "mint",
   },
 ];
@@ -45,6 +43,7 @@ export function LandingNavigation() {
 
     const cards = [...rootRef.current.querySelectorAll(".portal-card")];
     const cats = [...rootRef.current.querySelectorAll(".portal-cat")];
+    const currents = [...rootRef.current.querySelectorAll(".liquid-current")];
 
     animate(".portal-title > *", {
       opacity: { from: 0 },
@@ -73,7 +72,20 @@ export function LandingNavigation() {
       ease: "inOutSine",
     });
 
-    return () => catAnimation?.pause?.();
+    const currentAnimation = animate(currents, {
+      translateX: ["-1.2rem", "1.2rem"],
+      scaleX: [0.92, 1.08],
+      alternate: true,
+      loop: true,
+      delay: stagger(120),
+      duration: 2100,
+      ease: "inOutSine",
+    });
+
+    return () => {
+      catAnimation?.pause?.();
+      currentAnimation?.pause?.();
+    };
   }, []);
 
   function burst(event) {
@@ -88,6 +100,7 @@ export function LandingNavigation() {
     const drops = Array.from({ length: 10 }, (_, index) => {
       const drop = document.createElement("span");
       drop.className = "water-drop";
+      drop.innerHTML = "<span></span>";
       drop.style.left = `${originX}px`;
       drop.style.top = `${originY}px`;
       drop.style.setProperty("--angle", `${index * 36}deg`);
@@ -108,10 +121,18 @@ export function LandingNavigation() {
 
   return (
     <main className="portal-page" ref={rootRef}>
-      <div className="portal-flow portal-flow-left" aria-hidden="true" />
-      <div className="portal-flow portal-flow-right" aria-hidden="true" />
+      <div className="portal-flow portal-flow-left" aria-hidden="true">
+        <span className="liquid-current liquid-current-blue" />
+        <span className="liquid-current liquid-current-pink" />
+        <span className="liquid-current liquid-current-mint" />
+      </div>
+      <div className="portal-flow portal-flow-right" aria-hidden="true">
+        <span className="liquid-current liquid-current-coral" />
+        <span className="liquid-current liquid-current-violet" />
+        <span className="liquid-current liquid-current-lime" />
+      </div>
       <section className="portal-title" aria-labelledby="portal-heading">
-        <img className="portal-mark" src="/assets/site-logo.webp" alt="" width="72" height="72" />
+        <AnimatedCat className="portal-mark" tone="blue" variant="drop" />
         <p>Warm Hanser</p>
         <h1 id="portal-heading">
           <span>选择一只小猫</span>
@@ -130,7 +151,7 @@ export function LandingNavigation() {
             <span className="portal-burst" aria-hidden="true" />
             <span className="portal-card-label">{card.label}</span>
             <span className="portal-cat-wrap">
-              <img className="portal-cat" src={card.cat} alt="" width="320" height="210" />
+              <AnimatedCat className="portal-cat" tone={card.tone} />
             </span>
             <span className="portal-card-body">
               <strong>{card.title}</strong>
