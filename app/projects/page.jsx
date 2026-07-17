@@ -1,5 +1,5 @@
-import { AnimatedCat } from "../../src/components/AnimatedCat.jsx";
 import { Contact } from "../../src/components/Contact.jsx";
+import { DashboardVisual } from "../../src/components/DashboardVisual.jsx";
 import { PageFrame } from "../../src/components/PageFrame.jsx";
 import { Projects } from "../../src/components/Projects.jsx";
 
@@ -18,7 +18,7 @@ export default function ProjectsPage() {
             <h1>项目</h1>
             <p>这里集中放个人主页、构建报告和后续继续扩展的作品入口。</p>
           </div>
-          <AnimatedCat className="content-cat" tone="mint" />
+          <DashboardVisual className="content-visual" title="Work" />
         </section>
         <Projects />
         <Contact />
