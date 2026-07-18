@@ -50,14 +50,6 @@ export function LandingNavigation() {
     <main className="dashboard-page" ref={rootRef}>
       <div className="dashboard-shell">
         <aside className="dashboard-sidebar glass-panel dashboard-animate" aria-label="主页导航">
-          <div className="dashboard-brand">
-            <span className="dashboard-avatar">WH</span>
-            <div>
-              <h1>Warm Hanser</h1>
-              <span className="dashboard-status">开发中</span>
-            </div>
-          </div>
-
           <nav className="dashboard-nav">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -72,8 +64,6 @@ export function LandingNavigation() {
         </aside>
 
         <section className="dashboard-main">
-          <div className="banner-card glass-panel dashboard-animate" aria-hidden="true" />
-
           <section className="hero-profile glass-panel dashboard-animate" aria-labelledby="dashboard-title">
             <span className="profile-orb dashboard-float">WH</span>
             <h2 id="dashboard-title">
