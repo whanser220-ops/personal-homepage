@@ -36,34 +36,12 @@ body {
 
 .page-transition-root {
   min-height: 100vh;
+  transform-origin: 50% 22%;
+  will-change: opacity, transform, filter;
 }
 
-.route-transition-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 50% 44%, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0) 26%),
-    linear-gradient(135deg, rgba(180, 236, 238, 0.96), rgba(244, 240, 176, 0.96) 50%, rgba(214, 231, 179, 0.98));
-  border-radius: 44px 44px 0 0;
-  box-shadow: 0 -30px 80px rgba(38, 61, 57, 0.18);
-  transform: translateY(105%) scaleX(1);
-  transform-origin: bottom center;
-  will-change: transform, border-radius;
-}
-
-.route-transition-layer span {
-  width: clamp(82px, 12vw, 148px);
-  height: clamp(82px, 12vw, 148px);
-  border: 1px solid rgba(255, 255, 255, 0.82);
-  border-radius: 48% 52% 46% 54%;
-  background:
-    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.98), rgba(255, 241, 145, 0.78) 36%, rgba(180, 236, 238, 0.58)),
-    #ffffff;
-  box-shadow: 0 24px 70px rgba(38, 61, 57, 0.18);
+html.is-route-changing {
+  cursor: progress;
 }
 
 img {
