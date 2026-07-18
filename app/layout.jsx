@@ -1,4 +1,5 @@
 import { AntdRegistry } from "@ant-design/nextjs-registry";
+import { PageTransition } from "../src/components/PageTransition.jsx";
 import "../src/styles.css";
 
 export const metadata = {
@@ -10,7 +11,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="zh-CN">
       <body>
-        <AntdRegistry>{children}</AntdRegistry>
+        <AntdRegistry>
+          <PageTransition>{children}</PageTransition>
+        </AntdRegistry>
       </body>
     </html>
   );
