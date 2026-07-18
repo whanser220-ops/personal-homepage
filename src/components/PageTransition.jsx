@@ -35,7 +35,6 @@ function shouldHandleLink(event, anchor) {
 export function PageTransition({ children }) {
   const router = useRouter();
   const pathname = usePathname();
-  const overlayRef = useRef(null);
   const contentRef = useRef(null);
   const isTransitioningRef = useRef(false);
 
@@ -45,38 +44,23 @@ export function PageTransition({ children }) {
     }
 
     const content = contentRef.current;
-    const overlay = overlayRef.current;
 
-    if (!content || !overlay) {
+    if (!content) {
       return;
     }
 
-    overlay.style.pointerEvents = "none";
-
-    animate(overlay, {
-      translateY: ["0%", "-105%"],
-      scaleX: [1, 0.96],
-      borderRadius: ["0px", "0 0 44px 44px"],
-      duration: 620,
-      ease: "inOutCubic",
-    });
-
-    const timer = window.setTimeout(() => {
-      overlay.style.transform = "translateY(105%) scaleX(1)";
-      overlay.style.borderRadius = "44px 44px 0 0";
-      isTransitioningRef.current = false;
-    }, 660);
+    isTransitioningRef.current = false;
+    document.documentElement.classList.remove("is-route-changing");
+    content.style.pointerEvents = "";
 
     animate(content, {
-      opacity: { from: 0 },
-      translateY: { from: "1.1rem" },
-      filter: ["blur(10px)", "blur(0px)"],
-      duration: 560,
-      delay: 90,
+      opacity: [0, 1],
+      translateY: ["1.25rem", "0rem"],
+      scale: [0.985, 1],
+      filter: ["blur(12px)", "blur(0px)"],
+      duration: 620,
       ease: "outCubic",
     });
-
-    return () => window.clearTimeout(timer);
   }, [pathname]);
 
   function handleClick(event) {
@@ -96,46 +80,34 @@ export function PageTransition({ children }) {
       return;
     }
 
-    const overlay = overlayRef.current;
     const content = contentRef.current;
 
-    if (!overlay || !content) {
+    if (!content) {
       router.push(anchor.pathname + anchor.search + anchor.hash);
       return;
     }
 
     isTransitioningRef.current = true;
-    overlay.style.pointerEvents = "auto";
+    document.documentElement.classList.add("is-route-changing");
+    content.style.pointerEvents = "none";
 
     animate(content, {
       opacity: 0,
-      translateY: "-0.9rem",
-      filter: "blur(8px)",
-      duration: 260,
+      translateY: "-0.85rem",
+      scale: 0.985,
+      filter: "blur(10px)",
+      duration: 280,
       ease: "inCubic",
-    });
-
-    animate(overlay, {
-      translateY: ["105%", "0%"],
-      scaleX: [0.94, 1],
-      borderRadius: ["44px 44px 0 0", "0px"],
-      duration: 520,
-      ease: "inOutCubic",
     });
 
     window.setTimeout(() => {
       router.push(anchor.pathname + anchor.search + anchor.hash);
-    }, 500);
+    }, 250);
   }
 
   return (
-    <>
-      <div className="page-transition-root" onClick={handleClick} ref={contentRef}>
-        {children}
-      </div>
-      <div className="route-transition-layer" ref={overlayRef} aria-hidden="true">
-        <span />
-      </div>
-    </>
+    <div className="page-transition-root" onClick={handleClick} ref={contentRef}>
+      {children}
+    </div>
   );
 }
