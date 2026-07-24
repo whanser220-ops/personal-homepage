@@ -70,10 +70,10 @@ export const projects = [
   },
   {
     status: "已整合",
-    title: "YooAsset 构建分析报告",
-    body: "把 Unity 构建产物分析整合到同一个个人主页项目中，通过独立路由查看 Bundle 体积、重复资源和依赖深度。",
-    href: "/bundle-report",
-    linkLabel: "打开报告",
+    title: "Unity6 构建监控",
+    body: "展示云容器构建过程中采集到的业务阶段耗时、Bundle 构建状态和资源类型占用。",
+    href: "/build-monitor",
+    linkLabel: "打开监控",
   },
   {
     status: "计划中",

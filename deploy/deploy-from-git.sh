@@ -13,7 +13,7 @@ POSTGRES_VOLUME="${POSTGRES_VOLUME:-personal_homepage_pgdata}"
 NGINX_CONF_SOURCE="${NGINX_CONF_SOURCE:-deploy/nginx-personal-homepage.conf}"
 NGINX_CONF_TARGET="${NGINX_CONF_TARGET:-/etc/nginx/conf.d/personal-homepage.conf}"
 HEALTH_URL="http://127.0.0.1:${HOST_PORT}/api/health"
-PROGRESS_URL="http://127.0.0.1:${HOST_PORT}/api/build-progress"
+METRICS_URL="http://127.0.0.1:${HOST_PORT}/api/build-metrics/runs/latest"
 
 cd "$(dirname "$0")/.."
 
@@ -33,6 +33,12 @@ fi
 database_url="$(sudo awk -F= '$1 == "DATABASE_URL" { sub(/^DATABASE_URL=/, ""); print; exit }' "$ENV_FILE")"
 if [ -z "$database_url" ]; then
     echo "DATABASE_URL is required in $ENV_FILE" >&2
+    exit 2
+fi
+
+build_metrics_token="$(sudo awk -F= '$1 == "BUILD_METRICS_INGEST_TOKEN" { sub(/^BUILD_METRICS_INGEST_TOKEN=/, ""); print; exit }' "$ENV_FILE")"
+if [ -z "$build_metrics_token" ]; then
+    echo "BUILD_METRICS_INGEST_TOKEN is required in $ENV_FILE" >&2
     exit 2
 fi
 
@@ -122,6 +128,6 @@ sudo nginx -t
 sudo systemctl reload nginx
 
 curl --fail --silent --show-error "$HEALTH_URL" >/dev/null
-curl --fail --silent --show-error "$PROGRESS_URL" >/dev/null
+curl --fail --silent --show-error "$METRICS_URL" >/dev/null
 
 echo "Deployed ${commit_sha} as ${image_tag} on 127.0.0.1:${HOST_PORT}"
