@@ -27,7 +27,7 @@ export function BuildProgressPanel() {
         }
 
         setProgress(nextProgress);
-        setLoadError(nextProgress.ok ? "" : nextProgress.error || "Jenkins 状态暂不可用");
+        setLoadError(nextProgress.ok ? "" : nextProgress.error || "构建进度暂不可用");
         setIsLoading(false);
 
         const isActive = nextProgress.state === "running" || nextProgress.queue?.inQueue;
@@ -37,7 +37,7 @@ export function BuildProgressPanel() {
           return;
         }
 
-        setLoadError(error instanceof Error ? error.message : "Jenkins 状态暂不可用");
+        setLoadError(error instanceof Error ? error.message : "构建进度暂不可用");
         setIsLoading(false);
         timer = window.setTimeout(loadProgress, idlePollMs);
       }
@@ -59,11 +59,11 @@ export function BuildProgressPanel() {
   const statusTone = getStatusTone(progress?.state, currentBuild?.result);
 
   return (
-    <section className="build-progress-panel" aria-label="Unity6 Jenkins 构建进度">
+    <section className="build-progress-panel" aria-label="Unity6 构建容器进度">
       <div className="build-progress-header">
         <div>
-          <span className="build-progress-eyebrow">Jenkins Docker Cloud</span>
-          <h2>Unity6 容器构建进度</h2>
+          <span className="build-progress-eyebrow">PostgreSQL progress feed</span>
+          <h2>Unity6 构建容器进度</h2>
           <p>
             {progress?.jobName || "unity-linux-docker-build"}
             {currentBuild?.number ? ` #${currentBuild.number}` : ""}
