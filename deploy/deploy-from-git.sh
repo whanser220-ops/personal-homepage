@@ -18,17 +18,17 @@ git pull --ff-only origin "$BRANCH"
 
 commit_sha="$(git rev-parse --short HEAD)"
 image_tag="${IMAGE_TAG:-${APP_NAME}:${commit_sha}}"
-previous_image="$(docker inspect --format '{{.Config.Image}}' "$CONTAINER_NAME" 2>/dev/null || true)"
+previous_image="$(sudo docker inspect --format '{{.Config.Image}}' "$CONTAINER_NAME" 2>/dev/null || true)"
 
-if [ ! -f "$ENV_FILE" ]; then
+if ! sudo test -f "$ENV_FILE"; then
     echo "Missing runtime env file: $ENV_FILE" >&2
     exit 2
 fi
 
-docker build --pull -t "$image_tag" -t "${APP_NAME}:latest" .
+sudo docker build --pull -t "$image_tag" -t "${APP_NAME}:latest" .
 
-docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-docker run -d \
+sudo docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+sudo docker run -d \
     --name "$CONTAINER_NAME" \
     --restart unless-stopped \
     --env-file "$ENV_FILE" \
@@ -42,12 +42,12 @@ for attempt in $(seq 1 30); do
 
     if [ "$attempt" -eq 30 ]; then
         echo "Container health check failed: $HEALTH_URL" >&2
-        docker logs --tail 120 "$CONTAINER_NAME" >&2 || true
-        docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+        sudo docker logs --tail 120 "$CONTAINER_NAME" >&2 || true
+        sudo docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
         if [ -n "$previous_image" ]; then
             echo "Attempting rollback to $previous_image" >&2
-            docker run -d \
+            sudo docker run -d \
                 --name "$CONTAINER_NAME" \
                 --restart unless-stopped \
                 --env-file "$ENV_FILE" \
