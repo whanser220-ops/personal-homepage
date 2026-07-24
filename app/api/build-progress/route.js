@@ -44,6 +44,13 @@ export async function GET() {
         source: "jenkins",
         state: "unavailable",
         jobName: config.jobName,
+        buildNumber: null,
+        result: "",
+        building: false,
+        queueState: "idle",
+        elapsedDurationMs: 0,
+        estimatedDurationMs: 0,
+        percent: 0,
         queue: { inQueue: false, why: "" },
         currentBuild: null,
         progress: { percent: 0, label: "Jenkins unavailable" },
@@ -81,12 +88,22 @@ function createProgressPayload({ job, runs, stages, artifacts, logTail }) {
   const building = Boolean(currentBuild?.building);
   const inQueue = Boolean(job.inQueue);
   const progress = computeProgress(currentBuild, inQueue);
+  const elapsedDurationMs = getElapsedDurationMs(currentBuild);
+  const estimatedDurationMs = Number(currentBuild?.estimatedDuration || 0);
+  const result = currentBuild?.result || "";
 
   return {
     ok: true,
     source: "jenkins",
     state: inQueue ? "queued" : building ? "running" : resultToState(currentBuild?.result),
     jobName: job.displayName || DEFAULT_JOB,
+    buildNumber: currentBuild?.number || null,
+    result,
+    building,
+    queueState: inQueue ? "queued" : "idle",
+    elapsedDurationMs,
+    estimatedDurationMs,
+    percent: progress.percent,
     queue: {
       inQueue,
       why: sanitizeShortText(job.queueItem?.why || ""),
@@ -94,11 +111,11 @@ function createProgressPayload({ job, runs, stages, artifacts, logTail }) {
     currentBuild: currentBuild
       ? {
           number: currentBuild.number,
-          result: currentBuild.result || "",
+          result,
           building,
           timestamp: currentBuild.timestamp || null,
-          durationMs: currentBuild.duration || 0,
-          estimatedDurationMs: currentBuild.estimatedDuration || 0,
+          durationMs: elapsedDurationMs,
+          estimatedDurationMs,
         }
       : null,
     progress,
@@ -132,6 +149,19 @@ function computeProgress(build, inQueue) {
     percent,
     label: "Running",
   };
+}
+
+function getElapsedDurationMs(build) {
+  if (!build) {
+    return 0;
+  }
+
+  if (!build.building) {
+    return Number(build.duration || 0);
+  }
+
+  const startedAt = Number(build.timestamp || 0);
+  return startedAt > 0 ? Math.max(0, Date.now() - startedAt) : Number(build.duration || 0);
 }
 
 async function fetchLogTail(config, jobName, runId) {
@@ -313,6 +343,13 @@ function createMockPayload(jobName) {
     source: "mock",
     state: "unconfigured",
     jobName,
+    buildNumber: null,
+    result: "",
+    building: false,
+    queueState: "idle",
+    elapsedDurationMs: 0,
+    estimatedDurationMs: 0,
+    percent: 0,
     queue: { inQueue: false, why: "" },
     currentBuild: null,
     progress: { percent: 0, label: "Not configured" },
