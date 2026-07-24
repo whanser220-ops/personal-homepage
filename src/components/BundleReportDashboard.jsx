@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button as AntButton, Card as AntCard, Input as AntInput, Select as AntSelect, Tag as AntTag } from "antd";
+import { BuildProgressPanel } from "./BuildProgressPanel.jsx";
 
 const dataBasePath = "/bundle-report-data";
 const pageSize = 50;
@@ -202,6 +203,8 @@ export function BundleReportDashboard() {
       onSelectReport={selectReport}
     >
       {loadError && <AntTag color="error">报告加载失败：{loadError}</AntTag>}
+
+      <BuildProgressPanel />
 
       <section className="report-summary-grid" aria-label="概览">
         <SummaryStat label="Bundle 总数" value={formatInteger(report.summary.bundleCount)} />
