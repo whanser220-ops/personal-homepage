@@ -127,9 +127,15 @@ export async function writeBuildMetricEvent(input, defaultJobName = DEFAULT_JOB_
 }
 
 async function upsertRun(client, event) {
-  const terminal = event.state === "success" || event.state === "failure";
+  const terminal =
+    event.eventType === "run_finished" ||
+    event.eventType === "stage_failed" ||
+    event.eventType === "bundle_failed" ||
+    event.state === "failure";
+  const runState = terminal ? event.state || "failure" : "running";
+  const runResult = terminal ? event.result : "";
   const startedAt = event.eventType === "run_started" || event.eventType === "stage_started" ? event.createdAt : null;
-  const finishedAt = terminal || event.eventType === "run_finished" ? event.createdAt : null;
+  const finishedAt = terminal ? event.createdAt : null;
 
   await client.query(
     `insert into build_metric_runs (
@@ -162,8 +168,8 @@ async function upsertRun(client, event) {
       event.gitCommit,
       event.buildTarget,
       event.packageName,
-      event.state,
-      event.result,
+      runState,
+      runResult,
       event.stageId,
       event.stageName,
       startedAt,

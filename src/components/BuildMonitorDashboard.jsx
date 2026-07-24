@@ -154,7 +154,11 @@ export function BuildMonitorDashboard() {
       dataIndex: "state",
       key: "state",
       width: 90,
-      render: (value, row) => <Tag color={statusColor(value)}>{row.cached ? "cached" : statusLabel(value)}</Tag>,
+      render: (value, row) => (
+        <Tag color={statusColor(value)}>
+          {row.cached && value === "success" ? "cached" : row.cached && value === "running" ? "copying" : statusLabel(value)}
+        </Tag>
+      ),
     },
     {
       title: "耗时",
@@ -364,6 +368,10 @@ function formatDuration(ms) {
   const value = Number(ms || 0);
   if (!Number.isFinite(value) || value <= 0) {
     return "-";
+  }
+
+  if (value < 1000) {
+    return `${Math.max(1, Math.round(value))}ms`;
   }
 
   const totalSeconds = Math.round(value / 1000);
