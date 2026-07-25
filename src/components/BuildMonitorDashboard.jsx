@@ -57,6 +57,7 @@ export function BuildMonitorDashboard() {
   const [snapshot, setSnapshot] = useState(emptySnapshot);
   const [connected, setConnected] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     let disposed = false;
@@ -109,6 +110,14 @@ export function BuildMonitorDashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   async function refreshSnapshot() {
     try {
       const response = await fetch("/api/build-metrics/runs/latest", { cache: "no-store" });
@@ -128,6 +137,31 @@ export function BuildMonitorDashboard() {
   const totalBundles = summary.totalBundles || bundles.length;
   const completedBundles = summary.completedBundles || 0;
   const bundlePercent = totalBundles > 0 ? Math.round((completedBundles / totalBundles) * 100) : 0;
+  const activeBundleCount = summary.activeBundles || bundles.filter((bundle) => bundle.state === "running").length;
+  const elapsedDurationMs = getRunElapsedDurationMs(run, summary, snapshot.state, nowMs);
+
+  const activeBundleRows = useMemo(
+    () =>
+      bundles
+        .filter((bundle) => bundle.state === "running")
+        .slice()
+        .sort((left, right) => compareBundleSizeDesc(left, right) || compareBundleName(left, right)),
+    [bundles],
+  );
+
+  const completedBundleRows = useMemo(
+    () =>
+      bundles
+        .filter((bundle) => bundle.state === "success" || bundle.state === "failure")
+        .slice()
+        .sort(
+          (left, right) =>
+            getBundleDurationMs(right, nowMs) - getBundleDurationMs(left, nowMs) ||
+            compareBundleSizeDesc(left, right) ||
+            compareBundleName(left, right),
+        ),
+    [bundles, nowMs],
+  );
 
   const stagePieData = useMemo(() => buildDurationPieData(stages), [stages]);
 
@@ -163,20 +197,13 @@ export function BuildMonitorDashboard() {
       dataIndex: "durationMs",
       key: "durationMs",
       width: 120,
-      render: (value) => formatDuration(value),
+      render: (_, row) => formatDuration(getBundleDurationMs(row, nowMs)),
     },
     {
       title: "大小",
       key: "size",
       width: 130,
       render: (_, row) => formatBytes(row.sizeBytes || row.inputSizeBytes),
-    },
-    {
-      title: "进度",
-      key: "progress",
-      width: 120,
-      render: (_, row) =>
-        row.completedBundles && row.totalBundles ? `${row.completedBundles}/${row.totalBundles}` : "-",
     },
   ];
 
@@ -235,7 +262,7 @@ export function BuildMonitorDashboard() {
             <Statistic title="状态" value={statusLabel(snapshot.state)} valueStyle={{ color: statusTextColor(snapshot.state) }} />
           </Card>
           <Card>
-            <Statistic title="总耗时" value={formatDuration(run?.totalDurationMs || summary.totalDurationMs)} />
+            <Statistic title="总耗时" value={formatDuration(elapsedDurationMs)} />
           </Card>
           <Card>
             <Statistic title="当前阶段" value={snapshot.currentStage || "-"} />
@@ -246,6 +273,13 @@ export function BuildMonitorDashboard() {
         </section>
 
         <section className="build-monitor-progress" aria-label="Bundle 进度">
+          <div className="build-monitor-progress-summary">
+            <Typography.Text strong>Bundle 总进度</Typography.Text>
+            <Typography.Text type="secondary">
+              已完成 {completedBundles}/{totalBundles || 0}
+              {activeBundleCount > 0 ? ` · 正在构建 ${activeBundleCount}` : ""}
+            </Typography.Text>
+          </div>
           <Progress percent={bundlePercent} status={snapshot.state === "failure" ? "exception" : "active"} />
         </section>
 
@@ -254,7 +288,7 @@ export function BuildMonitorDashboard() {
             {stagePieData.length > 0 ? (
               <PieChart
                 data={stagePieData}
-                angleField="durationMs"
+                angleField="durationSeconds"
                 colorField="stage"
                 height={320}
                 radius={0.8}
@@ -265,6 +299,15 @@ export function BuildMonitorDashboard() {
                 }}
                 legend={{
                   color: { position: "bottom" },
+                }}
+                tooltip={{
+                  items: [
+                    {
+                      field: "durationSeconds",
+                      name: "耗时",
+                      valueFormatter: (value) => formatDuration(Number(value || 0) * 1000),
+                    },
+                  ],
                 }}
               />
             ) : (
@@ -293,12 +336,27 @@ export function BuildMonitorDashboard() {
 
         <section className="build-monitor-section" aria-label="实时 Bundle">
           <Card title="实时 Bundle 构建">
+            <Typography.Title level={5}>正在构建</Typography.Title>
             <Table
               rowKey="bundleName"
               columns={bundleColumns}
-              dataSource={bundles}
+              dataSource={activeBundleRows}
+              locale={{ emptyText: <Empty description="暂无正在构建的 Bundle" /> }}
+              pagination={false}
+              scroll={{ x: 760 }}
+              size="middle"
+            />
+
+            <Typography.Title className="build-monitor-subtitle" level={5}>
+              已完成
+            </Typography.Title>
+            <Table
+              rowKey="bundleName"
+              columns={bundleColumns}
+              dataSource={completedBundleRows}
+              locale={{ emptyText: <Empty description="暂无已完成的 Bundle" /> }}
               pagination={{ pageSize: 20, hideOnSinglePage: true }}
-              scroll={{ x: 920 }}
+              scroll={{ x: 760 }}
               size="middle"
             />
           </Card>
@@ -366,7 +424,70 @@ function buildDurationPieData(stages) {
     });
   }
 
-  return visible;
+  return visible.map((stage) => ({
+    ...stage,
+    durationSeconds: Number((stage.durationMs / 1000).toFixed(1)),
+    durationLabel: formatDuration(stage.durationMs),
+  }));
+}
+
+function getRunElapsedDurationMs(run, summary, state, nowMs) {
+  const started = parseTimeMs(run?.startedAt);
+  if (started) {
+    const finished = parseTimeMs(run?.finishedAt);
+    if (finished && finished >= started) {
+      return finished - started;
+    }
+    if (state === "running" || run?.state === "running") {
+      return Math.max(0, nowMs - started);
+    }
+  }
+
+  return Number(run?.totalDurationMs || summary?.totalDurationMs || 0);
+}
+
+function getBundleDurationMs(bundle, nowMs) {
+  const explicitDuration = Number(bundle?.durationMs || 0);
+  if (explicitDuration > 0) {
+    return explicitDuration;
+  }
+
+  const started = parseTimeMs(bundle?.startedAt);
+  if (!started) {
+    return 0;
+  }
+
+  const finished = parseTimeMs(bundle?.finishedAt);
+  if (finished && finished >= started) {
+    return finished - started;
+  }
+
+  if (bundle?.state === "running") {
+    return Math.max(0, nowMs - started);
+  }
+
+  return 0;
+}
+
+function compareBundleSizeDesc(left, right) {
+  return getBundleSizeForSort(right) - getBundleSizeForSort(left);
+}
+
+function compareBundleName(left, right) {
+  return String(left?.bundleName || "").localeCompare(String(right?.bundleName || ""));
+}
+
+function getBundleSizeForSort(bundle) {
+  return Number(bundle?.sizeBytes || bundle?.inputSizeBytes || 0);
+}
+
+function parseTimeMs(value) {
+  if (!value) {
+    return 0;
+  }
+
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function statusTextColor(state) {
@@ -408,7 +529,7 @@ function formatDuration(ms) {
   }
 
   if (value < 1000) {
-    return `${Math.max(1, Math.round(value))}ms`;
+    return `${Math.max(0.1, value / 1000).toFixed(1)}s`;
   }
 
   const totalSeconds = Math.round(value / 1000);
@@ -417,7 +538,7 @@ function formatDuration(ms) {
   const seconds = totalSeconds % 60;
 
   if (hours > 0) {
-    return `${hours}h ${minutes}m`;
+    return `${hours}h ${minutes}m ${seconds}s`;
   }
   if (minutes > 0) {
     return `${minutes}m ${seconds}s`;

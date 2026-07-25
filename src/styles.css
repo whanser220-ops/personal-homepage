@@ -1215,6 +1215,14 @@ h3 {
   background: #ffffff;
 }
 
+.build-monitor-progress-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
 .build-monitor-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1223,6 +1231,10 @@ h3 {
 
 .build-monitor-section {
   min-width: 0;
+}
+
+.build-monitor-subtitle {
+  margin-top: 22px;
 }
 
 .build-monitor-page .ant-table-cell code {
