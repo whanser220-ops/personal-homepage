@@ -129,10 +129,14 @@ export async function writeBuildMetricEvent(input, defaultJobName = DEFAULT_JOB_
 async function upsertRun(client, event) {
   const terminal =
     event.eventType === "run_finished" ||
+    event.eventType === "success" ||
+    event.eventType === "failure" ||
     event.eventType === "stage_failed" ||
     event.eventType === "bundle_failed" ||
     event.state === "failure";
-  const runState = terminal ? event.state || "failure" : "running";
+  const runState = terminal
+    ? event.state || (event.eventType === "success" ? "success" : "failure")
+    : "running";
   const runResult = terminal ? event.result : "";
   const startedAt = event.eventType === "run_started" || event.eventType === "stage_started" ? event.createdAt : null;
   const finishedAt = terminal ? event.createdAt : null;
@@ -151,7 +155,11 @@ async function upsertRun(client, event) {
        git_commit = coalesce(nullif(excluded.git_commit, ''), build_metric_runs.git_commit),
        build_target = coalesce(nullif(excluded.build_target, ''), build_metric_runs.build_target),
        package_name = coalesce(nullif(excluded.package_name, ''), build_metric_runs.package_name),
-       state = excluded.state,
+       state = case
+         when build_metric_runs.state in ('success', 'failure') and excluded.state = 'running'
+           then build_metric_runs.state
+         else excluded.state
+       end,
        result = coalesce(nullif(excluded.result, ''), build_metric_runs.result),
        current_stage_id = coalesce(nullif(excluded.current_stage_id, ''), build_metric_runs.current_stage_id),
        current_stage_name = coalesce(nullif(excluded.current_stage_name, ''), build_metric_runs.current_stage_name),
