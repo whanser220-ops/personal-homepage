@@ -20,6 +20,13 @@ const ColumnChart = dynamic(() => import("@ant-design/charts").then((module) => 
   ssr: false,
 });
 
+const PieChart = dynamic(() => import("@ant-design/charts").then((module) => module.Pie), {
+  ssr: false,
+});
+
+const MIN_STAGE_PIE_SLICE_RATIO = 0.03;
+const MIN_STAGE_PIE_SLICE_MS = 1000;
+
 const emptySnapshot = {
   configured: false,
   source: "empty",
@@ -122,16 +129,7 @@ export function BuildMonitorDashboard() {
   const completedBundles = summary.completedBundles || 0;
   const bundlePercent = totalBundles > 0 ? Math.round((completedBundles / totalBundles) * 100) : 0;
 
-  const stageChartData = useMemo(
-    () =>
-      stages
-        .filter((stage) => stage.durationMs > 0)
-        .map((stage) => ({
-          stage: stage.stageName || stage.stageId,
-          minutes: Number((stage.durationMs / 60000).toFixed(2)),
-        })),
-    [stages],
-  );
+  const stagePieData = useMemo(() => buildDurationPieData(stages), [stages]);
 
   const assetTypeChartData = useMemo(
     () =>
@@ -253,17 +251,21 @@ export function BuildMonitorDashboard() {
 
         <section className="build-monitor-grid" aria-label="构建耗时">
           <Card title="业务阶段耗时">
-            {stageChartData.length > 0 ? (
-              <ColumnChart
-                data={stageChartData}
-                xField="stage"
-                yField="minutes"
-                height={320}
-                axis={{
-                  x: { labelAutoRotate: false, labelAutoHide: true },
-                  y: { title: "分钟" },
-                }}
+            {stagePieData.length > 0 ? (
+              <PieChart
+                data={stagePieData}
+                angleField="durationMs"
                 colorField="stage"
+                height={320}
+                radius={0.8}
+                innerRadius={0.55}
+                label={{
+                  text: "stage",
+                  position: "outside",
+                }}
+                legend={{
+                  color: { position: "bottom" },
+                }}
               />
             ) : (
               <Empty description="暂无阶段耗时" />
@@ -330,6 +332,41 @@ function statusColor(state) {
     return "processing";
   }
   return "default";
+}
+
+function buildDurationPieData(stages) {
+  const rows = (stages || [])
+    .map((stage) => ({
+      stage: stage.stageName || stage.stageId || "-",
+      durationMs: Number(stage.durationMs || 0),
+    }))
+    .filter((stage) => Number.isFinite(stage.durationMs) && stage.durationMs > 0);
+
+  const totalMs = rows.reduce((total, stage) => total + stage.durationMs, 0);
+  if (totalMs <= 0) {
+    return [];
+  }
+
+  const thresholdMs = Math.max(totalMs * MIN_STAGE_PIE_SLICE_RATIO, MIN_STAGE_PIE_SLICE_MS);
+  const visible = [];
+  let otherMs = 0;
+
+  for (const row of rows) {
+    if (row.durationMs < thresholdMs) {
+      otherMs += row.durationMs;
+    } else {
+      visible.push(row);
+    }
+  }
+
+  if (otherMs > 0) {
+    visible.push({
+      stage: "其他",
+      durationMs: otherMs,
+    });
+  }
+
+  return visible;
 }
 
 function statusTextColor(state) {
