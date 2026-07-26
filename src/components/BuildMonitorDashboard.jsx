@@ -53,9 +53,9 @@ const emptySnapshot = {
   },
 };
 
-export function BuildMonitorDashboard() {
-  const [snapshot, setSnapshot] = useState(emptySnapshot);
-  const [connected, setConnected] = useState(false);
+export function BuildMonitorDashboard({ initialSnapshot = null }) {
+  const [snapshot, setSnapshot] = useState(() => initialSnapshot || emptySnapshot);
+  const [connected, setConnected] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -78,7 +78,9 @@ export function BuildMonitorDashboard() {
       }
     }
 
-    loadInitial();
+    if (!initialSnapshot) {
+      loadInitial();
+    }
 
     source = new EventSource("/api/build-metrics/stream");
     source.addEventListener("open", () => {
@@ -134,6 +136,8 @@ export function BuildMonitorDashboard() {
   const assetTypes = snapshot.assetTypes || [];
   const summary = snapshot.summary || emptySnapshot.summary;
   const run = snapshot.currentRun;
+  const sseStatusColor = connected ? "green" : connected === false ? "default" : "processing";
+  const sseStatusText = connected ? "SSE connected" : connected === false ? "SSE offline" : "SSE connecting";
   const totalBundles = summary.totalBundles || bundles.length;
   const completedBundles = summary.completedBundles || 0;
   const bundlePercent = totalBundles > 0 ? Math.round((completedBundles / totalBundles) * 100) : 0;
@@ -243,7 +247,7 @@ export function BuildMonitorDashboard() {
           </Typography.Text>
         </div>
         <Space className="build-monitor-actions">
-          <Tag color={connected ? "green" : "default"}>{connected ? "SSE connected" : "SSE offline"}</Tag>
+          <Tag color={sseStatusColor}>{sseStatusText}</Tag>
           <Button icon={<ReloadOutlined />} onClick={refreshSnapshot}>
             刷新
           </Button>

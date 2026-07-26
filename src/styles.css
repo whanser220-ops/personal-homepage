@@ -1244,6 +1244,17 @@ h3 {
   white-space: normal;
 }
 
+.build-monitor-page .ant-table-measure-row {
+  height: 0 !important;
+  visibility: hidden !important;
+}
+
+.build-monitor-page .ant-table-measure-cell {
+  height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
 @media (max-width: 1100px) {
   .build-monitor-topbar {
     grid-template-columns: 1fr;
