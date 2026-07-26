@@ -1128,6 +1128,116 @@ h3 {
   font-size: 14px;
 }
 
+.build-monitor-loading-page {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.build-monitor-loader {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  width: min(420px, 100%);
+  text-align: center;
+}
+
+.build-monitor-loader h1 {
+  margin: 0 0 4px;
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.build-monitor-loader p {
+  margin: 0;
+  color: #697471;
+}
+
+.build-monitor-loader-mark {
+  position: relative;
+  width: 76px;
+  height: 76px;
+}
+
+.build-monitor-loader-mark::before,
+.build-monitor-loader-mark::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  border: 3px solid transparent;
+  border-radius: 50%;
+}
+
+.build-monitor-loader-mark::before {
+  border-top-color: #26858a;
+  border-right-color: rgba(38, 133, 138, 0.35);
+  animation: build-monitor-spin 0.9s linear infinite;
+}
+
+.build-monitor-loader-mark::after {
+  inset: 10px;
+  border-bottom-color: #d88b51;
+  border-left-color: rgba(216, 139, 81, 0.34);
+  animation: build-monitor-spin 1.35s linear infinite reverse;
+}
+
+.build-monitor-loader-mark span {
+  position: absolute;
+  inset: 25px;
+  border-radius: 50%;
+  background: #26858a;
+  box-shadow: 0 0 0 8px rgba(38, 133, 138, 0.12);
+  animation: build-monitor-pulse 1.2s ease-in-out infinite;
+}
+
+.build-monitor-loader-bar {
+  position: relative;
+  overflow: hidden;
+  width: min(260px, 80vw);
+  height: 6px;
+  border-radius: 999px;
+  background: #dbe3e4;
+}
+
+.build-monitor-loader-bar::before {
+  position: absolute;
+  inset: 0;
+  width: 38%;
+  content: "";
+  border-radius: inherit;
+  background: linear-gradient(90deg, #26858a, #d88b51);
+  animation: build-monitor-loader-bar 1.1s ease-in-out infinite;
+}
+
+@keyframes build-monitor-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes build-monitor-pulse {
+  0%,
+  100% {
+    transform: scale(0.86);
+    opacity: 0.62;
+  }
+
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes build-monitor-loader-bar {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  100% {
+    transform: translateX(280%);
+  }
+}
+
 .build-monitor-topbar {
   position: sticky;
   top: 0;

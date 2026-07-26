@@ -26,6 +26,7 @@ const PieChart = dynamic(() => import("@ant-design/charts").then((module) => mod
 
 const MIN_STAGE_PIE_SLICE_RATIO = 0.03;
 const MIN_STAGE_PIE_SLICE_MS = 1000;
+const BOOT_LOADING_MS = 900;
 
 const emptySnapshot = {
   configured: false,
@@ -58,6 +59,15 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   const [connected, setConnected] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [nowMs, setNowMs] = useState(() => initialNowMs || Date.now());
+  const [dashboardReady, setDashboardReady] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDashboardReady(true);
+    }, BOOT_LOADING_MS);
+
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -177,6 +187,10 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
       })),
     [assetTypes],
   );
+
+  if (!dashboardReady) {
+    return <BuildMonitorLoadingScreen run={run} />;
+  }
 
   const bundleColumns = [
     {
@@ -383,6 +397,25 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
           </Card>
         </section>
       </main>
+    </div>
+  );
+}
+
+function BuildMonitorLoadingScreen({ run }) {
+  return (
+    <div className="build-monitor-page build-monitor-loading-page">
+      <div className="build-monitor-loader" role="status" aria-live="polite">
+        <div className="build-monitor-loader-mark" aria-hidden="true">
+          <span />
+        </div>
+        <div>
+          <h1>构建监控</h1>
+          <p>
+            {run ? `${run.jobName} #${run.buildNumber || "-"} 指标加载中` : "正在加载构建指标"}
+          </p>
+        </div>
+        <div className="build-monitor-loader-bar" aria-hidden="true" />
+      </div>
     </div>
   );
 }
