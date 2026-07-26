@@ -248,7 +248,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   ];
 
   return (
-    <div className="build-monitor-page">
+    <div className="build-monitor-page build-monitor-dashboard-ready">
       <header className="build-monitor-topbar">
         <a href="/" className="build-monitor-home" aria-label="返回首页">
           <img src="/assets/site-logo.webp" alt="" width="34" height="34" />

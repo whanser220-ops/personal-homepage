@@ -1134,6 +1134,10 @@ h3 {
   padding: 24px;
 }
 
+.build-monitor-dashboard-ready {
+  animation: build-monitor-dashboard-in 180ms ease-out both;
+}
+
 .build-monitor-loader {
   display: grid;
   justify-items: center;
@@ -1235,6 +1239,16 @@ h3 {
 
   100% {
     transform: translateX(280%);
+  }
+}
+
+@keyframes build-monitor-dashboard-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
   }
 }
 
