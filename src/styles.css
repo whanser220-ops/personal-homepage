@@ -1200,7 +1200,40 @@ h3 {
 .build-monitor-stats .ant-card,
 .build-monitor-grid .ant-card,
 .build-monitor-section .ant-card {
+  border: 1px solid #d7dde2;
   border-radius: 8px;
+  background: #ffffff;
+}
+
+.build-monitor-page .ant-card-head {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: 0 24px;
+  border-bottom: 1px solid #edf0f2;
+}
+
+.build-monitor-page .ant-card-head-wrapper {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+}
+
+.build-monitor-page .ant-card-head-title {
+  flex: 1;
+  min-width: 0;
+  padding: 16px 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.build-monitor-page .ant-card-body {
+  padding: 24px;
 }
 
 .build-monitor-stats .ant-statistic-content-value {
