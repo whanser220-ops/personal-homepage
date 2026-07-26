@@ -13,6 +13,7 @@ export const metadata = {
 
 export default async function BuildMonitorPage() {
   let initialSnapshot = null;
+  const initialNowMs = Date.now();
   try {
     initialSnapshot = await readLatestBuildMetrics();
   } catch {
@@ -21,7 +22,7 @@ export default async function BuildMonitorPage() {
 
   return (
     <AntdProvider>
-      <BuildMonitorDashboard initialSnapshot={initialSnapshot} />
+      <BuildMonitorDashboard initialSnapshot={initialSnapshot} initialNowMs={initialNowMs} />
     </AntdProvider>
   );
 }

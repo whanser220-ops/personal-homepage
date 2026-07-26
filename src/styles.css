@@ -1229,6 +1229,17 @@ h3 {
   gap: 18px;
 }
 
+.build-monitor-chart-frame {
+  display: grid;
+  align-items: center;
+  min-height: 320px;
+  min-width: 0;
+}
+
+.build-monitor-chart-frame > div {
+  min-width: 0;
+}
+
 .build-monitor-section {
   min-width: 0;
 }

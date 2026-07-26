@@ -53,11 +53,11 @@ const emptySnapshot = {
   },
 };
 
-export function BuildMonitorDashboard({ initialSnapshot = null }) {
+export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = null }) {
   const [snapshot, setSnapshot] = useState(() => initialSnapshot || emptySnapshot);
   const [connected, setConnected] = useState(null);
   const [loadError, setLoadError] = useState("");
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [nowMs, setNowMs] = useState(() => initialNowMs || Date.now());
 
   useEffect(() => {
     let disposed = false;
@@ -289,52 +289,56 @@ export function BuildMonitorDashboard({ initialSnapshot = null }) {
 
         <section className="build-monitor-grid" aria-label="构建耗时">
           <Card title="业务阶段耗时">
-            {stagePieData.length > 0 ? (
-              <PieChart
-                data={stagePieData}
-                angleField="durationSeconds"
-                colorField="stage"
-                height={320}
-                radius={0.8}
-                innerRadius={0.55}
-                label={{
-                  text: "stage",
-                  position: "outside",
-                }}
-                legend={{
-                  color: { position: "bottom" },
-                }}
-                tooltip={{
-                  items: [
-                    {
-                      field: "durationSeconds",
-                      name: "耗时",
-                      valueFormatter: (value) => formatDuration(Number(value || 0) * 1000),
-                    },
-                  ],
-                }}
-              />
-            ) : (
-              <Empty description="暂无阶段耗时" />
-            )}
+            <div className="build-monitor-chart-frame">
+              {stagePieData.length > 0 ? (
+                <PieChart
+                  data={stagePieData}
+                  angleField="durationSeconds"
+                  colorField="stage"
+                  height={320}
+                  radius={0.8}
+                  innerRadius={0.55}
+                  label={{
+                    text: "stage",
+                    position: "outside",
+                  }}
+                  legend={{
+                    color: { position: "bottom" },
+                  }}
+                  tooltip={{
+                    items: [
+                      {
+                        field: "durationSeconds",
+                        name: "耗时",
+                        valueFormatter: (value) => formatDuration(Number(value || 0) * 1000),
+                      },
+                    ],
+                  }}
+                />
+              ) : (
+                <Empty description="暂无阶段耗时" />
+              )}
+            </div>
           </Card>
 
           <Card title="各类型资源占用">
-            {assetTypeChartData.length > 0 ? (
-              <ColumnChart
-                data={assetTypeChartData}
-                xField="type"
-                yField="mb"
-                height={320}
-                axis={{
-                  x: { labelAutoRotate: false, labelAutoHide: true },
-                  y: { title: "MB" },
-                }}
-                colorField="type"
-              />
-            ) : (
-              <Empty description="暂无资源类型统计" />
-            )}
+            <div className="build-monitor-chart-frame">
+              {assetTypeChartData.length > 0 ? (
+                <ColumnChart
+                  data={assetTypeChartData}
+                  xField="type"
+                  yField="mb"
+                  height={320}
+                  axis={{
+                    x: { labelAutoRotate: false, labelAutoHide: true },
+                    y: { title: "MB" },
+                  }}
+                  colorField="type"
+                />
+              ) : (
+                <Empty description="暂无资源类型统计" />
+              )}
+            </div>
           </Card>
         </section>
 
