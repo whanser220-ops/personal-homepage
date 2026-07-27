@@ -26,7 +26,7 @@ const PieChart = dynamic(() => import("@ant-design/charts").then((module) => mod
 
 const MIN_STAGE_PIE_SLICE_RATIO = 0.03;
 const MIN_STAGE_PIE_SLICE_MS = 1000;
-const BOOT_LOADING_MS = 1400;
+const BOOT_LOADING_MS = 2200;
 
 const emptySnapshot = {
   configured: false,
