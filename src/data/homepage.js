@@ -64,7 +64,7 @@ export const focusItems = [
 
 export const projects = [
   {
-    title: "Unity6 Build Monitor",
+    title: "Unity6 构建监控",
     year: "2026",
     subtitle: "CI observability",
     summary: "展示 Unity 云构建内部业务打点，关注阶段耗时、Bundle 构建和资源类型占用。",
