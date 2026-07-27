@@ -27,6 +27,7 @@ const PieChart = dynamic(() => import("@ant-design/charts").then((module) => mod
 const MIN_STAGE_PIE_SLICE_RATIO = 0.03;
 const MIN_STAGE_PIE_SLICE_MS = 1000;
 const BOOT_LOADING_MS = 2200;
+const BOOT_LOADING_MAX_MS = 6500;
 
 const emptySnapshot = {
   configured: false,
@@ -59,14 +60,22 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   const [connected, setConnected] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [nowMs, setNowMs] = useState(() => initialNowMs || Date.now());
-  const [dashboardReady, setDashboardReady] = useState(false);
+  const [minimumLoadingElapsed, setMinimumLoadingElapsed] = useState(false);
+  const [firstSnapshotSettled, setFirstSnapshotSettled] = useState(() => Boolean(initialSnapshot));
+  const [forceReleaseLoading, setForceReleaseLoading] = useState(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setDashboardReady(true);
+    const minimumTimer = window.setTimeout(() => {
+      setMinimumLoadingElapsed(true);
     }, BOOT_LOADING_MS);
+    const maximumTimer = window.setTimeout(() => {
+      setForceReleaseLoading(true);
+    }, BOOT_LOADING_MAX_MS);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(minimumTimer);
+      window.clearTimeout(maximumTimer);
+    };
   }, []);
 
   useEffect(() => {
@@ -82,10 +91,12 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
         if (!disposed) {
           setSnapshot(payload);
           setLoadError(response.ok ? "" : "构建监控暂不可用");
+          setFirstSnapshotSettled(true);
         }
       } catch {
         if (!disposed) {
           setLoadError("构建监控暂不可用");
+          setFirstSnapshotSettled(true);
         }
       }
     }
@@ -124,8 +135,10 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
       try {
         setSnapshot(JSON.parse(event.data));
         setLoadError("");
+        setFirstSnapshotSettled(true);
       } catch {
         setLoadError("构建监控数据格式异常");
+        setFirstSnapshotSettled(true);
       }
     });
     source.addEventListener("error", () => {
@@ -174,6 +187,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   const bundlePercent = totalBundles > 0 ? Math.round((completedBundles / totalBundles) * 100) : 0;
   const activeBundleCount = summary.activeBundles || bundles.filter((bundle) => bundle.state === "running").length;
   const elapsedDurationMs = getRunElapsedDurationMs(run, summary, snapshot.state, nowMs);
+  const dashboardReady = forceReleaseLoading || (minimumLoadingElapsed && firstSnapshotSettled);
 
   const activeBundleRows = useMemo(
     () =>
