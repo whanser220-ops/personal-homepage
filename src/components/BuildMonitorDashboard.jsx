@@ -26,8 +26,7 @@ const PieChart = dynamic(() => import("@ant-design/charts").then((module) => mod
 
 const MIN_STAGE_PIE_SLICE_RATIO = 0.03;
 const MIN_STAGE_PIE_SLICE_MS = 1000;
-const BOOT_LOADING_MS = 2200;
-const BOOT_LOADING_MAX_MS = 6500;
+const BOOT_LOADING_MS = 900;
 
 const emptySnapshot = {
   configured: false,
@@ -60,22 +59,14 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   const [connected, setConnected] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [nowMs, setNowMs] = useState(() => initialNowMs || Date.now());
-  const [minimumLoadingElapsed, setMinimumLoadingElapsed] = useState(false);
-  const [firstSnapshotSettled, setFirstSnapshotSettled] = useState(() => Boolean(initialSnapshot));
-  const [forceReleaseLoading, setForceReleaseLoading] = useState(false);
+  const [dashboardReady, setDashboardReady] = useState(false);
 
   useEffect(() => {
-    const minimumTimer = window.setTimeout(() => {
-      setMinimumLoadingElapsed(true);
+    const timer = window.setTimeout(() => {
+      setDashboardReady(true);
     }, BOOT_LOADING_MS);
-    const maximumTimer = window.setTimeout(() => {
-      setForceReleaseLoading(true);
-    }, BOOT_LOADING_MAX_MS);
 
-    return () => {
-      window.clearTimeout(minimumTimer);
-      window.clearTimeout(maximumTimer);
-    };
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -91,12 +82,10 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
         if (!disposed) {
           setSnapshot(payload);
           setLoadError(response.ok ? "" : "构建监控暂不可用");
-          setFirstSnapshotSettled(true);
         }
       } catch {
         if (!disposed) {
           setLoadError("构建监控暂不可用");
-          setFirstSnapshotSettled(true);
         }
       }
     }
@@ -135,10 +124,8 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
       try {
         setSnapshot(JSON.parse(event.data));
         setLoadError("");
-        setFirstSnapshotSettled(true);
       } catch {
         setLoadError("构建监控数据格式异常");
-        setFirstSnapshotSettled(true);
       }
     });
     source.addEventListener("error", () => {
@@ -187,7 +174,6 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   const bundlePercent = totalBundles > 0 ? Math.round((completedBundles / totalBundles) * 100) : 0;
   const activeBundleCount = summary.activeBundles || bundles.filter((bundle) => bundle.state === "running").length;
   const elapsedDurationMs = getRunElapsedDurationMs(run, summary, snapshot.state, nowMs);
-  const dashboardReady = forceReleaseLoading || (minimumLoadingElapsed && firstSnapshotSettled);
 
   const activeBundleRows = useMemo(
     () =>
@@ -278,9 +264,12 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
     },
   ];
 
+  if (!dashboardReady) {
+    return <BuildMonitorLoadingScreen run={run} />;
+  }
+
   return (
-    <div className={`build-monitor-page ${dashboardReady ? "build-monitor-dashboard-ready" : "build-monitor-dashboard-booting"}`}>
-      <BuildMonitorLoadingScreen ready={dashboardReady} run={run} />
+    <div className="build-monitor-page build-monitor-dashboard-ready">
       <header className="build-monitor-topbar">
         <a href="/" className="build-monitor-home" aria-label="返回首页">
           <img src="/assets/site-logo.webp" alt="" width="34" height="34" />
@@ -433,13 +422,13 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   );
 }
 
-function BuildMonitorLoadingScreen({ run, ready }) {
+function BuildMonitorLoadingScreen({ run }) {
   const loadingText = run
     ? `${run.jobName} #${run.buildNumber || "-"} 指标加载中`
-    : "正在加载构建指标";
+    : "正在启动构建指标面板";
 
   return (
-    <div className={`build-monitor-loading-overlay${ready ? " is-ready" : ""}`}>
+    <div className="build-monitor-page build-monitor-loading-page">
       <div className="build-monitor-loader" role="status" aria-live="polite">
         <div className="build-monitor-loader-mark" aria-hidden="true">
           <span />

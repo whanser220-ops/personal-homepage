@@ -1329,39 +1329,14 @@ h3 {
 
 .build-monitor-loading-page {
   display: grid;
-  place-items: center;
-  padding: 24px;
-}
-
-.build-monitor-loading-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: grid;
+  min-height: 100vh;
   place-items: center;
   padding: 24px;
   background: #f5f7f8;
-  opacity: 1;
-  visibility: visible;
-  transition:
-    opacity 260ms ease,
-    visibility 260ms ease;
-}
-
-.build-monitor-loading-overlay.is-ready {
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-  animation: none;
 }
 
 .build-monitor-dashboard-ready {
   animation: build-monitor-dashboard-in 180ms ease-out both;
-}
-
-.build-monitor-dashboard-booting .build-monitor-topbar,
-.build-monitor-dashboard-booting .build-monitor-main {
-  opacity: 0;
 }
 
 .build-monitor-loader {
