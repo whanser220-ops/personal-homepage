@@ -26,7 +26,7 @@ const PieChart = dynamic(() => import("@ant-design/charts").then((module) => mod
 
 const MIN_STAGE_PIE_SLICE_RATIO = 0.03;
 const MIN_STAGE_PIE_SLICE_MS = 1000;
-const BOOT_LOADING_MS = 900;
+const BOOT_LOADING_MS = 1400;
 
 const emptySnapshot = {
   configured: false,
@@ -265,7 +265,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   ];
 
   return (
-    <div className="build-monitor-page build-monitor-dashboard-ready">
+    <div className={`build-monitor-page ${dashboardReady ? "build-monitor-dashboard-ready" : "build-monitor-dashboard-booting"}`}>
       <BuildMonitorLoadingScreen ready={dashboardReady} run={run} />
       <header className="build-monitor-topbar">
         <a href="/" className="build-monitor-home" aria-label="返回首页">
