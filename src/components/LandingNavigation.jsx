@@ -3,12 +3,13 @@
 import { useEffect, useRef } from "react";
 import { animate, stagger } from "animejs";
 import { BookOpen, FolderKanban, Smile } from "lucide-react";
+import { navItems } from "../data/homepage.js";
 
-const navItems = [
-  { href: "/about", label: "关于我", icon: Smile },
-  { href: "/articles", label: "文章", icon: BookOpen },
-  { href: "/projects", label: "项目", icon: FolderKanban },
-];
+const navIcons = {
+  "/about": Smile,
+  "/articles": BookOpen,
+  "/projects": FolderKanban,
+};
 
 function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -49,10 +50,11 @@ export function LandingNavigation() {
   return (
     <main className="dashboard-page" ref={rootRef}>
       <div className="dashboard-shell">
-        <aside className="dashboard-sidebar glass-panel dashboard-animate" aria-label="主页导航">
+        <aside className="dashboard-sidebar glass-panel dashboard-animate" aria-label="首页导航">
           <nav className="dashboard-nav">
             {navItems.map((item) => {
-              const Icon = item.icon;
+              const Icon = navIcons[item.href];
+
               return (
                 <a className="dashboard-nav-link" href={item.href} key={item.label}>
                   <Icon aria-hidden="true" size={24} />

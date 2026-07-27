@@ -5,12 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { animate, stagger } from "animejs";
 import { BookOpen, FolderKanban, Smile } from "lucide-react";
+import { navItems } from "../data/homepage.js";
 
-const navItems = [
-  { href: "/about", label: "关于我", icon: Smile },
-  { href: "/articles", label: "文章", icon: BookOpen },
-  { href: "/projects", label: "项目", icon: FolderKanban },
-];
+const navIcons = {
+  "/about": Smile,
+  "/articles": BookOpen,
+  "/projects": FolderKanban,
+};
 
 export function Header() {
   const pathname = usePathname();
@@ -45,7 +46,7 @@ export function Header() {
           <img src="/assets/site-logo.webp" alt="" width="54" height="54" />
         </Link>
         {navItems.map((item) => {
-          const Icon = item.icon;
+          const Icon = navIcons[item.href];
           const isActive = pathname === item.href;
 
           return (

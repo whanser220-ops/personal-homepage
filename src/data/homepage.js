@@ -64,20 +64,12 @@ export const focusItems = [
 
 export const projects = [
   {
-    status: "线上",
-    title: "个人主页",
-    body: "用于展示个人介绍、文章和项目入口的响应式网站，也是学习全栈开发流程的长期案例。",
-  },
-  {
-    status: "已整合",
-    title: "Unity6 构建监控",
-    body: "展示云容器构建过程中采集到的业务阶段耗时、Bundle 构建状态和资源类型占用。",
-    href: "/build-monitor",
-    linkLabel: "打开监控",
-  },
-  {
-    status: "计划中",
-    title: "内容管理后台",
-    body: "为作品、文章和联系信息准备一个更容易维护的管理入口。",
+    title: "Unity6 Build Monitor",
+    year: "2026",
+    subtitle: "CI observability",
+    summary: "展示 Unity 云构建内部业务打点，关注阶段耗时、Bundle 构建和资源类型占用。",
+    icon: "CI",
+    tags: ["Unity", "Jenkins", "PostgreSQL", "SSE"],
+    links: [{ href: "/build-monitor", label: "Monitor" }],
   },
 ];

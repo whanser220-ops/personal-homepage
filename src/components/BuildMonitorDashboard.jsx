@@ -56,7 +56,7 @@ const emptySnapshot = {
 
 export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = null }) {
   const [snapshot, setSnapshot] = useState(() => initialSnapshot || emptySnapshot);
-  const [connected, setConnected] = useState(null);
+  const [connected, setConnected] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [nowMs, setNowMs] = useState(() => initialNowMs || Date.now());
   const [dashboardReady, setDashboardReady] = useState(false);
@@ -72,6 +72,8 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   useEffect(() => {
     let disposed = false;
     let source;
+    let connectTimer;
+    let pollTimer;
 
     async function loadInitial() {
       try {
@@ -92,9 +94,25 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
       loadInitial();
     }
 
-    source = new EventSource("/api/build-metrics/stream");
+    if (typeof window.EventSource !== "function") {
+      setConnected(false);
+      pollTimer = window.setInterval(loadInitial, 30_000);
+      return () => {
+        disposed = true;
+        window.clearInterval(pollTimer);
+      };
+    }
+
+    connectTimer = window.setTimeout(() => {
+      if (!disposed) {
+        setConnected(false);
+      }
+    }, 5_000);
+
+    source = new window.EventSource("/api/build-metrics/stream");
     source.addEventListener("open", () => {
       if (!disposed) {
+        window.clearTimeout(connectTimer);
         setConnected(true);
       }
     });
@@ -112,12 +130,15 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
     });
     source.addEventListener("error", () => {
       if (!disposed) {
+        window.clearTimeout(connectTimer);
         setConnected(false);
       }
     });
 
     return () => {
       disposed = true;
+      window.clearTimeout(connectTimer);
+      window.clearInterval(pollTimer);
       source?.close();
     };
   }, []);
@@ -188,10 +209,6 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
     [assetTypes],
   );
 
-  if (!dashboardReady) {
-    return <BuildMonitorLoadingScreen run={run} />;
-  }
-
   const bundleColumns = [
     {
       title: "Bundle",
@@ -249,6 +266,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
 
   return (
     <div className="build-monitor-page build-monitor-dashboard-ready">
+      <BuildMonitorLoadingScreen ready={dashboardReady} run={run} />
       <header className="build-monitor-topbar">
         <a href="/" className="build-monitor-home" aria-label="返回首页">
           <img src="/assets/site-logo.webp" alt="" width="34" height="34" />
@@ -401,18 +419,20 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   );
 }
 
-function BuildMonitorLoadingScreen({ run }) {
+function BuildMonitorLoadingScreen({ run, ready }) {
+  const loadingText = run
+    ? `${run.jobName} #${run.buildNumber || "-"} 指标加载中`
+    : "正在加载构建指标";
+
   return (
-    <div className="build-monitor-page build-monitor-loading-page">
+    <div className={`build-monitor-loading-overlay${ready ? " is-ready" : ""}`}>
       <div className="build-monitor-loader" role="status" aria-live="polite">
         <div className="build-monitor-loader-mark" aria-hidden="true">
           <span />
         </div>
         <div>
           <h1>构建监控</h1>
-          <p>
-            {run ? `${run.jobName} #${run.buildNumber || "-"} 指标加载中` : "正在加载构建指标"}
-          </p>
+          <p>{loadingText}</p>
         </div>
         <div className="build-monitor-loader-bar" aria-hidden="true" />
       </div>
