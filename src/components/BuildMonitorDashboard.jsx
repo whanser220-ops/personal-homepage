@@ -12,20 +12,29 @@ import {
   Statistic,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
+import {
+  Box,
+  CheckCircle2,
+  CircleDashed,
+  Clock,
+  Cloud,
+  Database,
+  GitBranch,
+  LoaderCircle,
+  Monitor,
+  Package,
+  Server,
+  XCircle,
+} from "lucide-react";
 
 const ColumnChart = dynamic(() => import("@ant-design/charts").then((module) => module.Column), {
   ssr: false,
 });
 
-const PieChart = dynamic(() => import("@ant-design/charts").then((module) => module.Pie), {
-  ssr: false,
-});
-
-const MIN_STAGE_PIE_SLICE_RATIO = 0.03;
-const MIN_STAGE_PIE_SLICE_MS = 1000;
 const BOOT_LOADING_MS = 900;
 
 const emptySnapshot = {
@@ -53,6 +62,141 @@ const emptySnapshot = {
     totalDurationMs: 0,
   },
 };
+
+const ENVIRONMENT_DEFINITIONS = {
+  cloud: {
+    key: "cloud",
+    label: "云服务器",
+    detail: "1.117.232.198 · Docker/Jenkins 宿主机",
+    icon: Cloud,
+  },
+  jenkins: {
+    key: "jenkins",
+    label: "Jenkins 控制器",
+    detail: "jenkins 容器 · 调度构建任务",
+    icon: Server,
+  },
+  builder: {
+    key: "builder",
+    label: "构建机",
+    detail: "Jenkins Docker agent 节点",
+    icon: Monitor,
+  },
+  container: {
+    key: "container",
+    label: "Unity 容器",
+    detail: "构建工作区 /workspace",
+    icon: Box,
+  },
+  unity: {
+    key: "unity",
+    label: "Unity Editor",
+    detail: "Unity 6000 LinuxEditor 批处理",
+    icon: Server,
+  },
+  github: {
+    key: "github",
+    label: "GitHub",
+    detail: "代码源 Main 分支",
+    icon: GitBranch,
+  },
+  perforce: {
+    key: "perforce",
+    label: "Perforce",
+    detail: "美术资源仓库",
+    icon: Database,
+  },
+  yooasset: {
+    key: "yooasset",
+    label: "YooAsset/SBP",
+    detail: "资源打包工具链",
+    icon: Package,
+  },
+};
+
+const MAIN_FLOW_DEFINITIONS = [
+  {
+    key: "agent",
+    title: "准备构建执行环境",
+    purpose: "让 Jenkins 分配执行节点，并确认构建容器和工作区可用",
+    stageIds: ["agent", "agent-ready"],
+    environments: ["cloud", "jenkins", "builder", "container"],
+    icon: Cloud,
+  },
+  {
+    key: "bootstrap",
+    title: "同步项目代码",
+    purpose: "同步 Unity 项目代码到构建工作区",
+    stageIds: ["bootstrap"],
+    environments: ["builder", "container", "github"],
+    icon: GitBranch,
+  },
+  {
+    key: "p4-sync",
+    title: "同步美术资源",
+    purpose: "从 Perforce 拉取美术和关卡资源",
+    stageIds: ["p4-sync"],
+    environments: ["builder", "container", "perforce"],
+    icon: Database,
+  },
+  {
+    key: "sanitize-source-art",
+    title: "整理资源文件",
+    purpose: "清理资源文件名和路径，避免 Unity 导入失败",
+    stageIds: ["sanitize-source-art"],
+    environments: ["builder", "container"],
+    icon: Box,
+  },
+  {
+    key: "unity-bootstrap",
+    title: "启动 Unity 编辑器",
+    purpose: "完成许可证、LFS 和输出目录准备，并启动 Unity 编辑器",
+    stageIds: ["unity-license", "git-lfs", "cleanup", "unity-editor-start"],
+    fallbackStageIds: ["unity-build-script", "unity-process"],
+    environments: ["builder", "container", "unity"],
+    icon: Server,
+  },
+  {
+    key: "build-target",
+    title: "配置构建目标",
+    purpose: "切换到 Windows64 构建目标并应用构建设置",
+    stageIds: ["build-target-switch", "build-target-settings"],
+    environments: ["container", "unity"],
+    icon: Monitor,
+  },
+  {
+    key: "yooasset-prepare",
+    title: "准备资源打包",
+    purpose: "应用 YooAsset 收集器并生成资源打包计划",
+    stageIds: ["yooasset-prepare", "dependency-analysis", "yooasset-plan-write", "yooasset-apply-collectors"],
+    environments: ["container", "unity", "yooasset"],
+    icon: Package,
+  },
+  {
+    key: "yooasset-build",
+    title: "生成资源包",
+    purpose: "调用 YooAsset/SBP 产出可发布的资源包",
+    stageIds: ["yooasset-sbp-build", "yooasset-sbp-content", "yooasset-sbp-layout"],
+    environments: ["container", "unity", "yooasset"],
+    icon: Package,
+  },
+  {
+    key: "build-player",
+    title: "生成 Windows 程序",
+    purpose: "调用 BuildPipeline 生成 Windows 玩家程序",
+    stageIds: ["build-player"],
+    environments: ["container", "unity"],
+    icon: Monitor,
+  },
+  {
+    key: "package-player",
+    title: "打包构建产物",
+    purpose: "压缩 Windows 构建结果，形成可下载产物",
+    stageIds: ["package-player"],
+    environments: ["builder", "container"],
+    icon: Package,
+  },
+];
 
 export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = null }) {
   const [snapshot, setSnapshot] = useState(() => initialSnapshot || emptySnapshot);
@@ -174,6 +318,9 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   const bundlePercent = totalBundles > 0 ? Math.round((completedBundles / totalBundles) * 100) : 0;
   const activeBundleCount = summary.activeBundles || bundles.filter((bundle) => bundle.state === "running").length;
   const elapsedDurationMs = getRunElapsedDurationMs(run, summary, snapshot.state, nowMs);
+  const mainFlowSteps = useMemo(() => buildMainFlowSteps(stages, snapshot, nowMs), [stages, snapshot, nowMs]);
+  const currentMainFlowStep = getCurrentMainFlowStep(mainFlowSteps);
+  const currentMainFlowLabel = currentMainFlowStep?.title || "-";
 
   const activeBundleRows = useMemo(
     () =>
@@ -197,8 +344,6 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
         ),
     [bundles, nowMs],
   );
-
-  const stagePieData = useMemo(() => buildDurationPieData(stages), [stages]);
 
   const assetTypeChartData = useMemo(
     () =>
@@ -242,28 +387,6 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
     },
   ];
 
-  const stageColumns = [
-    {
-      title: "阶段",
-      dataIndex: "stageName",
-      key: "stageName",
-    },
-    {
-      title: "状态",
-      dataIndex: "state",
-      key: "state",
-      width: 90,
-      render: (value) => <Tag color={statusColor(value)}>{statusLabel(value)}</Tag>,
-    },
-    {
-      title: "耗时",
-      dataIndex: "durationMs",
-      key: "durationMs",
-      width: 130,
-      render: (value) => formatDuration(value),
-    },
-  ];
-
   if (!dashboardReady) {
     return <BuildMonitorLoadingScreen run={run} />;
   }
@@ -304,7 +427,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
             <Statistic title="总耗时" value={formatDuration(elapsedDurationMs)} />
           </Card>
           <Card>
-            <Statistic title="当前阶段" value={snapshot.currentStage || "-"} />
+            <Statistic title="当前主步骤" value={currentMainFlowLabel} />
           </Card>
           <Card>
             <Statistic title="Bundle" value={`${completedBundles}/${totalBundles || 0}`} />
@@ -322,40 +445,9 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
           <Progress percent={bundlePercent} status={snapshot.state === "failure" ? "exception" : "active"} />
         </section>
 
-        <section className="build-monitor-grid" aria-label="构建耗时">
-          <Card title="业务阶段耗时">
-            <div className="build-monitor-chart-frame">
-              {stagePieData.length > 0 ? (
-                <PieChart
-                  data={stagePieData}
-                  angleField="durationSeconds"
-                  colorField="stage"
-                  height={320}
-                  radius={0.8}
-                  innerRadius={0.55}
-                  label={{
-                    text: "stage",
-                    position: "outside",
-                  }}
-                  legend={{
-                    color: { position: "bottom" },
-                  }}
-                  tooltip={{
-                    items: [
-                      {
-                        field: "durationSeconds",
-                        name: "耗时",
-                        valueFormatter: (value) => formatDuration(Number(value || 0) * 1000),
-                      },
-                    ],
-                  }}
-                />
-              ) : (
-                <Empty description="暂无阶段耗时" />
-              )}
-            </div>
-          </Card>
+        <MainFlowDisclosure steps={mainFlowSteps} currentStep={currentMainFlowStep} />
 
+        <section className="build-monitor-grid build-monitor-grid-single" aria-label="资源统计">
           <Card title="各类型资源占用">
             <div className="build-monitor-chart-frame">
               {assetTypeChartData.length > 0 ? (
@@ -405,19 +497,90 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
           </Card>
         </section>
 
-        <section className="build-monitor-section" aria-label="阶段明细">
-          <Card title="阶段明细">
-            <Table
-              rowKey="stageId"
-              columns={stageColumns}
-              dataSource={stages}
-              pagination={false}
-              scroll={{ x: 720 }}
-              size="middle"
-            />
-          </Card>
-        </section>
       </main>
+    </div>
+  );
+}
+
+function MainFlowDisclosure({ steps, currentStep }) {
+  return (
+    <section className="build-monitor-flow-panel" aria-label="主流程进度">
+      <div className="build-monitor-flow-heading">
+        <div className="build-monitor-flow-heading-copy">
+          <Typography.Text strong>主流程进度</Typography.Text>
+          <Typography.Text type="secondary">执行到：{currentStep?.title || "等待构建步骤"}</Typography.Text>
+        </div>
+        <Tag color={statusColor(currentStep?.state || "idle")}>{steps.length > 0 ? `已显示 ${steps.length} 个步骤` : "暂无步骤"}</Tag>
+      </div>
+
+      {steps.length > 0 ? (
+        <ol className="build-monitor-flow-list">
+          {steps.map((step) => {
+            const StepIcon = step.icon;
+            const StatusIcon = getFlowStatusIcon(step.state);
+
+            return (
+              <li key={step.key} className="build-monitor-flow-item">
+                <Tooltip title={<FlowStepTooltip step={step} />} placement="top">
+                  <div className={`build-monitor-flow-step build-monitor-flow-step-${step.tone} build-monitor-flow-state-${step.state}`}>
+                    <div className="build-monitor-flow-step-icon" aria-hidden="true">
+                      <StepIcon size={21} strokeWidth={2.1} />
+                    </div>
+                    <div className="build-monitor-flow-step-body">
+                      <div className="build-monitor-flow-step-header">
+                        <Typography.Text strong className="build-monitor-flow-step-title">
+                          {step.title}
+                        </Typography.Text>
+                        <span className="build-monitor-flow-status">
+                          <StatusIcon size={14} strokeWidth={2.2} aria-hidden="true" />
+                          {statusLabel(step.state)}
+                        </span>
+                      </div>
+                      <Typography.Text className="build-monitor-flow-purpose">{step.purpose}</Typography.Text>
+                      <div className="build-monitor-flow-env-list" aria-label={`${step.title}执行位置`}>
+                        {step.environments.map((environment) => (
+                          <FlowEnvironmentChip key={environment.key} environment={environment} />
+                        ))}
+                      </div>
+                      <span className="build-monitor-flow-duration" aria-label={`${step.title}耗时`}>
+                        <Clock size={14} strokeWidth={2.1} aria-hidden="true" />
+                        {step.durationLabel}
+                      </span>
+                    </div>
+                  </div>
+                </Tooltip>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <Empty description="暂无主流程步骤" />
+      )}
+    </section>
+  );
+}
+
+function FlowEnvironmentChip({ environment }) {
+  const EnvironmentIcon = environment.icon;
+
+  return (
+    <span className={`build-monitor-flow-env build-monitor-flow-env-${environment.key}`} title={environment.detail}>
+      <EnvironmentIcon size={14} strokeWidth={2.1} aria-hidden="true" />
+      <span>{environment.label}</span>
+    </span>
+  );
+}
+
+function FlowStepTooltip({ step }) {
+  return (
+    <div className="build-monitor-flow-tooltip">
+      <strong>{step.title}</strong>
+      <span>状态：{statusLabel(step.state)}</span>
+      <span>耗时：{step.durationLabel}</span>
+      <span>开始：{formatDateTime(step.startedAt)}</span>
+      <span>结束：{step.state === "running" ? "进行中" : formatDateTime(step.finishedAt)}</span>
+      <span>涉及环境：{step.environments.map((environment) => environment.label).join(" / ")}</span>
+      {step.runtimeDetails.length > 0 && <span>运行信息：{step.runtimeDetails.join(" / ")}</span>}
     </div>
   );
 }
@@ -456,43 +619,191 @@ function statusColor(state) {
   return "default";
 }
 
-function buildDurationPieData(stages) {
-  const rows = (stages || [])
-    .map((stage) => ({
-      stage: stage.stageName || stage.stageId || "-",
-      durationMs: Number(stage.durationMs || 0),
-    }))
-    .filter((stage) => Number.isFinite(stage.durationMs) && stage.durationMs > 0);
-
-  const totalMs = rows.reduce((total, stage) => total + stage.durationMs, 0);
-  if (totalMs <= 0) {
-    return [];
-  }
-
-  const thresholdMs = Math.max(totalMs * MIN_STAGE_PIE_SLICE_RATIO, MIN_STAGE_PIE_SLICE_MS);
-  const visible = [];
-  let otherMs = 0;
-
-  for (const row of rows) {
-    if (row.durationMs < thresholdMs) {
-      otherMs += row.durationMs;
-    } else {
-      visible.push(row);
+function buildMainFlowSteps(stages, snapshot, nowMs) {
+  const stageById = new Map();
+  for (const stage of stages || []) {
+    if (stage?.stageId) {
+      stageById.set(stage.stageId, stage);
     }
   }
 
-  if (otherMs > 0) {
-    visible.push({
-      stage: "其他",
-      durationMs: otherMs,
-    });
+  return MAIN_FLOW_DEFINITIONS.map((definition) => buildMainFlowStep(definition, stageById, snapshot, nowMs)).filter(Boolean);
+}
+
+function buildMainFlowStep(definition, stageById, snapshot, nowMs) {
+  const primaryStages = definition.stageIds.map((stageId) => stageById.get(stageId)).filter(Boolean);
+  const fallbackStages = (definition.fallbackStageIds || []).map((stageId) => stageById.get(stageId)).filter(Boolean);
+  const sourceStages = primaryStages.length > 0 ? primaryStages : fallbackStages;
+  if (sourceStages.length === 0) {
+    return null;
   }
 
-  return visible.map((stage) => ({
-    ...stage,
-    durationSeconds: Number((stage.durationMs / 1000).toFixed(1)),
-    durationLabel: formatDuration(stage.durationMs),
-  }));
+  const state = getMainFlowStepState(sourceStages, snapshot);
+  const durationMs = getMainFlowDurationMs(sourceStages, state, nowMs);
+  const startedAt = getEarliestStageTime(sourceStages, "startedAt") || getEarliestStageTime(sourceStages, "finishedAt");
+  const finishedAt = state === "running" ? "" : getLatestStageTime(sourceStages, "finishedAt");
+
+  return {
+    ...definition,
+    state,
+    durationMs,
+    durationLabel: formatDuration(durationMs),
+    startedAt,
+    finishedAt,
+    tone: durationTone(durationMs, state),
+    environments: definition.environments.map((key) => ENVIRONMENT_DEFINITIONS[key]).filter(Boolean),
+    runtimeDetails: buildRuntimeDetails(sourceStages),
+  };
+}
+
+function getMainFlowStepState(sourceStages, snapshot) {
+  if (sourceStages.some((stage) => stage.state === "failure" || stage.state === "unavailable")) {
+    return "failure";
+  }
+  if (sourceStages.some((stage) => stage.state === "running")) {
+    return "running";
+  }
+  if (snapshot?.state === "failure" && sourceStages.some((stage) => !stage.finishedAt)) {
+    return "failure";
+  }
+  return "success";
+}
+
+function getMainFlowDurationMs(sourceStages, state, nowMs) {
+  if (sourceStages.length === 1) {
+    return getStageDurationMs(sourceStages[0], nowMs);
+  }
+
+  const startedTimes = sourceStages.map((stage) => parseTimeMs(stage.startedAt)).filter(Boolean);
+  if (startedTimes.length > 0) {
+    const startedAt = Math.min(...startedTimes);
+    if (state === "running") {
+      return Math.max(0, nowMs - startedAt);
+    }
+
+    const finishedTimes = sourceStages.map((stage) => parseTimeMs(stage.finishedAt)).filter(Boolean);
+    if (finishedTimes.length > 0) {
+      return Math.max(0, Math.max(...finishedTimes) - startedAt);
+    }
+  }
+
+  return sourceStages.reduce((total, stage) => total + Number(stage.durationMs || 0), 0);
+}
+
+function getStageDurationMs(stage, nowMs) {
+  const explicitDuration = Number(stage?.durationMs || 0);
+  if (explicitDuration > 0) {
+    return explicitDuration;
+  }
+
+  const started = parseTimeMs(stage?.startedAt);
+  const finished = parseTimeMs(stage?.finishedAt);
+  if (started && finished && finished >= started) {
+    return finished - started;
+  }
+  if (started && stage?.state === "running") {
+    return Math.max(0, nowMs - started);
+  }
+
+  return 0;
+}
+
+function getCurrentMainFlowStep(steps) {
+  const failedStep = steps.find((step) => step.state === "failure");
+  if (failedStep) {
+    return failedStep;
+  }
+
+  const runningStep = steps.find((step) => step.state === "running");
+  if (runningStep) {
+    return runningStep;
+  }
+
+  return steps.length > 0 ? steps[steps.length - 1] : null;
+}
+
+function getFlowStatusIcon(state) {
+  if (state === "success") {
+    return CheckCircle2;
+  }
+  if (state === "failure" || state === "unavailable") {
+    return XCircle;
+  }
+  if (state === "running") {
+    return LoaderCircle;
+  }
+  return CircleDashed;
+}
+
+function durationTone(durationMs, state) {
+  if (state === "failure" || state === "unavailable") {
+    return "failed";
+  }
+  if (state === "running") {
+    return "running";
+  }
+
+  const value = Number(durationMs || 0);
+  if (!Number.isFinite(value) || value <= 0) {
+    return "unknown";
+  }
+  if (value < 10_000) {
+    return "fast";
+  }
+  if (value < 60_000) {
+    return "normal";
+  }
+  if (value < 180_000) {
+    return "slow";
+  }
+  return "long";
+}
+
+function getEarliestStageTime(sourceStages, fieldName) {
+  const times = sourceStages
+    .map((stage) => parseTimeMs(stage?.[fieldName]))
+    .filter(Boolean);
+  if (times.length === 0) {
+    return "";
+  }
+
+  return new Date(Math.min(...times)).toISOString();
+}
+
+function getLatestStageTime(sourceStages, fieldName) {
+  const times = sourceStages
+    .map((stage) => parseTimeMs(stage?.[fieldName]))
+    .filter(Boolean);
+  if (times.length === 0) {
+    return "";
+  }
+
+  return new Date(Math.max(...times)).toISOString();
+}
+
+function buildRuntimeDetails(sourceStages) {
+  const details = [];
+  const nodeNames = uniqueMetadataValues(sourceStages, "nodeName");
+  const workspaces = uniqueMetadataValues(sourceStages, "workspace");
+  const platforms = uniqueMetadataValues(sourceStages, "platform");
+  const unityVersions = uniqueMetadataValues(sourceStages, "unityVersion");
+
+  details.push(...nodeNames.map((value) => `构建节点：${value}`));
+  details.push(...workspaces.map((value) => `工作区：${value}`));
+  details.push(...platforms.map((value) => `Unity 平台：${value}`));
+  details.push(...unityVersions.map((value) => `Unity 版本：${value}`));
+
+  return details;
+}
+
+function uniqueMetadataValues(sourceStages, key) {
+  return Array.from(
+    new Set(
+      sourceStages
+        .map((stage) => stage?.metadata?.[key])
+        .filter((value) => typeof value === "string" && value.trim().length > 0),
+    ),
+  );
 }
 
 function getRunElapsedDurationMs(run, summary, state, nowMs) {
@@ -584,6 +895,17 @@ function statusLabel(state) {
     return "不可用";
   }
   return "空闲";
+}
+
+function formatDateTime(value) {
+  const time = parseTimeMs(value);
+  if (!time) {
+    return "-";
+  }
+
+  const date = new Date(time);
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 function formatDuration(ms) {
