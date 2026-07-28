@@ -316,19 +316,28 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   const totalBundles = summary.totalBundles || bundles.length;
   const completedBundles = summary.completedBundles || 0;
   const bundlePercent = totalBundles > 0 ? Math.round((completedBundles / totalBundles) * 100) : 0;
-  const activeBundleCount = summary.activeBundles || bundles.filter((bundle) => bundle.state === "running").length;
+  const buildIsRunning = snapshot.state === "running";
+  const activeBundleCount = buildIsRunning
+    ? summary.activeBundles || bundles.filter((bundle) => bundle.state === "running").length
+    : 0;
   const elapsedDurationMs = getRunElapsedDurationMs(run, summary, snapshot.state, nowMs);
+  const runFreezeTimeMs = buildIsRunning ? 0 : getRunFreezeTimeMs(run, snapshot);
   const mainFlowSteps = useMemo(() => buildMainFlowSteps(stages, snapshot, nowMs), [stages, snapshot, nowMs]);
   const currentMainFlowStep = getCurrentMainFlowStep(mainFlowSteps);
   const currentMainFlowLabel = currentMainFlowStep?.title || "-";
 
   const activeBundleRows = useMemo(
-    () =>
-      bundles
+    () => {
+      if (!buildIsRunning) {
+        return [];
+      }
+
+      return bundles
         .filter((bundle) => bundle.state === "running")
         .slice()
-        .sort((left, right) => compareBundleSizeDesc(left, right) || compareBundleName(left, right)),
-    [bundles],
+        .sort((left, right) => compareBundleSizeDesc(left, right) || compareBundleName(left, right));
+    },
+    [bundles, buildIsRunning],
   );
 
   const completedBundleRows = useMemo(
@@ -338,11 +347,11 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
         .slice()
         .sort(
           (left, right) =>
-            getBundleDurationMs(right, nowMs) - getBundleDurationMs(left, nowMs) ||
+            getBundleDurationMs(right, nowMs, runFreezeTimeMs) - getBundleDurationMs(left, nowMs, runFreezeTimeMs) ||
             compareBundleSizeDesc(left, right) ||
             compareBundleName(left, right),
         ),
-    [bundles, nowMs],
+    [bundles, nowMs, runFreezeTimeMs],
   );
 
   const assetTypeChartData = useMemo(
@@ -377,7 +386,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
       dataIndex: "durationMs",
       key: "durationMs",
       width: 120,
-      render: (_, row) => formatDuration(getBundleDurationMs(row, nowMs)),
+      render: (_, row) => formatDuration(getBundleDurationMs(row, nowMs, runFreezeTimeMs)),
     },
     {
       title: "大小",
@@ -807,21 +816,22 @@ function uniqueMetadataValues(sourceStages, key) {
 }
 
 function getRunElapsedDurationMs(run, summary, state, nowMs) {
+  const explicitDuration = Number(run?.totalDurationMs || summary?.totalDurationMs || 0);
   const started = parseTimeMs(run?.startedAt);
   if (started) {
     const finished = parseTimeMs(run?.finishedAt);
     if (finished && finished >= started) {
       return finished - started;
     }
-    if (state === "running" || run?.state === "running") {
+    if (state === "running") {
       return Math.max(0, nowMs - started);
     }
   }
 
-  return Number(run?.totalDurationMs || summary?.totalDurationMs || 0);
+  return explicitDuration;
 }
 
-function getBundleDurationMs(bundle, nowMs) {
+function getBundleDurationMs(bundle, nowMs, freezeTimeMs = 0) {
   const explicitDuration = Number(bundle?.durationMs || 0);
   if (explicitDuration > 0) {
     return explicitDuration;
@@ -838,10 +848,15 @@ function getBundleDurationMs(bundle, nowMs) {
   }
 
   if (bundle?.state === "running") {
-    return Math.max(0, nowMs - started);
+    const end = freezeTimeMs || nowMs;
+    return Math.max(0, end - started);
   }
 
   return 0;
+}
+
+function getRunFreezeTimeMs(run, snapshot) {
+  return parseTimeMs(run?.finishedAt) || parseTimeMs(snapshot?.updatedAt);
 }
 
 function compareBundleSizeDesc(left, right) {
