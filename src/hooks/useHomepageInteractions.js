@@ -17,6 +17,14 @@ function runAnimation(target, params) {
     return null;
   }
 
+  if (typeof target === "string" && document.querySelectorAll(target).length === 0) {
+    return null;
+  }
+
+  if (Array.isArray(target) && target.length === 0) {
+    return null;
+  }
+
   return animate(target, params);
 }
 

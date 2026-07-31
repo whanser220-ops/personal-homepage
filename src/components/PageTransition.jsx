@@ -32,6 +32,11 @@ function shouldHandleLink(event, anchor) {
   return true;
 }
 
+function getTransitionTargets(root) {
+  const targets = [...root.children].filter((child) => !child.classList.contains("site-header"));
+  return targets.length > 0 ? targets : root;
+}
+
 export function PageTransition({ children }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -51,9 +56,18 @@ export function PageTransition({ children }) {
 
     isTransitioningRef.current = false;
     document.documentElement.classList.remove("is-route-changing");
+    content.style.opacity = "";
+    content.style.transform = "";
+    content.style.filter = "";
     content.style.pointerEvents = "";
 
-    animate(content, {
+    const targets = getTransitionTargets(content);
+
+    for (const target of Array.isArray(targets) ? targets : [targets]) {
+      target.style.pointerEvents = "";
+    }
+
+    animate(targets, {
       opacity: [0, 1],
       translateY: ["1.25rem", "0rem"],
       scale: [0.985, 1],
@@ -89,9 +103,14 @@ export function PageTransition({ children }) {
 
     isTransitioningRef.current = true;
     document.documentElement.classList.add("is-route-changing");
-    content.style.pointerEvents = "none";
 
-    animate(content, {
+    const targets = getTransitionTargets(content);
+
+    for (const target of Array.isArray(targets) ? targets : [targets]) {
+      target.style.pointerEvents = "none";
+    }
+
+    animate(targets, {
       opacity: 0,
       translateY: "-0.85rem",
       scale: 0.985,
