@@ -1,4 +1,6 @@
 import { Badge } from "./ui/badge.jsx";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card.jsx";
+import AnimatedContent from "./AnimatedContent.jsx";
 import { articles } from "../data/homepage.js";
 
 export function ArticlesPage() {
@@ -11,12 +13,28 @@ export function ArticlesPage() {
       </header>
       <section className="section content-section page-animate">
         <div className="timeline" aria-label="文章列表">
-          {articles.map((article) => (
-            <article className="timeline-item" key={article.title}>
-              <Badge>{article.status}</Badge>
-              <h3>{article.title}</h3>
-              <p>{article.body}</p>
-            </article>
+          {articles.map((article, index) => (
+            <AnimatedContent
+              className="timeline-card-motion"
+              delay={index * 0.06}
+              distance={28}
+              duration={0.58}
+              key={article.title}
+              threshold={0.16}
+            >
+              <Card asChild className="timeline-item">
+                <article>
+                  <CardHeader className="timeline-item-header">
+                    <Badge variant="outline">{article.status}</Badge>
+                    <CardTitle>{article.title}</CardTitle>
+                    <CardDescription>{article.date}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p>{article.body}</p>
+                  </CardContent>
+                </article>
+              </Card>
+            </AnimatedContent>
           ))}
         </div>
       </section>

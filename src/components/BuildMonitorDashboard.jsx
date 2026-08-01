@@ -1,21 +1,19 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  Button,
-  Card,
+  Card as AntCard,
   Empty,
   Progress,
   Space,
   Statistic,
   Table,
-  Tag,
   Tooltip,
   Typography,
 } from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
 import {
   Box,
   CheckCircle2,
@@ -27,9 +25,13 @@ import {
   LoaderCircle,
   Monitor,
   Package,
+  RefreshCw,
   Server,
   XCircle,
 } from "lucide-react";
+import { Badge as UiBadge } from "./ui/badge.jsx";
+import { Button as UiButton } from "./ui/button.jsx";
+import { Card as UiCard, CardContent as UiCardContent } from "./ui/card.jsx";
 
 const ColumnChart = dynamic(() => import("@ant-design/charts").then((module) => module.Column), {
   ssr: false,
@@ -202,7 +204,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   const [snapshot, setSnapshot] = useState(() => initialSnapshot || emptySnapshot);
   const [connected, setConnected] = useState(false);
   const [loadError, setLoadError] = useState("");
-  const [nowMs, setNowMs] = useState(() => initialNowMs || Date.now());
+  const [nowMs, setNowMs] = useState(() => initialNowMs || 0);
   const [dashboardReady, setDashboardReady] = useState(false);
 
   useEffect(() => {
@@ -288,6 +290,8 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   }, []);
 
   useEffect(() => {
+    setNowMs(Date.now());
+
     const interval = setInterval(() => {
       setNowMs(Date.now());
     }, 1000);
@@ -311,7 +315,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   const assetTypes = snapshot.assetTypes || [];
   const summary = snapshot.summary || emptySnapshot.summary;
   const run = snapshot.currentRun;
-  const sseStatusColor = connected ? "green" : connected === false ? "default" : "processing";
+  const sseStatusVariant = connected ? "success" : connected === false ? "secondary" : "warning";
   const sseStatusText = connected ? "SSE connected" : connected === false ? "SSE offline" : "SSE connecting";
   const totalBundles = summary.totalBundles || bundles.length;
   const completedBundles = summary.completedBundles || 0;
@@ -376,9 +380,9 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
       key: "state",
       width: 90,
       render: (value, row) => (
-        <Tag color={statusColor(value)}>
+        <UiBadge className="build-monitor-status-badge" variant={statusBadgeVariant(value)}>
           {row.cached && value === "success" ? "cached" : row.cached && value === "running" ? "copying" : statusLabel(value)}
-        </Tag>
+        </UiBadge>
       ),
     },
     {
@@ -403,10 +407,12 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   return (
     <div className="build-monitor-page build-monitor-dashboard-ready">
       <header className="build-monitor-topbar">
-        <a href="/" className="build-monitor-home" aria-label="返回首页">
-          <img src="/assets/site-logo.webp" alt="" width="34" height="34" />
-          <span>Huang</span>
-        </a>
+        <UiButton asChild className="build-monitor-home" variant="ghost">
+          <Link href="/" aria-label="返回首页">
+            <img src="/assets/site-logo.webp" alt="" width="34" height="34" />
+            <span>Huang</span>
+          </Link>
+        </UiButton>
         <div className="build-monitor-title">
           <Typography.Title level={1}>构建监控</Typography.Title>
           <Typography.Text type="secondary">
@@ -414,10 +420,11 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
           </Typography.Text>
         </div>
         <Space className="build-monitor-actions">
-          <Tag color={sseStatusColor}>{sseStatusText}</Tag>
-          <Button icon={<ReloadOutlined />} onClick={refreshSnapshot}>
+          <UiBadge variant={sseStatusVariant}>{sseStatusText}</UiBadge>
+          <UiButton onClick={refreshSnapshot} size="sm" type="button" variant="outline">
+            <RefreshCw aria-hidden="true" data-icon="inline-start" />
             刷新
-          </Button>
+          </UiButton>
         </Space>
       </header>
 
@@ -429,18 +436,26 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
         {snapshot.state === "idle" && <Alert type="info" message="还没有构建打点数据" showIcon />}
 
         <section className="build-monitor-stats" aria-label="构建状态">
-          <Card>
-            <Statistic title="状态" value={statusLabel(snapshot.state)} valueStyle={{ color: statusTextColor(snapshot.state) }} />
-          </Card>
-          <Card>
-            <Statistic title="总耗时" value={formatDuration(elapsedDurationMs)} />
-          </Card>
-          <Card>
-            <Statistic title="当前主步骤" value={currentMainFlowLabel} />
-          </Card>
-          <Card>
-            <Statistic title="Bundle" value={`${completedBundles}/${totalBundles || 0}`} />
-          </Card>
+          <UiCard className="build-monitor-stat-card">
+            <UiCardContent>
+              <Statistic title="状态" value={statusLabel(snapshot.state)} valueStyle={{ color: statusTextColor(snapshot.state) }} />
+            </UiCardContent>
+          </UiCard>
+          <UiCard className="build-monitor-stat-card">
+            <UiCardContent>
+              <Statistic title="总耗时" value={formatDuration(elapsedDurationMs)} />
+            </UiCardContent>
+          </UiCard>
+          <UiCard className="build-monitor-stat-card">
+            <UiCardContent>
+              <Statistic title="当前主步骤" value={currentMainFlowLabel} />
+            </UiCardContent>
+          </UiCard>
+          <UiCard className="build-monitor-stat-card">
+            <UiCardContent>
+              <Statistic title="Bundle" value={`${completedBundles}/${totalBundles || 0}`} />
+            </UiCardContent>
+          </UiCard>
         </section>
 
         <section className="build-monitor-progress" aria-label="Bundle 进度">
@@ -457,7 +472,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
         <MainFlowDisclosure steps={mainFlowSteps} currentStep={currentMainFlowStep} />
 
         <section className="build-monitor-grid build-monitor-grid-single" aria-label="资源统计">
-          <Card title="各类型资源占用">
+          <AntCard title="各类型资源占用">
             <div className="build-monitor-chart-frame">
               {assetTypeChartData.length > 0 ? (
                 <ColumnChart
@@ -475,11 +490,11 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
                 <Empty description="暂无资源类型统计" />
               )}
             </div>
-          </Card>
+          </AntCard>
         </section>
 
         <section className="build-monitor-section" aria-label="实时 Bundle">
-          <Card title="实时 Bundle 构建">
+          <AntCard title="实时 Bundle 构建">
             <Typography.Title level={5}>正在构建</Typography.Title>
             <Table
               rowKey="bundleName"
@@ -503,7 +518,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
               scroll={{ x: 760 }}
               size="middle"
             />
-          </Card>
+          </AntCard>
         </section>
 
       </main>
@@ -519,7 +534,9 @@ function MainFlowDisclosure({ steps, currentStep }) {
           <Typography.Text strong>主流程进度</Typography.Text>
           <Typography.Text type="secondary">执行到：{currentStep?.title || "等待构建步骤"}</Typography.Text>
         </div>
-        <Tag color={statusColor(currentStep?.state || "idle")}>{steps.length > 0 ? `已显示 ${steps.length} 个步骤` : "暂无步骤"}</Tag>
+        <UiBadge variant={statusBadgeVariant(currentStep?.state || "idle")}>
+          {steps.length > 0 ? `已显示 ${steps.length} 个步骤` : "暂无步骤"}
+        </UiBadge>
       </div>
 
       {steps.length > 0 ? (
@@ -540,10 +557,10 @@ function MainFlowDisclosure({ steps, currentStep }) {
                         <Typography.Text strong className="build-monitor-flow-step-title">
                           {step.title}
                         </Typography.Text>
-                        <span className="build-monitor-flow-status">
-                          <StatusIcon size={14} strokeWidth={2.2} aria-hidden="true" />
+                        <UiBadge className="build-monitor-flow-status" variant={statusBadgeVariant(step.state)}>
+                          <StatusIcon aria-hidden="true" data-icon="inline-start" />
                           {statusLabel(step.state)}
-                        </span>
+                        </UiBadge>
                       </div>
                       <Typography.Text className="build-monitor-flow-purpose">{step.purpose}</Typography.Text>
                       <div className="build-monitor-flow-env-list" aria-label={`${step.title}执行位置`}>
@@ -573,10 +590,10 @@ function FlowEnvironmentChip({ environment }) {
   const EnvironmentIcon = environment.icon;
 
   return (
-    <span className={`build-monitor-flow-env build-monitor-flow-env-${environment.key}`} title={environment.detail}>
-      <EnvironmentIcon size={14} strokeWidth={2.1} aria-hidden="true" />
+    <UiBadge className={`build-monitor-flow-env build-monitor-flow-env-${environment.key}`} title={environment.detail} variant="outline">
+      <EnvironmentIcon aria-hidden="true" data-icon="inline-start" />
       <span>{environment.label}</span>
-    </span>
+    </UiBadge>
   );
 }
 
@@ -615,17 +632,20 @@ function BuildMonitorLoadingScreen({ run }) {
   );
 }
 
-function statusColor(state) {
+function statusBadgeVariant(state) {
   if (state === "success") {
     return "success";
   }
   if (state === "failure" || state === "unavailable") {
-    return "error";
+    return "destructive";
   }
   if (state === "running") {
-    return "processing";
+    return "accent";
   }
-  return "default";
+  if (state === "unconfigured") {
+    return "warning";
+  }
+  return "secondary";
 }
 
 function buildMainFlowSteps(stages, snapshot, nowMs) {
@@ -882,15 +902,15 @@ function parseTimeMs(value) {
 
 function statusTextColor(state) {
   if (state === "success") {
-    return "#23784b";
+    return "var(--status-success)";
   }
   if (state === "failure" || state === "unavailable") {
-    return "#b42318";
+    return "var(--destructive)";
   }
   if (state === "running") {
-    return "#1d5f8c";
+    return "var(--status-info)";
   }
-  return "#39434c";
+  return "var(--muted-foreground)";
 }
 
 function statusLabel(state) {
