@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BookOpen, Smile, Star } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle.jsx";
 
 const dockItems = [
   { href: "/articles", label: "文章", icon: BookOpen },
@@ -20,6 +21,7 @@ export function NavigationDock({ className = "" }) {
   const pathname = usePathname();
   const activeIndex = useMemo(() => getActiveIndex(pathname), [pathname]);
   const [spotIndex, setSpotIndex] = useState(activeIndex);
+  const themeSpotIndex = dockItems.length + 1;
 
   useEffect(() => {
     setSpotIndex(activeIndex);
@@ -65,6 +67,12 @@ export function NavigationDock({ className = "" }) {
           </Link>
         );
       })}
+
+      <ThemeToggle
+        className="dashboard-nav-link theme-toggle"
+        onMouseEnter={() => setSpotIndex(themeSpotIndex)}
+        spotIndex={themeSpotIndex}
+      />
     </nav>
   );
 }

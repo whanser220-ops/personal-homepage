@@ -4,6 +4,27 @@ export const navItems = [
   { href: "/projects", label: "项目" },
 ];
 
+export const articles = [
+  {
+    status: "计划中",
+    title: "个人主页的前端结构",
+    body: "记录从静态页、Vite、React、Next.js 到组件库接入的项目演进。",
+    date: "07-18",
+  },
+  {
+    status: "计划中",
+    title: "部署流水线笔记",
+    body: "整理 GitHub PR、Jenkins 自动构建和 Nginx 静态托管的流程。",
+    date: "07-20",
+  },
+  {
+    status: "计划中",
+    title: "交互动画实验",
+    body: "沉淀 Anime.js、组件状态和页面动效之间的协作方式。",
+    date: "07-22",
+  },
+];
+
 export const abilityCards = [
   {
     index: "01",
