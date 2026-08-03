@@ -34,6 +34,8 @@ export async function GET(request) {
           stages: [],
           bundles: [],
           assetTypes: [],
+          bundleModules: [],
+          redundantAssets: [],
           recentRuns: [],
         });
       }

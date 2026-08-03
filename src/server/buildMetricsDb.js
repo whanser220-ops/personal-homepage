@@ -7,9 +7,20 @@ const MAX_TEXT_LENGTH = 2048;
 const MAX_NAME_LENGTH = 256;
 const MAX_METADATA_KEYS = 80;
 const MAX_ASSET_TYPE_ROWS = 80;
+const MAX_BUNDLE_MODULE_ROWS = 8;
+const MAX_MODULE_BUNDLES = 120;
+const MAX_REDUNDANT_ASSET_ROWS = 25;
+const MAX_REDUNDANT_ASSET_BUNDLES = 16;
 const SECRET_KEY_PATTERN = /(token|password|passwd|secret|authorization|credential|private[_-]?key|database_url)/i;
 const SECRET_VALUE_PATTERN =
   /(bearer\s+[a-z0-9._~+/=-]+|-----begin [a-z ]*private key-----|database_url=|api[_-]?token|ingest[_-]?token)/i;
+const SCENE_MODULE_LABEL = "\u573a\u666f\u6a21\u5757";
+const BUNDLE_MODULE_DEFINITIONS = [
+  { key: "summer", label: "\u590f" },
+  { key: "autumn", label: "\u79cb" },
+  { key: "winter", label: "\u51ac" },
+  { key: "common", label: "\u516c\u5171" },
+];
 
 export class BuildMetricsDbNotConfigured extends Error {
   constructor() {
@@ -43,7 +54,7 @@ export async function readLatestBuildMetrics(runId) {
   }
 
   const run = runResult.rows[0];
-  const [stageResult, bundleResult, assetTypeResult, recentRunResult] = await Promise.all([
+  const [stageResult, bundleResult, assetTypeResult, bundleModuleResult, redundantAssetResult, recentRunResult] = await Promise.all([
     pool.query(
       `select *
          from build_metric_stages
@@ -71,6 +82,29 @@ export async function readLatestBuildMetrics(runId) {
       [run.run_id],
     ),
     pool.query(
+      `select *
+         from build_metric_bundle_modules
+        where run_id = $1
+        order by
+          case module_key
+            when 'summer' then 0
+            when 'autumn' then 1
+            when 'winter' then 2
+            when 'common' then 3
+            else 4
+          end,
+          module_key`,
+      [run.run_id],
+    ),
+    pool.query(
+      `select *
+         from build_metric_redundant_assets
+        where run_id = $1
+        order by redundant_size_bytes desc, duplicate_count desc, asset_path
+        limit 80`,
+      [run.run_id],
+    ),
+    pool.query(
       `select run_id, job_name, build_number, state, result, started_at, finished_at,
               total_duration_ms, updated_at
          from build_metric_runs
@@ -78,6 +112,13 @@ export async function readLatestBuildMetrics(runId) {
         limit 10`,
     ),
   ]);
+
+  const bundles = bundleResult.rows.map(toBundle);
+  const bundleModuleChildren =
+    bundleModuleResult.rowCount > 0
+      ? bundleModuleResult.rows.map(toBundleModule)
+      : buildBundleModuleChildren(bundles);
+  const redundantAssets = redundantAssetResult.rows.map(toRedundantAsset);
 
   return {
     configured: true,
@@ -91,10 +132,12 @@ export async function readLatestBuildMetrics(runId) {
     updatedAt: toIso(run.updated_at),
     currentRun: toRun(run),
     stages: stageResult.rows.map(toStage),
-    bundles: bundleResult.rows.map(toBundle),
+    bundles,
     assetTypes: assetTypeResult.rows.map(toAssetType),
+    bundleModules: createBundleModuleTree(bundleModuleChildren),
+    redundantAssets,
     recentRuns: recentRunResult.rows.map(toRun),
-    summary: createSummary(run, stageResult.rows, bundleResult.rows, assetTypeResult.rows),
+    summary: createSummary(run, stageResult.rows, bundleResult.rows, assetTypeResult.rows, redundantAssets),
   };
 }
 
@@ -114,6 +157,8 @@ export async function writeBuildMetricEvent(input, defaultJobName = DEFAULT_JOB_
     await upsertStage(client, event);
     await upsertBundle(client, event);
     await upsertAssetTypes(client, event);
+    await upsertBundleModules(client, event);
+    await upsertRedundantAssets(client, event);
     await appendEvent(client, event);
     await client.query("commit");
   } catch (error) {
@@ -296,6 +341,74 @@ async function upsertAssetTypes(client, event) {
   }
 }
 
+async function upsertBundleModules(client, event) {
+  if (!event.bundleModulesProvided) {
+    return;
+  }
+
+  await client.query("delete from build_metric_bundle_modules where run_id = $1", [event.runId]);
+  for (const item of event.bundleModules) {
+    await client.query(
+      `insert into build_metric_bundle_modules (
+         run_id, module_key, module_label, bundle_count, total_size_bytes,
+         total_asset_count, bundles, updated_at
+       )
+       values ($1,$2,$3,$4,$5,$6,$7::jsonb,now())
+       on conflict (run_id, module_key) do update set
+         module_label = excluded.module_label,
+         bundle_count = excluded.bundle_count,
+         total_size_bytes = excluded.total_size_bytes,
+         total_asset_count = excluded.total_asset_count,
+         bundles = excluded.bundles,
+         updated_at = now()`,
+      [
+        event.runId,
+        item.key,
+        item.label,
+        item.bundleCount,
+        item.totalSizeBytes,
+        item.totalAssetCount,
+        JSON.stringify(item.bundles),
+      ],
+    );
+  }
+}
+
+async function upsertRedundantAssets(client, event) {
+  if (!event.redundantAssetsProvided) {
+    return;
+  }
+
+  await client.query("delete from build_metric_redundant_assets where run_id = $1", [event.runId]);
+  for (const item of event.redundantAssets) {
+    await client.query(
+      `insert into build_metric_redundant_assets (
+         run_id, asset_path, asset_name, asset_type, duplicate_count,
+         single_size_bytes, redundant_size_bytes, bundles, updated_at
+       )
+       values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,now())
+       on conflict (run_id, asset_path) do update set
+         asset_name = excluded.asset_name,
+         asset_type = excluded.asset_type,
+         duplicate_count = excluded.duplicate_count,
+         single_size_bytes = excluded.single_size_bytes,
+         redundant_size_bytes = excluded.redundant_size_bytes,
+         bundles = excluded.bundles,
+         updated_at = now()`,
+      [
+        event.runId,
+        item.assetPath,
+        item.assetName,
+        item.assetType,
+        item.duplicateCount,
+        item.singleSizeBytes,
+        item.redundantSizeBytes,
+        JSON.stringify(item.bundles),
+      ],
+    );
+  }
+}
+
 async function appendEvent(client, event) {
   await client.query(
     `insert into build_metric_events (
@@ -382,6 +495,31 @@ async function ensureBuildMetricsSchema() {
         primary key (run_id, asset_type)
       );
 
+      create table if not exists build_metric_bundle_modules (
+        run_id text not null references build_metric_runs(run_id) on delete cascade,
+        module_key text not null,
+        module_label text not null default '',
+        bundle_count integer not null default 0,
+        total_size_bytes bigint not null default 0,
+        total_asset_count integer not null default 0,
+        bundles jsonb not null default '[]'::jsonb,
+        updated_at timestamptz not null default now(),
+        primary key (run_id, module_key)
+      );
+
+      create table if not exists build_metric_redundant_assets (
+        run_id text not null references build_metric_runs(run_id) on delete cascade,
+        asset_path text not null,
+        asset_name text not null default '',
+        asset_type text not null default '',
+        duplicate_count integer not null default 0,
+        single_size_bytes bigint not null default 0,
+        redundant_size_bytes bigint not null default 0,
+        bundles jsonb not null default '[]'::jsonb,
+        updated_at timestamptz not null default now(),
+        primary key (run_id, asset_path)
+      );
+
       create table if not exists build_metric_events (
         id bigserial primary key,
         run_id text not null references build_metric_runs(run_id) on delete cascade,
@@ -401,6 +539,8 @@ async function ensureBuildMetricsSchema() {
         on build_metric_runs (updated_at desc);
       create index if not exists build_metric_events_run_created_at_idx
         on build_metric_events (run_id, created_at desc);
+      create index if not exists build_metric_redundant_assets_run_size_idx
+        on build_metric_redundant_assets (run_id, redundant_size_bytes desc);
     `);
   }
 
@@ -438,6 +578,12 @@ function normalizeEvent(input, defaultJobName) {
   const state = normalizeState(source.state, eventType);
   const result = normalizeResult(source.result, state);
   const durationMs = toNonNegativeInteger(source.durationMs ?? source.elapsedMs);
+  const metadata = sanitizeMetadata(source.metadata);
+  const isBundleAnalysisSummary = eventType === "bundle_analysis_summary";
+  const redundancySummary = isBundleAnalysisSummary ? sanitizeRedundancySummary(source.redundancySummary) : null;
+  if (redundancySummary) {
+    metadata.redundancySummary = redundancySummary;
+  }
 
   const event = {
     runId,
@@ -461,8 +607,13 @@ function normalizeEvent(input, defaultJobName) {
     gitCommit: cleanText(source.gitCommit || "", MAX_NAME_LENGTH),
     buildTarget: cleanText(source.buildTarget || "", MAX_NAME_LENGTH),
     packageName: cleanText(source.packageName || "", MAX_NAME_LENGTH),
-    metadata: sanitizeMetadata(source.metadata),
+    metadata,
     assetTypes: sanitizeAssetTypes(source.assetTypes),
+    bundleModules: isBundleAnalysisSummary ? sanitizeBundleModules(source.bundleModules) : [],
+    bundleModulesProvided: isBundleAnalysisSummary && Array.isArray(source.bundleModules),
+    redundantAssets: isBundleAnalysisSummary ? sanitizeRedundantAssets(source.redundantAssets) : [],
+    redundantAssetsProvided: isBundleAnalysisSummary && Array.isArray(source.redundantAssets),
+    redundancySummary,
     createdAt: new Date(),
   };
 
@@ -487,6 +638,9 @@ function normalizeEvent(input, defaultJobName) {
     packageName: event.packageName,
     metadata: event.metadata,
     assetTypes: event.assetTypes,
+    bundleModules: createBundleModuleTree(event.bundleModules),
+    redundantAssets: event.redundantAssets,
+    redundancySummary: event.redundancySummary || {},
   };
 
   return event;
@@ -533,6 +687,104 @@ function sanitizeAssetTypes(value) {
       sizeBytes: toNonNegativeInteger(item?.sizeBytes || item?.bytes) || 0,
     }))
     .filter((item) => item.assetType);
+}
+
+function sanitizeBundleModules(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const rawChildren = [];
+  for (const item of value) {
+    if (Array.isArray(item?.children)) {
+      rawChildren.push(...item.children);
+    } else {
+      rawChildren.push(item);
+    }
+  }
+
+  return rawChildren
+    .slice(0, MAX_BUNDLE_MODULE_ROWS)
+    .map((item) => {
+      const key = normalizeBundleModuleKey(item?.key || item?.moduleKey || item?.label || "");
+      const bundles = sanitizeModuleBundles(item?.bundles);
+      return {
+        key,
+        label: bundleModuleLabel(key, item?.label),
+        bundleCount: toNonNegativeInteger(item?.bundleCount) ?? bundles.length,
+        totalSizeBytes:
+          toNonNegativeInteger(item?.totalSizeBytes ?? item?.sizeBytes) ??
+          bundles.reduce((total, bundle) => total + Number(bundle.sizeBytes || 0), 0),
+        totalAssetCount:
+          toNonNegativeInteger(item?.totalAssetCount ?? item?.assetCount) ??
+          bundles.reduce((total, bundle) => total + Number(bundle.assetCount || 0), 0),
+        bundles,
+      };
+    })
+    .filter((item) => item.key);
+}
+
+function sanitizeModuleBundles(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(0, MAX_MODULE_BUNDLES)
+    .map((item) => ({
+      bundleName: cleanText(item?.bundleName || item?.name || "", MAX_NAME_LENGTH),
+      sizeBytes: toNonNegativeInteger(item?.sizeBytes ?? item?.compressedSizeBytes ?? item?.inputSizeBytes) || 0,
+      assetCount: toInteger(item?.assetCount) || 0,
+    }))
+    .filter((item) => item.bundleName);
+}
+
+function sanitizeRedundantAssets(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(0, MAX_REDUNDANT_ASSET_ROWS)
+    .map((item) => {
+      const assetPath = cleanText(item?.assetPath || item?.path || "", MAX_TEXT_LENGTH);
+      return {
+        assetPath,
+        assetName: cleanText(item?.assetName || getAssetName(assetPath), MAX_NAME_LENGTH),
+        assetType: cleanText(item?.assetType || "", MAX_NAME_LENGTH),
+        duplicateCount: toNonNegativeInteger(item?.duplicateCount ?? item?.bundleCount) || 0,
+        singleSizeBytes: toNonNegativeInteger(item?.singleSizeBytes ?? item?.buildSizeBytes) || 0,
+        redundantSizeBytes: toNonNegativeInteger(item?.redundantSizeBytes) || 0,
+        bundles: sanitizeRedundantAssetBundles(item?.bundles),
+      };
+    })
+    .filter((item) => item.assetPath && item.duplicateCount > 1);
+}
+
+function sanitizeRedundantAssetBundles(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(0, MAX_REDUNDANT_ASSET_BUNDLES)
+    .map((item) => ({
+      bundleName: cleanText(item?.bundleName || item?.name || "", MAX_NAME_LENGTH),
+      copySizeBytes: toNonNegativeInteger(item?.copySizeBytes ?? item?.sizeBytes) || 0,
+    }))
+    .filter((item) => item.bundleName);
+}
+
+function sanitizeRedundancySummary(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return {
+    duplicateAssetCount: toNonNegativeInteger(value.duplicateAssetCount ?? value.count) || 0,
+    totalRedundantSizeBytes:
+      toNonNegativeInteger(value.totalRedundantSizeBytes ?? value.redundantSizeBytes) || 0,
+  };
 }
 
 function sanitizeMetadata(value, depth = 0) {
@@ -618,11 +870,17 @@ function toNonNegativeInteger(value) {
   return parsed;
 }
 
-function createSummary(run, stages, bundles, assetTypes) {
+function createSummary(run, stages, bundles, assetTypes, redundantAssets = []) {
   const totalBundles = Math.max(...bundles.map((bundle) => bundle.total_bundles || 0), bundles.length, 0);
   const completedBundles = bundles.filter((bundle) => bundle.state === "success" || bundle.state === "failure").length;
   const activeBundles = bundles.filter((bundle) => bundle.state === "running").length;
   const totalAssetBytes = assetTypes.reduce((total, item) => total + Number(item.size_bytes || 0), 0);
+  const redundancySummary = run.metadata?.redundancySummary || {};
+  const duplicateAssetCount =
+    toNonNegativeInteger(redundancySummary.duplicateAssetCount) ?? redundantAssets.length;
+  const totalRedundantSizeBytes =
+    toNonNegativeInteger(redundancySummary.totalRedundantSizeBytes) ??
+    redundantAssets.reduce((total, item) => total + Number(item.redundantSizeBytes || 0), 0);
 
   return {
     stageCount: stages.length,
@@ -632,6 +890,8 @@ function createSummary(run, stages, bundles, assetTypes) {
     activeBundles,
     assetTypeCount: assetTypes.length,
     totalAssetBytes,
+    duplicateAssetCount,
+    totalRedundantSizeBytes,
     totalDurationMs: durationFromRow(run.total_duration_ms, run.started_at, run.finished_at || run.updated_at),
   };
 }
@@ -651,6 +911,8 @@ function createUnconfiguredSnapshot() {
     stages: [],
     bundles: [],
     assetTypes: [],
+    bundleModules: createBundleModuleTree([]),
+    redundantAssets: [],
     recentRuns: [],
     summary: {
       stageCount: 0,
@@ -660,6 +922,8 @@ function createUnconfiguredSnapshot() {
       activeBundles: 0,
       assetTypeCount: 0,
       totalAssetBytes: 0,
+      duplicateAssetCount: 0,
+      totalRedundantSizeBytes: 0,
       totalDurationMs: 0,
     },
   };
@@ -728,6 +992,150 @@ function toAssetType(row) {
     count: Number(row.asset_count || 0),
     sizeBytes: Number(row.size_bytes || 0),
   };
+}
+
+function toBundleModule(row) {
+  return {
+    key: normalizeBundleModuleKey(row.module_key),
+    label: bundleModuleLabel(row.module_key, row.module_label),
+    bundleCount: Number(row.bundle_count || 0),
+    totalSizeBytes: Number(row.total_size_bytes || 0),
+    totalAssetCount: Number(row.total_asset_count || 0),
+    bundles: Array.isArray(row.bundles) ? row.bundles : [],
+  };
+}
+
+function toRedundantAsset(row) {
+  return {
+    assetPath: row.asset_path,
+    assetName: row.asset_name || getAssetName(row.asset_path),
+    assetType: row.asset_type || "",
+    duplicateCount: Number(row.duplicate_count || 0),
+    singleSizeBytes: Number(row.single_size_bytes || 0),
+    redundantSizeBytes: Number(row.redundant_size_bytes || 0),
+    bundles: Array.isArray(row.bundles) ? row.bundles : [],
+  };
+}
+
+function createBundleModuleTree(children) {
+  return [
+    {
+      key: "scene",
+      label: SCENE_MODULE_LABEL,
+      children: mergeBundleModuleChildren(children),
+    },
+  ];
+}
+
+function mergeBundleModuleChildren(children) {
+  const byKey = new Map(
+    BUNDLE_MODULE_DEFINITIONS.map((definition) => [
+      definition.key,
+      {
+        key: definition.key,
+        label: definition.label,
+        bundleCount: 0,
+        totalSizeBytes: 0,
+        totalAssetCount: 0,
+        bundles: [],
+      },
+    ]),
+  );
+
+  for (const child of children || []) {
+    const key = normalizeBundleModuleKey(child?.key || child?.label || "");
+    const current = byKey.get(key);
+    if (!current) {
+      continue;
+    }
+
+    current.label = bundleModuleLabel(key, child.label);
+    current.bundleCount = toNonNegativeInteger(child.bundleCount) ?? current.bundleCount;
+    current.totalSizeBytes = toNonNegativeInteger(child.totalSizeBytes) ?? current.totalSizeBytes;
+    current.totalAssetCount = toNonNegativeInteger(child.totalAssetCount) ?? current.totalAssetCount;
+    current.bundles = Array.isArray(child.bundles) ? child.bundles : current.bundles;
+  }
+
+  return BUNDLE_MODULE_DEFINITIONS.map((definition) => byKey.get(definition.key));
+}
+
+function buildBundleModuleChildren(bundles) {
+  const byKey = new Map(
+    BUNDLE_MODULE_DEFINITIONS.map((definition) => [
+      definition.key,
+      {
+        key: definition.key,
+        label: definition.label,
+        bundleCount: 0,
+        totalSizeBytes: 0,
+        totalAssetCount: 0,
+        bundles: [],
+      },
+    ]),
+  );
+
+  for (const bundle of bundles || []) {
+    const key = classifyBundleModule(bundle.bundleName);
+    const module = byKey.get(key) || byKey.get("common");
+    const sizeBytes = Number(bundle.sizeBytes || bundle.inputSizeBytes || 0);
+    const assetCount = Number(bundle.assetCount || 0);
+    module.bundles.push({
+      bundleName: bundle.bundleName,
+      sizeBytes,
+      assetCount,
+    });
+    module.bundleCount += 1;
+    module.totalSizeBytes += sizeBytes;
+    module.totalAssetCount += assetCount;
+  }
+
+  for (const module of byKey.values()) {
+    module.bundles.sort((left, right) => right.sizeBytes - left.sizeBytes || left.bundleName.localeCompare(right.bundleName));
+  }
+
+  return BUNDLE_MODULE_DEFINITIONS.map((definition) => byKey.get(definition.key));
+}
+
+function classifyBundleModule(bundleName) {
+  const normalized = String(bundleName || "").toLowerCase();
+  if (normalized.includes("summer")) {
+    return "summer";
+  }
+  if (normalized.includes("autumn")) {
+    return "autumn";
+  }
+  if (normalized.includes("winter")) {
+    return "winter";
+  }
+  return "common";
+}
+
+function normalizeBundleModuleKey(value) {
+  const normalized = cleanText(value || "", MAX_NAME_LENGTH).toLowerCase();
+  if (normalized === "summer" || normalized === "\u590f") {
+    return "summer";
+  }
+  if (normalized === "autumn" || normalized === "\u79cb") {
+    return "autumn";
+  }
+  if (normalized === "winter" || normalized === "\u51ac") {
+    return "winter";
+  }
+  if (normalized === "common" || normalized === "shared" || normalized === "\u516c\u5171") {
+    return "common";
+  }
+  return classifyBundleModule(normalized);
+}
+
+function bundleModuleLabel(key, fallback) {
+  const definition = BUNDLE_MODULE_DEFINITIONS.find((item) => item.key === normalizeBundleModuleKey(key));
+  return definition?.label || cleanText(fallback || "", MAX_NAME_LENGTH) || key;
+}
+
+function getAssetName(assetPath) {
+  const text = cleanText(assetPath || "", MAX_TEXT_LENGTH).replace(/\\/g, "/");
+  const index = text.lastIndexOf("/");
+  return index >= 0 ? text.slice(index + 1) : text;
 }
 
 function toIso(value) {

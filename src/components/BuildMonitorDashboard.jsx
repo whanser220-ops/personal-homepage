@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -35,10 +34,6 @@ import { Card as UiCard, CardContent as UiCardContent } from "./ui/card.jsx";
 import { cn } from "../lib/utils.js";
 import styles from "./BuildMonitorDashboard.module.css";
 
-const ColumnChart = dynamic(() => import("@ant-design/charts").then((module) => module.Column), {
-  ssr: false,
-});
-
 const BOOT_LOADING_MS = 900;
 
 function css(...names) {
@@ -58,6 +53,8 @@ const emptySnapshot = {
   stages: [],
   bundles: [],
   assetTypes: [],
+  bundleModules: [],
+  redundantAssets: [],
   recentRuns: [],
   summary: {
     stageCount: 0,
@@ -67,9 +64,24 @@ const emptySnapshot = {
     activeBundles: 0,
     assetTypeCount: 0,
     totalAssetBytes: 0,
+    duplicateAssetCount: 0,
+    totalRedundantSizeBytes: 0,
     totalDurationMs: 0,
   },
 };
+
+const SCENE_MODULE_LABEL = "\u573a\u666f\u6a21\u5757";
+const REDUNDANCY_ANALYSIS_LABEL = "\u5197\u4f59\u5206\u6790";
+const DUPLICATE_RESOURCE_LABEL = "\u91cd\u590d\u8d44\u6e90";
+const TOTAL_REDUNDANT_SIZE_LABEL = "\u5197\u4f59\u603b\u5927\u5c0f";
+const NO_REDUNDANT_ASSETS_LABEL = "\u6682\u65e0\u5197\u4f59\u8d44\u6e90\u5206\u6790";
+const NO_BUNDLES_LABEL = "\u6682\u65e0 Bundle";
+const BUNDLE_MODULE_DEFINITIONS = [
+  { key: "summer", label: "\u590f" },
+  { key: "autumn", label: "\u79cb" },
+  { key: "winter", label: "\u51ac" },
+  { key: "common", label: "\u516c\u5171" },
+];
 
 const ENVIRONMENT_DEFINITIONS = {
   cloud: {
@@ -318,8 +330,8 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
 
   const stages = snapshot.stages || [];
   const bundles = snapshot.bundles || [];
-  const assetTypes = snapshot.assetTypes || [];
   const summary = snapshot.summary || emptySnapshot.summary;
+  const redundantAssets = snapshot.redundantAssets || [];
   const run = snapshot.currentRun;
   const sseStatusVariant = connected ? "success" : connected === false ? "secondary" : "warning";
   const sseStatusText = connected ? "SSE connected" : connected === false ? "SSE offline" : "SSE connecting";
@@ -335,6 +347,14 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   const mainFlowSteps = useMemo(() => buildMainFlowSteps(stages, snapshot, nowMs), [stages, snapshot, nowMs]);
   const currentMainFlowStep = getCurrentMainFlowStep(mainFlowSteps);
   const currentMainFlowLabel = currentMainFlowStep?.title || "-";
+  const bundleModuleTree = useMemo(
+    () => resolveBundleModuleTree(snapshot.bundleModules, bundles),
+    [snapshot.bundleModules, bundles],
+  );
+  const duplicateAssetCount = summary.duplicateAssetCount || redundantAssets.length;
+  const totalRedundantSizeBytes =
+    summary.totalRedundantSizeBytes ||
+    redundantAssets.reduce((total, item) => total + Number(item.redundantSizeBytes || 0), 0);
 
   const activeBundleRows = useMemo(
     () => {
@@ -362,15 +382,6 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
             compareBundleName(left, right),
         ),
     [bundles, nowMs, runFreezeTimeMs],
-  );
-
-  const assetTypeChartData = useMemo(
-    () =>
-      assetTypes.map((item) => ({
-        type: item.assetType,
-        mb: Number((item.sizeBytes / 1024 / 1024).toFixed(2)),
-      })),
-    [assetTypes],
   );
 
   const bundleColumns = [
@@ -403,6 +414,46 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
       key: "size",
       width: 130,
       render: (_, row) => formatBytes(row.sizeBytes || row.inputSizeBytes),
+    },
+  ];
+
+  const redundantAssetColumns = [
+    {
+      title: "\u8d44\u6e90",
+      key: "assetPath",
+      render: (_, row) => (
+        <div className={css("build-monitor-resource-cell")}>
+          <Typography.Text strong>{row.assetName || getAssetName(row.assetPath)}</Typography.Text>
+          <Typography.Text code>{row.assetPath}</Typography.Text>
+          {row.assetType ? <Typography.Text type="secondary">{row.assetType}</Typography.Text> : null}
+        </div>
+      ),
+    },
+    {
+      title: "\u91cd\u590d\u6b21\u6570",
+      dataIndex: "duplicateCount",
+      key: "duplicateCount",
+      width: 110,
+      render: (value) => Number(value || 0),
+    },
+    {
+      title: "\u5355\u4efd\u5927\u5c0f",
+      dataIndex: "singleSizeBytes",
+      key: "singleSizeBytes",
+      width: 120,
+      render: (value) => formatBytes(value),
+    },
+    {
+      title: "\u5197\u4f59\u5927\u5c0f",
+      dataIndex: "redundantSizeBytes",
+      key: "redundantSizeBytes",
+      width: 120,
+      render: (value) => formatBytes(value),
+    },
+    {
+      title: "\u51fa\u73b0 Bundle",
+      key: "bundles",
+      render: (_, row) => <BundleCopyList bundles={row.bundles || []} />,
     },
   ];
 
@@ -477,25 +528,27 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
 
         <MainFlowDisclosure steps={mainFlowSteps} currentStep={currentMainFlowStep} />
 
-        <section className={css("build-monitor-grid", "build-monitor-grid-single")} aria-label="资源统计">
-          <AntCard title="各类型资源占用">
-            <div className={css("build-monitor-chart-frame")}>
-              {assetTypeChartData.length > 0 ? (
-                <ColumnChart
-                  data={assetTypeChartData}
-                  xField="type"
-                  yField="mb"
-                  height={320}
-                  axis={{
-                    x: { labelAutoRotate: false, labelAutoHide: true },
-                    y: { title: "MB" },
-                  }}
-                  colorField="type"
-                />
-              ) : (
-                <Empty description="暂无资源类型统计" />
-              )}
+        <section className={css("build-monitor-grid", "build-monitor-grid-single")} aria-label="Bundle modules">
+          <AntCard title={SCENE_MODULE_LABEL}>
+            <BundleModuleGraph root={bundleModuleTree} />
+          </AntCard>
+        </section>
+
+        <section className={css("build-monitor-section")} aria-label="Bundle redundancy">
+          <AntCard title={REDUNDANCY_ANALYSIS_LABEL}>
+            <div className={css("build-monitor-analysis-summary")}>
+              <Statistic title={DUPLICATE_RESOURCE_LABEL} value={duplicateAssetCount} />
+              <Statistic title={TOTAL_REDUNDANT_SIZE_LABEL} value={formatBytes(totalRedundantSizeBytes)} />
             </div>
+            <Table
+              rowKey={(row) => row.assetPath}
+              columns={redundantAssetColumns}
+              dataSource={redundantAssets}
+              locale={{ emptyText: <Empty description={NO_REDUNDANT_ASSETS_LABEL} /> }}
+              pagination={{ pageSize: 10, hideOnSinglePage: true }}
+              scroll={{ x: 960 }}
+              size="middle"
+            />
           </AntCard>
         </section>
 
@@ -613,6 +666,70 @@ function FlowStepTooltip({ step }) {
       <span>结束：{step.state === "running" ? "进行中" : formatDateTime(step.finishedAt)}</span>
       <span>涉及环境：{step.environments.map((environment) => environment.label).join(" / ")}</span>
       {step.runtimeDetails.length > 0 && <span>运行信息：{step.runtimeDetails.join(" / ")}</span>}
+    </div>
+  );
+}
+
+function BundleModuleGraph({ root }) {
+  const children = root?.children || [];
+
+  return (
+    <div className={css("build-monitor-module-graph")}>
+      <div className={css("build-monitor-module-root")}>
+        <Typography.Text strong>{root?.label || SCENE_MODULE_LABEL}</Typography.Text>
+        <Typography.Text type="secondary">
+          {children.reduce((total, child) => total + Number(child.bundleCount || 0), 0)} Bundles
+        </Typography.Text>
+      </div>
+      <div className={css("build-monitor-module-children")}>
+        {children.map((module) => (
+          <div key={module.key} className={css("build-monitor-module-node", `build-monitor-module-node-${module.key}`)}>
+            <div className={css("build-monitor-module-node-header")}>
+              <Typography.Text strong>{module.label}</Typography.Text>
+              <UiBadge variant={module.bundleCount > 0 ? "accent" : "secondary"}>{module.bundleCount || 0}</UiBadge>
+            </div>
+            <div className={css("build-monitor-module-stats")}>
+              <span>{formatBytes(module.totalSizeBytes || 0)}</span>
+              <span>{Number(module.totalAssetCount || 0)} assets</span>
+            </div>
+            <BundleNameList bundles={module.bundles || []} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BundleNameList({ bundles }) {
+  if (!bundles || bundles.length === 0) {
+    return <Empty className={css("build-monitor-module-empty")} description={NO_BUNDLES_LABEL} image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
+
+  return (
+    <ul className={css("build-monitor-module-bundle-list")}>
+      {bundles.map((bundle) => (
+        <li key={bundle.bundleName}>
+          <Typography.Text code>{bundle.bundleName}</Typography.Text>
+          <span>{formatBytes(bundle.sizeBytes || bundle.inputSizeBytes || 0)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function BundleCopyList({ bundles }) {
+  if (!bundles || bundles.length === 0) {
+    return <Typography.Text type="secondary">-</Typography.Text>;
+  }
+
+  return (
+    <div className={css("build-monitor-bundle-copy-list")}>
+      {bundles.map((bundle) => (
+        <UiBadge key={bundle.bundleName} variant="outline">
+          {bundle.bundleName}
+          {bundle.copySizeBytes ? ` · ${formatBytes(bundle.copySizeBytes)}` : ""}
+        </UiBadge>
+      ))}
     </div>
   );
 }
@@ -895,6 +1012,130 @@ function compareBundleName(left, right) {
 
 function getBundleSizeForSort(bundle) {
   return Number(bundle?.sizeBytes || bundle?.inputSizeBytes || 0);
+}
+
+function resolveBundleModuleTree(bundleModules, bundles) {
+  if (Array.isArray(bundleModules) && bundleModules.length > 0) {
+    const root = bundleModules[0];
+    return {
+      key: root?.key || "scene",
+      label: root?.label || SCENE_MODULE_LABEL,
+      children: mergeBundleModuleChildren(root?.children || []),
+    };
+  }
+
+  return {
+    key: "scene",
+    label: SCENE_MODULE_LABEL,
+    children: buildBundleModuleChildren(bundles),
+  };
+}
+
+function mergeBundleModuleChildren(children) {
+  const byKey = new Map(
+    BUNDLE_MODULE_DEFINITIONS.map((definition) => [
+      definition.key,
+      {
+        key: definition.key,
+        label: definition.label,
+        bundleCount: 0,
+        totalSizeBytes: 0,
+        totalAssetCount: 0,
+        bundles: [],
+      },
+    ]),
+  );
+
+  for (const child of children || []) {
+    const key = normalizeBundleModuleKey(child?.key || child?.label || "");
+    const current = byKey.get(key);
+    if (!current) {
+      continue;
+    }
+
+    current.label = bundleModuleLabel(key, child.label);
+    current.bundleCount = Number(child.bundleCount || 0);
+    current.totalSizeBytes = Number(child.totalSizeBytes || 0);
+    current.totalAssetCount = Number(child.totalAssetCount || 0);
+    current.bundles = Array.isArray(child.bundles) ? child.bundles : [];
+  }
+
+  return BUNDLE_MODULE_DEFINITIONS.map((definition) => byKey.get(definition.key));
+}
+
+function buildBundleModuleChildren(bundles) {
+  const children = BUNDLE_MODULE_DEFINITIONS.map((definition) => ({
+    key: definition.key,
+    label: definition.label,
+    bundleCount: 0,
+    totalSizeBytes: 0,
+    totalAssetCount: 0,
+    bundles: [],
+  }));
+  const byKey = new Map(children.map((child) => [child.key, child]));
+
+  for (const bundle of bundles || []) {
+    const key = classifyBundleModule(bundle.bundleName);
+    const module = byKey.get(key) || byKey.get("common");
+    const sizeBytes = Number(bundle.sizeBytes || bundle.inputSizeBytes || 0);
+    const assetCount = Number(bundle.assetCount || 0);
+    module.bundles.push({
+      bundleName: bundle.bundleName,
+      sizeBytes,
+      assetCount,
+    });
+    module.bundleCount += 1;
+    module.totalSizeBytes += sizeBytes;
+    module.totalAssetCount += assetCount;
+  }
+
+  for (const module of children) {
+    module.bundles.sort((left, right) => right.sizeBytes - left.sizeBytes || compareBundleName(left, right));
+  }
+
+  return children;
+}
+
+function classifyBundleModule(bundleName) {
+  const normalized = String(bundleName || "").toLowerCase();
+  if (normalized.includes("summer")) {
+    return "summer";
+  }
+  if (normalized.includes("autumn")) {
+    return "autumn";
+  }
+  if (normalized.includes("winter")) {
+    return "winter";
+  }
+  return "common";
+}
+
+function normalizeBundleModuleKey(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "summer" || normalized === "\u590f") {
+    return "summer";
+  }
+  if (normalized === "autumn" || normalized === "\u79cb") {
+    return "autumn";
+  }
+  if (normalized === "winter" || normalized === "\u51ac") {
+    return "winter";
+  }
+  if (normalized === "common" || normalized === "shared" || normalized === "\u516c\u5171") {
+    return "common";
+  }
+  return classifyBundleModule(normalized);
+}
+
+function bundleModuleLabel(key, fallback) {
+  const definition = BUNDLE_MODULE_DEFINITIONS.find((item) => item.key === normalizeBundleModuleKey(key));
+  return definition?.label || fallback || key;
+}
+
+function getAssetName(assetPath) {
+  const normalized = String(assetPath || "").replace(/\\/g, "/");
+  const index = normalized.lastIndexOf("/");
+  return index >= 0 ? normalized.slice(index + 1) : normalized;
 }
 
 function parseTimeMs(value) {
