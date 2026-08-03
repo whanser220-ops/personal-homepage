@@ -1,0 +1,698 @@
+.build-monitor-page {
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 14px;
+}
+
+.build-monitor-loading-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background: var(--background);
+}
+
+.build-monitor-dashboard-ready {
+  animation: build-monitor-dashboard-in 180ms ease-out both;
+}
+
+.build-monitor-loader {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  width: min(420px, 100%);
+  text-align: center;
+  animation: build-monitor-loader-in 360ms ease-out both;
+}
+
+.build-monitor-loader h1 {
+  margin: 0 0 4px;
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.build-monitor-loader p {
+  margin: 0;
+  color: var(--muted-foreground);
+}
+
+.build-monitor-loader-mark {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  animation: build-monitor-loader-float 1.55s ease-in-out infinite;
+}
+
+.build-monitor-loader-mark::before,
+.build-monitor-loader-mark::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  border: 3px solid transparent;
+  border-radius: 50%;
+}
+
+.build-monitor-loader-mark::before {
+  border-top-color: var(--accent);
+  border-right-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 18%, transparent));
+  animation: build-monitor-spin 0.82s linear infinite;
+}
+
+.build-monitor-loader-mark::after {
+  inset: 10px;
+  border-bottom-color: var(--ring);
+  border-left-color: color-mix(in srgb, var(--ring) 34%, transparent);
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--ring) 16%, transparent));
+  animation: build-monitor-spin 1.12s linear infinite reverse;
+}
+
+.build-monitor-loader-mark span {
+  position: absolute;
+  inset: 25px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 12%, transparent);
+  animation: build-monitor-pulse 0.95s ease-in-out infinite;
+}
+
+.build-monitor-loader-bar {
+  position: relative;
+  overflow: hidden;
+  width: min(260px, 80vw);
+  height: 6px;
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.build-monitor-loader-bar::before {
+  position: absolute;
+  inset: 0;
+  width: 38%;
+  content: "";
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--ring));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--ring) 32%, transparent);
+  animation: build-monitor-loader-bar 0.95s ease-in-out infinite;
+}
+
+.build-monitor-loader-bar::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.78), transparent);
+  transform: translateX(-120%);
+  animation: build-monitor-loader-shine 1.4s ease-in-out infinite;
+}
+
+@keyframes build-monitor-loader-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes build-monitor-loader-float {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(-4px) scale(1.02);
+  }
+}
+
+@keyframes build-monitor-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes build-monitor-pulse {
+  0%,
+  100% {
+    transform: scale(0.86);
+    opacity: 0.62;
+  }
+
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes build-monitor-loader-bar {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  100% {
+    transform: translateX(280%);
+  }
+}
+
+@keyframes build-monitor-loader-shine {
+  0%,
+  20% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes build-monitor-overlay-out {
+  to {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+@keyframes build-monitor-dashboard-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.build-monitor-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  background: color-mix(in srgb, var(--background) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.build-monitor-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px 10px 3px 4px;
+  background: var(--card);
+  color: var(--foreground);
+  font-weight: 800;
+}
+
+.build-monitor-home img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.build-monitor-title {
+  min-width: 0;
+}
+
+.build-monitor-title h1 {
+  margin: 0 0 2px;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.build-monitor-title span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.build-monitor-actions {
+  justify-content: end;
+}
+
+.build-monitor-main {
+  display: grid;
+  gap: 18px;
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 22px 24px 48px;
+}
+
+.build-monitor-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.build-monitor-stats :global(.ant-card),
+.build-monitor-stat-card,
+.build-monitor-grid :global(.ant-card),
+.build-monitor-section :global(.ant-card) {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.build-monitor-stat-card :global(.ui-card-content) {
+  padding: 24px;
+}
+
+.build-monitor-page :global(.ant-card-head) {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.build-monitor-page :global(.ant-card-head-wrapper) {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+}
+
+.build-monitor-page :global(.ant-card-head-title) {
+  flex: 1;
+  min-width: 0;
+  padding: 16px 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.build-monitor-page :global(.ant-card-body) {
+  padding: 24px;
+}
+
+.build-monitor-stats :global(.ant-statistic-content-value) {
+  overflow-wrap: anywhere;
+  font-size: 22px;
+}
+
+.build-monitor-status-badge {
+  white-space: nowrap;
+}
+
+.build-monitor-progress {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: var(--card);
+}
+
+.build-monitor-progress-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.build-monitor-flow-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  background: var(--card);
+}
+
+.build-monitor-flow-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.build-monitor-flow-heading-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.build-monitor-flow-heading-copy :global(.ant-typography):first-child {
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.build-monitor-flow-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.build-monitor-flow-item {
+  min-width: 0;
+}
+
+.build-monitor-flow-step {
+  --duration-color: var(--muted-foreground);
+  --duration-fill: color-mix(in srgb, var(--muted-foreground) 12%, transparent);
+  --duration-soft: color-mix(in srgb, var(--muted) 44%, var(--card));
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  height: 100%;
+  min-height: 152px;
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--duration-color);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: linear-gradient(135deg, var(--duration-soft), var(--card) 68%);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 5%, transparent);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.build-monitor-flow-step:hover {
+  border-color: var(--duration-color);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--foreground) 10%, transparent);
+  transform: translateY(-1px);
+}
+
+.build-monitor-flow-step-fast {
+  --duration-color: var(--status-success);
+  --duration-fill: color-mix(in srgb, var(--status-success) 14%, transparent);
+  --duration-soft: var(--status-success-soft);
+}
+
+.build-monitor-flow-step-normal {
+  --duration-color: var(--accent);
+  --duration-fill: color-mix(in srgb, var(--accent) 15%, transparent);
+  --duration-soft: color-mix(in srgb, var(--accent) 9%, var(--card));
+}
+
+.build-monitor-flow-step-slow {
+  --duration-color: var(--status-warning);
+  --duration-fill: color-mix(in srgb, var(--status-warning) 15%, transparent);
+  --duration-soft: var(--status-warning-soft);
+}
+
+.build-monitor-flow-step-long {
+  --duration-color: var(--destructive);
+  --duration-fill: color-mix(in srgb, var(--destructive) 14%, transparent);
+  --duration-soft: color-mix(in srgb, var(--destructive) 10%, var(--card));
+}
+
+.build-monitor-flow-step-running {
+  --duration-color: var(--status-info);
+  --duration-fill: color-mix(in srgb, var(--status-info) 15%, transparent);
+  --duration-soft: var(--status-info-soft);
+}
+
+.build-monitor-flow-step-failed {
+  --duration-color: var(--destructive);
+  --duration-fill: color-mix(in srgb, var(--destructive) 16%, transparent);
+  --duration-soft: color-mix(in srgb, var(--destructive) 10%, var(--card));
+}
+
+:global(.dark) .build-monitor-flow-step {
+  --duration-fill: color-mix(in srgb, var(--duration-color) 22%, transparent);
+  --duration-soft: color-mix(in srgb, var(--card) 82%, var(--duration-color) 18%);
+}
+
+.build-monitor-flow-step-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: var(--radius);
+  background: var(--duration-fill);
+  color: var(--duration-color);
+}
+
+.build-monitor-flow-step-body {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+
+.build-monitor-flow-step-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.build-monitor-flow-step-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.build-monitor-flow-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 5px 7px;
+  background: var(--duration-fill);
+  color: var(--duration-color);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.build-monitor-flow-state-running .build-monitor-flow-status svg {
+  animation: build-monitor-spin 1.1s linear infinite;
+}
+
+.build-monitor-flow-purpose {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.build-monitor-flow-env-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.build-monitor-flow-env {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 4px 7px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.build-monitor-flow-env span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.build-monitor-flow-env-cloud {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.build-monitor-flow-env-jenkins {
+  border-color: #d4d9df;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.build-monitor-flow-env-builder {
+  border-color: #bde8df;
+  background: #f0fdfa;
+  color: #0f766e;
+}
+
+.build-monitor-flow-env-container {
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.build-monitor-flow-env-unity {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.build-monitor-flow-env-github {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.build-monitor-flow-env-perforce {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #a16207;
+}
+
+.build-monitor-flow-env-yooasset {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+:global(.dark) .build-monitor-flow-env {
+  border-color: color-mix(in srgb, currentColor 38%, var(--border));
+  background: color-mix(in srgb, currentColor 13%, var(--card));
+}
+
+.build-monitor-flow-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: max-content;
+  max-width: 100%;
+  margin-top: auto;
+  color: var(--duration-color);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.build-monitor-flow-tooltip {
+  display: grid;
+  gap: 4px;
+  max-width: 340px;
+}
+
+.build-monitor-flow-tooltip span {
+  display: block;
+  line-height: 1.4;
+}
+
+.build-monitor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.build-monitor-grid.build-monitor-grid-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.build-monitor-chart-frame {
+  display: grid;
+  align-items: center;
+  min-height: 320px;
+  min-width: 0;
+}
+
+.build-monitor-chart-frame > div {
+  min-width: 0;
+}
+
+.build-monitor-section {
+  min-width: 0;
+}
+
+.build-monitor-subtitle {
+  margin-top: 22px;
+}
+
+.build-monitor-page :global(.ant-table-cell) code {
+  display: inline-block;
+  max-width: 520px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.build-monitor-page :global(.ant-table-measure-row) {
+  height: 0 !important;
+  visibility: hidden !important;
+}
+
+.build-monitor-page :global(.ant-table-measure-cell) {
+  height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+@media (max-width: 1100px) {
+  .build-monitor-flow-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .build-monitor-topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .build-monitor-actions {
+    justify-content: start;
+  }
+
+  .build-monitor-stats,
+  .build-monitor-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .build-monitor-flow-panel {
+    padding: 14px;
+  }
+
+  .build-monitor-flow-heading {
+    flex-direction: column;
+  }
+
+  .build-monitor-flow-list {
+    grid-template-columns: 1fr;
+  }
+
+  .build-monitor-flow-step {
+    grid-template-columns: 38px minmax(0, 1fr);
+    min-height: auto;
+  }
+
+  .build-monitor-flow-step-icon {
+    width: 38px;
+    height: 38px;
+  }
+}
+
+@media (max-width: 640px) {
+  .build-monitor-topbar,
+  .build-monitor-main {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .build-monitor-home {
+    width: fit-content;
+  }
+
+  .build-monitor-stats,
+  .build-monitor-grid {
+    grid-template-columns: 1fr;
+  }
+}

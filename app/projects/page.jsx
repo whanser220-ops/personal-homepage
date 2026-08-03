@@ -1,5 +1,6 @@
 import { PageFrame } from "../../src/components/PageFrame.jsx";
 import { Projects } from "../../src/components/Projects.jsx";
+import styles from "./page.module.css";
 
 export const metadata = {
   title: "项目 | Huang",
@@ -9,7 +10,7 @@ export const metadata = {
 export default function ProjectsPage() {
   return (
     <PageFrame>
-      <main className="projects-page">
+      <main className={styles.projectsPage}>
         <Projects />
       </main>
     </PageFrame>

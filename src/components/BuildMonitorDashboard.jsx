@@ -32,12 +32,18 @@ import {
 import { Badge as UiBadge } from "./ui/badge.jsx";
 import { Button as UiButton } from "./ui/button.jsx";
 import { Card as UiCard, CardContent as UiCardContent } from "./ui/card.jsx";
+import { cn } from "../lib/utils.js";
+import styles from "./BuildMonitorDashboard.module.css";
 
 const ColumnChart = dynamic(() => import("@ant-design/charts").then((module) => module.Column), {
   ssr: false,
 });
 
 const BOOT_LOADING_MS = 900;
+
+function css(...names) {
+  return cn(...names.map((name) => name && styles[name]));
+}
 
 const emptySnapshot = {
   configured: false,
@@ -380,7 +386,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
       key: "state",
       width: 90,
       render: (value, row) => (
-        <UiBadge className="build-monitor-status-badge" variant={statusBadgeVariant(value)}>
+        <UiBadge className={css("build-monitor-status-badge")} variant={statusBadgeVariant(value)}>
           {row.cached && value === "success" ? "cached" : row.cached && value === "running" ? "copying" : statusLabel(value)}
         </UiBadge>
       ),
@@ -405,21 +411,21 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   }
 
   return (
-    <div className="build-monitor-page build-monitor-dashboard-ready">
-      <header className="build-monitor-topbar">
-        <UiButton asChild className="build-monitor-home" variant="ghost">
+    <div className={css("build-monitor-page", "build-monitor-dashboard-ready")}>
+      <header className={css("build-monitor-topbar")}>
+        <UiButton asChild className={css("build-monitor-home")} variant="ghost">
           <Link href="/" aria-label="返回首页">
             <img src="/assets/site-logo.webp" alt="" width="34" height="34" />
             <span>Huang</span>
           </Link>
         </UiButton>
-        <div className="build-monitor-title">
+        <div className={css("build-monitor-title")}>
           <Typography.Title level={1}>构建监控</Typography.Title>
           <Typography.Text type="secondary">
             {run ? `${run.jobName} #${run.buildNumber || "-"} ${run.buildTarget || ""}` : "等待构建指标"}
           </Typography.Text>
         </div>
-        <Space className="build-monitor-actions">
+        <Space className={css("build-monitor-actions")}>
           <UiBadge variant={sseStatusVariant}>{sseStatusText}</UiBadge>
           <UiButton onClick={refreshSnapshot} size="sm" type="button" variant="outline">
             <RefreshCw aria-hidden="true" data-icon="inline-start" />
@@ -428,38 +434,38 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
         </Space>
       </header>
 
-      <main className="build-monitor-main">
+      <main className={css("build-monitor-main")}>
         {loadError && <Alert type="error" message={loadError} showIcon />}
         {snapshot.state === "unconfigured" && (
           <Alert type="warning" message="构建指标数据库未配置" showIcon />
         )}
         {snapshot.state === "idle" && <Alert type="info" message="还没有构建打点数据" showIcon />}
 
-        <section className="build-monitor-stats" aria-label="构建状态">
-          <UiCard className="build-monitor-stat-card">
+        <section className={css("build-monitor-stats")} aria-label="构建状态">
+          <UiCard className={css("build-monitor-stat-card")}>
             <UiCardContent>
               <Statistic title="状态" value={statusLabel(snapshot.state)} valueStyle={{ color: statusTextColor(snapshot.state) }} />
             </UiCardContent>
           </UiCard>
-          <UiCard className="build-monitor-stat-card">
+          <UiCard className={css("build-monitor-stat-card")}>
             <UiCardContent>
               <Statistic title="总耗时" value={formatDuration(elapsedDurationMs)} />
             </UiCardContent>
           </UiCard>
-          <UiCard className="build-monitor-stat-card">
+          <UiCard className={css("build-monitor-stat-card")}>
             <UiCardContent>
               <Statistic title="当前主步骤" value={currentMainFlowLabel} />
             </UiCardContent>
           </UiCard>
-          <UiCard className="build-monitor-stat-card">
+          <UiCard className={css("build-monitor-stat-card")}>
             <UiCardContent>
               <Statistic title="Bundle" value={`${completedBundles}/${totalBundles || 0}`} />
             </UiCardContent>
           </UiCard>
         </section>
 
-        <section className="build-monitor-progress" aria-label="Bundle 进度">
-          <div className="build-monitor-progress-summary">
+        <section className={css("build-monitor-progress")} aria-label="Bundle 进度">
+          <div className={css("build-monitor-progress-summary")}>
             <Typography.Text strong>Bundle 总进度</Typography.Text>
             <Typography.Text type="secondary">
               已完成 {completedBundles}/{totalBundles || 0}
@@ -471,9 +477,9 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
 
         <MainFlowDisclosure steps={mainFlowSteps} currentStep={currentMainFlowStep} />
 
-        <section className="build-monitor-grid build-monitor-grid-single" aria-label="资源统计">
+        <section className={css("build-monitor-grid", "build-monitor-grid-single")} aria-label="资源统计">
           <AntCard title="各类型资源占用">
-            <div className="build-monitor-chart-frame">
+            <div className={css("build-monitor-chart-frame")}>
               {assetTypeChartData.length > 0 ? (
                 <ColumnChart
                   data={assetTypeChartData}
@@ -493,7 +499,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
           </AntCard>
         </section>
 
-        <section className="build-monitor-section" aria-label="实时 Bundle">
+        <section className={css("build-monitor-section")} aria-label="实时 Bundle">
           <AntCard title="实时 Bundle 构建">
             <Typography.Title level={5}>正在构建</Typography.Title>
             <Table
@@ -506,7 +512,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
               size="middle"
             />
 
-            <Typography.Title className="build-monitor-subtitle" level={5}>
+            <Typography.Title className={css("build-monitor-subtitle")} level={5}>
               已完成
             </Typography.Title>
             <Table
@@ -528,9 +534,9 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
 
 function MainFlowDisclosure({ steps, currentStep }) {
   return (
-    <section className="build-monitor-flow-panel" aria-label="主流程进度">
-      <div className="build-monitor-flow-heading">
-        <div className="build-monitor-flow-heading-copy">
+    <section className={css("build-monitor-flow-panel")} aria-label="主流程进度">
+      <div className={css("build-monitor-flow-heading")}>
+        <div className={css("build-monitor-flow-heading-copy")}>
           <Typography.Text strong>主流程进度</Typography.Text>
           <Typography.Text type="secondary">执行到：{currentStep?.title || "等待构建步骤"}</Typography.Text>
         </div>
@@ -540,35 +546,35 @@ function MainFlowDisclosure({ steps, currentStep }) {
       </div>
 
       {steps.length > 0 ? (
-        <ol className="build-monitor-flow-list">
+        <ol className={css("build-monitor-flow-list")}>
           {steps.map((step) => {
             const StepIcon = step.icon;
             const StatusIcon = getFlowStatusIcon(step.state);
 
             return (
-              <li key={step.key} className="build-monitor-flow-item">
+              <li key={step.key} className={css("build-monitor-flow-item")}>
                 <Tooltip title={<FlowStepTooltip step={step} />} placement="top">
-                  <div className={`build-monitor-flow-step build-monitor-flow-step-${step.tone} build-monitor-flow-state-${step.state}`}>
-                    <div className="build-monitor-flow-step-icon" aria-hidden="true">
+                  <div className={css("build-monitor-flow-step", `build-monitor-flow-step-${step.tone}`, `build-monitor-flow-state-${step.state}`)}>
+                    <div className={css("build-monitor-flow-step-icon")} aria-hidden="true">
                       <StepIcon size={21} strokeWidth={2.1} />
                     </div>
-                    <div className="build-monitor-flow-step-body">
-                      <div className="build-monitor-flow-step-header">
-                        <Typography.Text strong className="build-monitor-flow-step-title">
+                    <div className={css("build-monitor-flow-step-body")}>
+                      <div className={css("build-monitor-flow-step-header")}>
+                        <Typography.Text strong className={css("build-monitor-flow-step-title")}>
                           {step.title}
                         </Typography.Text>
-                        <UiBadge className="build-monitor-flow-status" variant={statusBadgeVariant(step.state)}>
+                        <UiBadge className={css("build-monitor-flow-status")} variant={statusBadgeVariant(step.state)}>
                           <StatusIcon aria-hidden="true" data-icon="inline-start" />
                           {statusLabel(step.state)}
                         </UiBadge>
                       </div>
-                      <Typography.Text className="build-monitor-flow-purpose">{step.purpose}</Typography.Text>
-                      <div className="build-monitor-flow-env-list" aria-label={`${step.title}执行位置`}>
+                      <Typography.Text className={css("build-monitor-flow-purpose")}>{step.purpose}</Typography.Text>
+                      <div className={css("build-monitor-flow-env-list")} aria-label={`${step.title}执行位置`}>
                         {step.environments.map((environment) => (
                           <FlowEnvironmentChip key={environment.key} environment={environment} />
                         ))}
                       </div>
-                      <span className="build-monitor-flow-duration" aria-label={`${step.title}耗时`}>
+                      <span className={css("build-monitor-flow-duration")} aria-label={`${step.title}耗时`}>
                         <Clock size={14} strokeWidth={2.1} aria-hidden="true" />
                         {step.durationLabel}
                       </span>
@@ -590,7 +596,7 @@ function FlowEnvironmentChip({ environment }) {
   const EnvironmentIcon = environment.icon;
 
   return (
-    <UiBadge className={`build-monitor-flow-env build-monitor-flow-env-${environment.key}`} title={environment.detail} variant="outline">
+    <UiBadge className={css("build-monitor-flow-env", `build-monitor-flow-env-${environment.key}`)} title={environment.detail} variant="outline">
       <EnvironmentIcon aria-hidden="true" data-icon="inline-start" />
       <span>{environment.label}</span>
     </UiBadge>
@@ -599,7 +605,7 @@ function FlowEnvironmentChip({ environment }) {
 
 function FlowStepTooltip({ step }) {
   return (
-    <div className="build-monitor-flow-tooltip">
+    <div className={css("build-monitor-flow-tooltip")}>
       <strong>{step.title}</strong>
       <span>状态：{statusLabel(step.state)}</span>
       <span>耗时：{step.durationLabel}</span>
@@ -617,16 +623,16 @@ function BuildMonitorLoadingScreen({ run }) {
     : "正在启动构建指标面板";
 
   return (
-    <div className="build-monitor-page build-monitor-loading-page">
-      <div className="build-monitor-loader" role="status" aria-live="polite">
-        <div className="build-monitor-loader-mark" aria-hidden="true">
+    <div className={css("build-monitor-page", "build-monitor-loading-page")}>
+      <div className={css("build-monitor-loader")} role="status" aria-live="polite">
+        <div className={css("build-monitor-loader-mark")} aria-hidden="true">
           <span />
         </div>
         <div>
           <h1>构建监控</h1>
           <p>{loadingText}</p>
         </div>
-        <div className="build-monitor-loader-bar" aria-hidden="true" />
+        <div className={css("build-monitor-loader-bar")} aria-hidden="true" />
       </div>
     </div>
   );

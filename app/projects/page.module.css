@@ -1,0 +1,14 @@
+.projectsPage {
+  min-height: 100vh;
+  padding: 128px clamp(24px, 3.1vw, 40px) 84px;
+  background:
+    linear-gradient(120deg, rgba(199, 240, 229, 0.78) 0%, rgba(247, 244, 209, 0.86) 46%, rgba(215, 234, 185, 0.82) 100%),
+    linear-gradient(25deg, rgba(176, 231, 238, 0.56), rgba(255, 255, 255, 0) 44%),
+    var(--bg);
+}
+
+@media (max-width: 680px) {
+  .projectsPage {
+    padding: 104px 14px 58px;
+  }
+}

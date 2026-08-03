@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BookOpen, Smile, Star } from "lucide-react";
+import { cn } from "../lib/utils.js";
+import styles from "./NavigationDock.module.css";
 import { ThemeToggle } from "./ThemeToggle.jsx";
 
 const dockItems = [
@@ -15,6 +17,10 @@ const dockItems = [
 function getActiveIndex(pathname) {
   const itemIndex = dockItems.findIndex((item) => pathname === item.href);
   return itemIndex >= 0 ? itemIndex + 1 : 0;
+}
+
+function css(...names) {
+  return cn(...names.map((name) => name && styles[name]));
 }
 
 export function NavigationDock({ className = "" }) {
@@ -30,15 +36,15 @@ export function NavigationDock({ className = "" }) {
   return (
     <nav
       aria-label="首页导航"
-      className={`navigation-dock${className ? ` ${className}` : ""}`}
+      className={cn(css("navigation-dock"), className)}
       onMouseLeave={() => setSpotIndex(activeIndex)}
       style={{ "--dock-spot-index": spotIndex }}
     >
-      <span className="dock-spot" aria-hidden="true" />
+      <span className={css("dock-spot")} aria-hidden="true" />
       <Link
         aria-current={pathname === "/" ? "page" : undefined}
         aria-label="首页"
-        className="dock-avatar"
+        className={css("dock-avatar")}
         data-dock-index="0"
         href="/"
         onMouseEnter={() => setSpotIndex(0)}
@@ -55,7 +61,7 @@ export function NavigationDock({ className = "" }) {
           <Link
             aria-current={isActive ? "page" : undefined}
             aria-label={item.label}
-            className={`dashboard-nav-link${isActive ? " is-active" : ""}`}
+            className={css("dashboard-nav-link", isActive && "is-active")}
             data-dock-index={index + 1}
             href={item.href}
             key={item.label}
@@ -69,7 +75,7 @@ export function NavigationDock({ className = "" }) {
       })}
 
       <ThemeToggle
-        className="dashboard-nav-link theme-toggle"
+        className={css("dashboard-nav-link")}
         onMouseEnter={() => setSpotIndex(themeSpotIndex)}
         spotIndex={themeSpotIndex}
       />
