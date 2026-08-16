@@ -10,8 +10,6 @@ DOCKER_NETWORK="${DOCKER_NETWORK:-personal-homepage-net}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-personal-homepage-postgres}"
 POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:16-alpine}"
 POSTGRES_VOLUME="${POSTGRES_VOLUME:-personal_homepage_pgdata}"
-JENKINS_JOBS_HOST_ROOT="${JENKINS_JOBS_HOST_ROOT:-/var/lib/docker/volumes/jenkins_home/_data/jobs}"
-JENKINS_JOBS_CONTAINER_ROOT="${JENKINS_JOBS_CONTAINER_ROOT:-/srv/jenkins-jobs}"
 NGINX_CONF_SOURCE="${NGINX_CONF_SOURCE:-deploy/nginx-personal-homepage.conf}"
 NGINX_CONF_TARGET="${NGINX_CONF_TARGET:-/etc/nginx/conf.d/personal-homepage.conf}"
 HEALTH_URL="http://127.0.0.1:${HOST_PORT}/api/health"
@@ -87,16 +85,6 @@ for attempt in $(seq 1 60); do
     sleep 2
 done
 
-jenkins_jobs_mount_args=()
-if sudo test -d "$JENKINS_JOBS_HOST_ROOT"; then
-    jenkins_jobs_mount_args=(
-        --mount "type=bind,source=${JENKINS_JOBS_HOST_ROOT},target=${JENKINS_JOBS_CONTAINER_ROOT},readonly"
-        -e "JENKINS_JOBS_ROOT=${JENKINS_JOBS_CONTAINER_ROOT}"
-    )
-else
-    echo "Jenkins jobs root not found; bundle report enrichment disabled: $JENKINS_JOBS_HOST_ROOT" >&2
-fi
-
 sudo docker build --pull -t "$image_tag" -t "${APP_NAME}:latest" .
 
 sudo docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
@@ -105,7 +93,6 @@ sudo docker run -d \
     --restart unless-stopped \
     --network "$DOCKER_NETWORK" \
     --env-file "$ENV_FILE" \
-    "${jenkins_jobs_mount_args[@]}" \
     -p "127.0.0.1:${HOST_PORT}:3000" \
     "$image_tag" >/dev/null
 
@@ -126,7 +113,6 @@ for attempt in $(seq 1 30); do
                 --restart unless-stopped \
                 --network "$DOCKER_NETWORK" \
                 --env-file "$ENV_FILE" \
-                "${jenkins_jobs_mount_args[@]}" \
                 -p "127.0.0.1:${HOST_PORT}:3000" \
                 "$previous_image" >/dev/null || true
         fi
