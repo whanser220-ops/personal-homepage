@@ -105,8 +105,9 @@ export async function readLatestBuildMetrics(runId) {
       [run.run_id],
     ),
     pool.query(
-      `select run_id, job_name, build_number, state, result, started_at, finished_at,
-              total_duration_ms, updated_at
+      `select run_id, job_name, build_number, git_ref, git_commit, build_target, package_name,
+              state, result, current_stage_name, started_at, finished_at,
+              total_duration_ms, metadata, updated_at
          from build_metric_runs
         order by updated_at desc
         limit 10`,
@@ -939,6 +940,7 @@ function createEmptySnapshot() {
 }
 
 function toRun(row) {
+  const metadata = row.metadata || {};
   return {
     runId: row.run_id,
     jobName: row.job_name,
@@ -954,6 +956,44 @@ function toRun(row) {
     finishedAt: toIso(row.finished_at),
     totalDurationMs: durationFromRow(row.total_duration_ms, row.started_at, row.finished_at || row.updated_at),
     updatedAt: toIso(row.updated_at),
+    metadata,
+    revision: buildRunRevision(row, metadata),
+  };
+}
+
+function buildRunRevision(row, metadata) {
+  const p4 = metadata?.p4 && typeof metadata.p4 === "object" && !Array.isArray(metadata.p4)
+    ? metadata.p4
+    : {};
+  const changelist = cleanText(p4.changelist || p4.change || p4.syncedChange || "", MAX_NAME_LENGTH);
+  const pinnedChangelist = cleanText(p4.pinned_changelist || p4.pinnedChangelist || "", MAX_NAME_LENGTH);
+  const stream = cleanText(p4.stream || "", MAX_NAME_LENGTH);
+  const client = cleanText(p4.client || "", MAX_NAME_LENGTH);
+  const user = cleanText(p4.user || "", MAX_NAME_LENGTH);
+  const port = cleanText(p4.port || "", MAX_NAME_LENGTH);
+
+  if (changelist || stream || client) {
+    return {
+      type: "perforce",
+      label: changelist ? `P4 CL ${changelist}` : "Perforce",
+      detail: [stream, client].filter(Boolean).join(" · "),
+      changelist,
+      pinnedChangelist,
+      stream,
+      client,
+      user,
+      port,
+    };
+  }
+
+  const gitRef = row.git_ref || "";
+  const gitCommit = row.git_commit || "";
+  return {
+    type: gitRef || gitCommit ? "git" : "unknown",
+    label: gitCommit ? `Git ${gitCommit}` : gitRef || "版本未知",
+    detail: gitRef || "",
+    gitRef,
+    gitCommit,
   };
 }
 

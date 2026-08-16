@@ -326,6 +326,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   const summary = snapshot.summary || emptySnapshot.summary;
   const redundantAssets = snapshot.redundantAssets || [];
   const run = snapshot.currentRun;
+  const revision = getRunRevision(run);
   const sseStatusVariant = connected ? "success" : connected === false ? "secondary" : "warning";
   const sseStatusText = connected ? "SSE connected" : connected === false ? "SSE offline" : "SSE connecting";
   const totalBundles = summary.totalBundles || bundles.length;
@@ -465,9 +466,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
         </UiButton>
         <div className={css("build-monitor-title")}>
           <Typography.Title level={1}>构建监控</Typography.Title>
-          <Typography.Text type="secondary">
-            {run ? `${run.jobName} #${run.buildNumber || "-"} ${run.buildTarget || ""}` : "等待构建指标"}
-          </Typography.Text>
+          <Typography.Text type="secondary">{formatRunSubtitle(run, revision)}</Typography.Text>
         </div>
         <Space className={css("build-monitor-actions")}>
           <UiBadge variant={sseStatusVariant}>{sseStatusText}</UiBadge>
@@ -489,6 +488,12 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
           <UiCard className={css("build-monitor-stat-card")}>
             <UiCardContent>
               <Statistic title="状态" value={statusLabel(snapshot.state)} valueStyle={{ color: statusTextColor(snapshot.state) }} />
+            </UiCardContent>
+          </UiCard>
+          <UiCard className={css("build-monitor-stat-card")}>
+            <UiCardContent>
+              <Statistic title="版本来源" value={revision.label} />
+              {revision.detail ? <Typography.Text className={css("build-monitor-stat-detail")} type="secondary">{revision.detail}</Typography.Text> : null}
             </UiCardContent>
           </UiCard>
           <UiCard className={css("build-monitor-stat-card")}>
@@ -932,11 +937,15 @@ function buildRuntimeDetails(sourceStages) {
   const workspaces = uniqueMetadataValues(sourceStages, "workspace");
   const platforms = uniqueMetadataValues(sourceStages, "platform");
   const unityVersions = uniqueMetadataValues(sourceStages, "unityVersion");
+  const p4Changes = uniqueNestedMetadataValues(sourceStages, ["p4", "changelist"]);
+  const p4Streams = uniqueNestedMetadataValues(sourceStages, ["p4", "stream"]);
 
   details.push(...nodeNames.map((value) => `构建节点：${value}`));
   details.push(...workspaces.map((value) => `工作区：${value}`));
   details.push(...platforms.map((value) => `Unity 平台：${value}`));
   details.push(...unityVersions.map((value) => `Unity 版本：${value}`));
+  details.push(...p4Changes.map((value) => `P4 CL：${value}`));
+  details.push(...p4Streams.map((value) => `P4 Stream：${value}`));
 
   return details;
 }
@@ -949,6 +958,79 @@ function uniqueMetadataValues(sourceStages, key) {
         .filter((value) => typeof value === "string" && value.trim().length > 0),
     ),
   );
+}
+
+function uniqueNestedMetadataValues(sourceStages, path) {
+  return Array.from(
+    new Set(
+      sourceStages
+        .map((stage) => getNestedValue(stage?.metadata, path))
+        .filter((value) => typeof value === "string" && value.trim().length > 0),
+    ),
+  );
+}
+
+function getNestedValue(source, path) {
+  let current = source;
+  for (const key of path) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      return "";
+    }
+    current = current[key];
+  }
+  return current;
+}
+
+function formatRunSubtitle(run, revision) {
+  if (!run) {
+    return "等待构建指标";
+  }
+
+  return [run.jobName ? `${run.jobName} #${run.buildNumber || "-"}` : "", revision.label, run.buildTarget]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function getRunRevision(run) {
+  const revision = run?.revision;
+  if (revision?.type === "perforce" || revision?.type === "git") {
+    return normalizeRevision(revision);
+  }
+
+  const p4 = run?.metadata?.p4;
+  if (p4 && typeof p4 === "object" && !Array.isArray(p4)) {
+    const changelist = String(p4.changelist || p4.change || p4.syncedChange || "").trim();
+    const stream = String(p4.stream || "").trim();
+    const client = String(p4.client || "").trim();
+    if (changelist || stream || client) {
+      return normalizeRevision({
+        type: "perforce",
+        label: changelist ? `P4 CL ${changelist}` : "Perforce",
+        detail: [stream, client].filter(Boolean).join(" · "),
+        changelist,
+        stream,
+        client,
+      });
+    }
+  }
+
+  if (run?.gitCommit || run?.gitRef) {
+    return normalizeRevision({
+      type: "git",
+      label: run.gitCommit ? `Git ${run.gitCommit}` : run.gitRef,
+      detail: run.gitRef || "",
+    });
+  }
+
+  return normalizeRevision({ type: "unknown", label: "版本未知", detail: "" });
+}
+
+function normalizeRevision(revision) {
+  return {
+    type: revision?.type || "unknown",
+    label: String(revision?.label || "版本未知").trim() || "版本未知",
+    detail: String(revision?.detail || "").trim(),
+  };
 }
 
 function getRunElapsedDurationMs(run, summary, state, nowMs) {

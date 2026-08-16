@@ -252,7 +252,7 @@
 
 .build-monitor-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 12px;
 }
 
@@ -303,6 +303,16 @@
 .build-monitor-stats :global(.ant-statistic-content-value) {
   overflow-wrap: anywhere;
   font-size: 22px;
+}
+
+.build-monitor-stat-detail {
+  display: block;
+  margin-top: 6px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .build-monitor-status-badge {
