@@ -1,4 +1,5 @@
 import pg from "pg";
+import { enrichSnapshotWithArchivedBundleReport } from "./buildMetricsReports.js";
 
 const { Pool } = pg;
 
@@ -120,7 +121,7 @@ export async function readLatestBuildMetrics(runId) {
       : buildBundleModuleChildren(bundles);
   const redundantAssets = redundantAssetResult.rows.map(toRedundantAsset);
 
-  return {
+  return enrichSnapshotWithArchivedBundleReport({
     configured: true,
     source: "postgres",
     state: run.state || "idle",
@@ -138,7 +139,7 @@ export async function readLatestBuildMetrics(runId) {
     redundantAssets,
     recentRuns: recentRunResult.rows.map(toRun),
     summary: createSummary(run, stageResult.rows, bundleResult.rows, assetTypeResult.rows, redundantAssets),
-  };
+  });
 }
 
 export async function writeBuildMetricEvent(input, defaultJobName = DEFAULT_JOB_NAME) {
