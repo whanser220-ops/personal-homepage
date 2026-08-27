@@ -27,6 +27,8 @@ export async function GET() {
         stages: [],
         bundles: [],
         assetTypes: [],
+        bundleModules: [],
+        redundantAssets: [],
         recentRuns: [],
         summary: {
           stageCount: 0,
@@ -36,6 +38,8 @@ export async function GET() {
           activeBundles: 0,
           assetTypeCount: 0,
           totalAssetBytes: 0,
+          duplicateAssetCount: 0,
+          totalRedundantSizeBytes: 0,
           totalDurationMs: 0,
         },
       },

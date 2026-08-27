@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -21,7 +20,6 @@ import {
   Clock,
   Cloud,
   Database,
-  GitBranch,
   LoaderCircle,
   Monitor,
   Package,
@@ -32,12 +30,14 @@ import {
 import { Badge as UiBadge } from "./ui/badge.jsx";
 import { Button as UiButton } from "./ui/button.jsx";
 import { Card as UiCard, CardContent as UiCardContent } from "./ui/card.jsx";
-
-const ColumnChart = dynamic(() => import("@ant-design/charts").then((module) => module.Column), {
-  ssr: false,
-});
+import { cn } from "../lib/utils.js";
+import styles from "./BuildMonitorDashboard.module.css";
 
 const BOOT_LOADING_MS = 900;
+
+function css(...names) {
+  return cn(...names.map((name) => name && styles[name]));
+}
 
 const emptySnapshot = {
   configured: false,
@@ -52,6 +52,8 @@ const emptySnapshot = {
   stages: [],
   bundles: [],
   assetTypes: [],
+  bundleModules: [],
+  redundantAssets: [],
   recentRuns: [],
   summary: {
     stageCount: 0,
@@ -61,9 +63,24 @@ const emptySnapshot = {
     activeBundles: 0,
     assetTypeCount: 0,
     totalAssetBytes: 0,
+    duplicateAssetCount: 0,
+    totalRedundantSizeBytes: 0,
     totalDurationMs: 0,
   },
 };
+
+const SCENE_MODULE_LABEL = "\u573a\u666f\u6a21\u5757";
+const REDUNDANCY_ANALYSIS_LABEL = "\u5197\u4f59\u5206\u6790";
+const DUPLICATE_RESOURCE_LABEL = "\u91cd\u590d\u8d44\u6e90";
+const TOTAL_REDUNDANT_SIZE_LABEL = "\u5197\u4f59\u603b\u5927\u5c0f";
+const NO_REDUNDANT_ASSETS_LABEL = "\u6682\u65e0\u5197\u4f59\u8d44\u6e90\u5206\u6790";
+const NO_BUNDLES_LABEL = "\u6682\u65e0 Bundle";
+const BUNDLE_MODULE_DEFINITIONS = [
+  { key: "summer", label: "\u590f" },
+  { key: "autumn", label: "\u79cb" },
+  { key: "winter", label: "\u51ac" },
+  { key: "common", label: "\u516c\u5171" },
+];
 
 const ENVIRONMENT_DEFINITIONS = {
   cloud: {
@@ -96,16 +113,10 @@ const ENVIRONMENT_DEFINITIONS = {
     detail: "Unity 6000 LinuxEditor 批处理",
     icon: Server,
   },
-  github: {
-    key: "github",
-    label: "GitHub",
-    detail: "代码源 Main 分支",
-    icon: GitBranch,
-  },
   perforce: {
     key: "perforce",
     label: "Perforce",
-    detail: "美术资源仓库",
+    detail: "源码、美术资源和 Jenkinsfile 统一来源",
     icon: Database,
   },
   yooasset: {
@@ -127,16 +138,16 @@ const MAIN_FLOW_DEFINITIONS = [
   },
   {
     key: "bootstrap",
-    title: "同步项目代码",
-    purpose: "同步 Unity 项目代码到构建工作区",
-    stageIds: ["bootstrap"],
-    environments: ["builder", "container", "github"],
-    icon: GitBranch,
+    title: "同步 Perforce 项目代码",
+    purpose: "从 Perforce 拉取 Jenkinsfile、Unity 工程和构建脚本",
+    stageIds: ["bootstrap", "p4-bootstrap", "p4-project-sync"],
+    environments: ["builder", "container", "perforce"],
+    icon: Database,
   },
   {
     key: "p4-sync",
-    title: "同步美术资源",
-    purpose: "从 Perforce 拉取美术和关卡资源",
+    title: "同步 Perforce 项目资源",
+    purpose: "从 Perforce 同步 Unity 工程资源和关卡内容",
     stageIds: ["p4-sync"],
     environments: ["builder", "container", "perforce"],
     icon: Database,
@@ -152,8 +163,8 @@ const MAIN_FLOW_DEFINITIONS = [
   {
     key: "unity-bootstrap",
     title: "启动 Unity 编辑器",
-    purpose: "完成许可证、LFS 和输出目录准备，并启动 Unity 编辑器",
-    stageIds: ["unity-license", "git-lfs", "cleanup", "unity-editor-start"],
+    purpose: "完成许可证和输出目录准备，并启动 Unity 编辑器",
+    stageIds: ["unity-license", "cleanup", "unity-editor-start"],
     fallbackStageIds: ["unity-build-script", "unity-process"],
     environments: ["builder", "container", "unity"],
     icon: Server,
@@ -312,9 +323,10 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
 
   const stages = snapshot.stages || [];
   const bundles = snapshot.bundles || [];
-  const assetTypes = snapshot.assetTypes || [];
   const summary = snapshot.summary || emptySnapshot.summary;
+  const redundantAssets = snapshot.redundantAssets || [];
   const run = snapshot.currentRun;
+  const revision = getRunRevision(run);
   const sseStatusVariant = connected ? "success" : connected === false ? "secondary" : "warning";
   const sseStatusText = connected ? "SSE connected" : connected === false ? "SSE offline" : "SSE connecting";
   const totalBundles = summary.totalBundles || bundles.length;
@@ -329,6 +341,14 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   const mainFlowSteps = useMemo(() => buildMainFlowSteps(stages, snapshot, nowMs), [stages, snapshot, nowMs]);
   const currentMainFlowStep = getCurrentMainFlowStep(mainFlowSteps);
   const currentMainFlowLabel = currentMainFlowStep?.title || "-";
+  const bundleModuleTree = useMemo(
+    () => resolveBundleModuleTree(snapshot.bundleModules, bundles),
+    [snapshot.bundleModules, bundles],
+  );
+  const duplicateAssetCount = summary.duplicateAssetCount || redundantAssets.length;
+  const totalRedundantSizeBytes =
+    summary.totalRedundantSizeBytes ||
+    redundantAssets.reduce((total, item) => total + Number(item.redundantSizeBytes || 0), 0);
 
   const activeBundleRows = useMemo(
     () => {
@@ -358,15 +378,6 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
     [bundles, nowMs, runFreezeTimeMs],
   );
 
-  const assetTypeChartData = useMemo(
-    () =>
-      assetTypes.map((item) => ({
-        type: item.assetType,
-        mb: Number((item.sizeBytes / 1024 / 1024).toFixed(2)),
-      })),
-    [assetTypes],
-  );
-
   const bundleColumns = [
     {
       title: "Bundle",
@@ -380,7 +391,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
       key: "state",
       width: 90,
       render: (value, row) => (
-        <UiBadge className="build-monitor-status-badge" variant={statusBadgeVariant(value)}>
+        <UiBadge className={css("build-monitor-status-badge")} variant={statusBadgeVariant(value)}>
           {row.cached && value === "success" ? "cached" : row.cached && value === "running" ? "copying" : statusLabel(value)}
         </UiBadge>
       ),
@@ -400,26 +411,64 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
     },
   ];
 
+  const redundantAssetColumns = [
+    {
+      title: "\u8d44\u6e90",
+      key: "assetPath",
+      render: (_, row) => (
+        <div className={css("build-monitor-resource-cell")}>
+          <Typography.Text strong>{row.assetName || getAssetName(row.assetPath)}</Typography.Text>
+          <Typography.Text code>{row.assetPath}</Typography.Text>
+          {row.assetType ? <Typography.Text type="secondary">{row.assetType}</Typography.Text> : null}
+        </div>
+      ),
+    },
+    {
+      title: "\u91cd\u590d\u6b21\u6570",
+      dataIndex: "duplicateCount",
+      key: "duplicateCount",
+      width: 110,
+      render: (value) => Number(value || 0),
+    },
+    {
+      title: "\u5355\u4efd\u5927\u5c0f",
+      dataIndex: "singleSizeBytes",
+      key: "singleSizeBytes",
+      width: 120,
+      render: (value) => formatBytes(value),
+    },
+    {
+      title: "\u5197\u4f59\u5927\u5c0f",
+      dataIndex: "redundantSizeBytes",
+      key: "redundantSizeBytes",
+      width: 120,
+      render: (value) => formatBytes(value),
+    },
+    {
+      title: "\u51fa\u73b0 Bundle",
+      key: "bundles",
+      render: (_, row) => <BundleCopyList bundles={row.bundles || []} />,
+    },
+  ];
+
   if (!dashboardReady) {
     return <BuildMonitorLoadingScreen run={run} />;
   }
 
   return (
-    <div className="build-monitor-page build-monitor-dashboard-ready">
-      <header className="build-monitor-topbar">
-        <UiButton asChild className="build-monitor-home" variant="ghost">
+    <div className={css("build-monitor-page", "build-monitor-dashboard-ready")}>
+      <header className={css("build-monitor-topbar")}>
+        <UiButton asChild className={css("build-monitor-home")} variant="ghost">
           <Link href="/" aria-label="返回首页">
             <img src="/assets/site-logo.webp" alt="" width="34" height="34" />
             <span>Huang</span>
           </Link>
         </UiButton>
-        <div className="build-monitor-title">
+        <div className={css("build-monitor-title")}>
           <Typography.Title level={1}>构建监控</Typography.Title>
-          <Typography.Text type="secondary">
-            {run ? `${run.jobName} #${run.buildNumber || "-"} ${run.buildTarget || ""}` : "等待构建指标"}
-          </Typography.Text>
+          <Typography.Text type="secondary">{formatRunSubtitle(run, revision)}</Typography.Text>
         </div>
-        <Space className="build-monitor-actions">
+        <Space className={css("build-monitor-actions")}>
           <UiBadge variant={sseStatusVariant}>{sseStatusText}</UiBadge>
           <UiButton onClick={refreshSnapshot} size="sm" type="button" variant="outline">
             <RefreshCw aria-hidden="true" data-icon="inline-start" />
@@ -428,38 +477,44 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
         </Space>
       </header>
 
-      <main className="build-monitor-main">
+      <main className={css("build-monitor-main")}>
         {loadError && <Alert type="error" message={loadError} showIcon />}
         {snapshot.state === "unconfigured" && (
           <Alert type="warning" message="构建指标数据库未配置" showIcon />
         )}
         {snapshot.state === "idle" && <Alert type="info" message="还没有构建打点数据" showIcon />}
 
-        <section className="build-monitor-stats" aria-label="构建状态">
-          <UiCard className="build-monitor-stat-card">
+        <section className={css("build-monitor-stats")} aria-label="构建状态">
+          <UiCard className={css("build-monitor-stat-card")}>
             <UiCardContent>
               <Statistic title="状态" value={statusLabel(snapshot.state)} valueStyle={{ color: statusTextColor(snapshot.state) }} />
             </UiCardContent>
           </UiCard>
-          <UiCard className="build-monitor-stat-card">
+          <UiCard className={css("build-monitor-stat-card")}>
+            <UiCardContent>
+              <Statistic title="版本来源" value={revision.label} />
+              {revision.detail ? <Typography.Text className={css("build-monitor-stat-detail")} type="secondary">{revision.detail}</Typography.Text> : null}
+            </UiCardContent>
+          </UiCard>
+          <UiCard className={css("build-monitor-stat-card")}>
             <UiCardContent>
               <Statistic title="总耗时" value={formatDuration(elapsedDurationMs)} />
             </UiCardContent>
           </UiCard>
-          <UiCard className="build-monitor-stat-card">
+          <UiCard className={css("build-monitor-stat-card")}>
             <UiCardContent>
               <Statistic title="当前主步骤" value={currentMainFlowLabel} />
             </UiCardContent>
           </UiCard>
-          <UiCard className="build-monitor-stat-card">
+          <UiCard className={css("build-monitor-stat-card")}>
             <UiCardContent>
               <Statistic title="Bundle" value={`${completedBundles}/${totalBundles || 0}`} />
             </UiCardContent>
           </UiCard>
         </section>
 
-        <section className="build-monitor-progress" aria-label="Bundle 进度">
-          <div className="build-monitor-progress-summary">
+        <section className={css("build-monitor-progress")} aria-label="Bundle 进度">
+          <div className={css("build-monitor-progress-summary")}>
             <Typography.Text strong>Bundle 总进度</Typography.Text>
             <Typography.Text type="secondary">
               已完成 {completedBundles}/{totalBundles || 0}
@@ -471,29 +526,31 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
 
         <MainFlowDisclosure steps={mainFlowSteps} currentStep={currentMainFlowStep} />
 
-        <section className="build-monitor-grid build-monitor-grid-single" aria-label="资源统计">
-          <AntCard title="各类型资源占用">
-            <div className="build-monitor-chart-frame">
-              {assetTypeChartData.length > 0 ? (
-                <ColumnChart
-                  data={assetTypeChartData}
-                  xField="type"
-                  yField="mb"
-                  height={320}
-                  axis={{
-                    x: { labelAutoRotate: false, labelAutoHide: true },
-                    y: { title: "MB" },
-                  }}
-                  colorField="type"
-                />
-              ) : (
-                <Empty description="暂无资源类型统计" />
-              )}
-            </div>
+        <section className={css("build-monitor-grid", "build-monitor-grid-single")} aria-label="Bundle modules">
+          <AntCard title={SCENE_MODULE_LABEL}>
+            <BundleModuleGraph root={bundleModuleTree} />
           </AntCard>
         </section>
 
-        <section className="build-monitor-section" aria-label="实时 Bundle">
+        <section className={css("build-monitor-section")} aria-label="Bundle redundancy">
+          <AntCard title={REDUNDANCY_ANALYSIS_LABEL}>
+            <div className={css("build-monitor-analysis-summary")}>
+              <Statistic title={DUPLICATE_RESOURCE_LABEL} value={duplicateAssetCount} />
+              <Statistic title={TOTAL_REDUNDANT_SIZE_LABEL} value={formatBytes(totalRedundantSizeBytes)} />
+            </div>
+            <Table
+              rowKey={(row) => row.assetPath}
+              columns={redundantAssetColumns}
+              dataSource={redundantAssets}
+              locale={{ emptyText: <Empty description={NO_REDUNDANT_ASSETS_LABEL} /> }}
+              pagination={{ pageSize: 10, hideOnSinglePage: true }}
+              scroll={{ x: 960 }}
+              size="middle"
+            />
+          </AntCard>
+        </section>
+
+        <section className={css("build-monitor-section")} aria-label="实时 Bundle">
           <AntCard title="实时 Bundle 构建">
             <Typography.Title level={5}>正在构建</Typography.Title>
             <Table
@@ -506,7 +563,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
               size="middle"
             />
 
-            <Typography.Title className="build-monitor-subtitle" level={5}>
+            <Typography.Title className={css("build-monitor-subtitle")} level={5}>
               已完成
             </Typography.Title>
             <Table
@@ -528,9 +585,9 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
 
 function MainFlowDisclosure({ steps, currentStep }) {
   return (
-    <section className="build-monitor-flow-panel" aria-label="主流程进度">
-      <div className="build-monitor-flow-heading">
-        <div className="build-monitor-flow-heading-copy">
+    <section className={css("build-monitor-flow-panel")} aria-label="主流程进度">
+      <div className={css("build-monitor-flow-heading")}>
+        <div className={css("build-monitor-flow-heading-copy")}>
           <Typography.Text strong>主流程进度</Typography.Text>
           <Typography.Text type="secondary">执行到：{currentStep?.title || "等待构建步骤"}</Typography.Text>
         </div>
@@ -540,35 +597,35 @@ function MainFlowDisclosure({ steps, currentStep }) {
       </div>
 
       {steps.length > 0 ? (
-        <ol className="build-monitor-flow-list">
+        <ol className={css("build-monitor-flow-list")}>
           {steps.map((step) => {
             const StepIcon = step.icon;
             const StatusIcon = getFlowStatusIcon(step.state);
 
             return (
-              <li key={step.key} className="build-monitor-flow-item">
+              <li key={step.key} className={css("build-monitor-flow-item")}>
                 <Tooltip title={<FlowStepTooltip step={step} />} placement="top">
-                  <div className={`build-monitor-flow-step build-monitor-flow-step-${step.tone} build-monitor-flow-state-${step.state}`}>
-                    <div className="build-monitor-flow-step-icon" aria-hidden="true">
+                  <div className={css("build-monitor-flow-step", `build-monitor-flow-step-${step.tone}`, `build-monitor-flow-state-${step.state}`)}>
+                    <div className={css("build-monitor-flow-step-icon")} aria-hidden="true">
                       <StepIcon size={21} strokeWidth={2.1} />
                     </div>
-                    <div className="build-monitor-flow-step-body">
-                      <div className="build-monitor-flow-step-header">
-                        <Typography.Text strong className="build-monitor-flow-step-title">
+                    <div className={css("build-monitor-flow-step-body")}>
+                      <div className={css("build-monitor-flow-step-header")}>
+                        <Typography.Text strong className={css("build-monitor-flow-step-title")}>
                           {step.title}
                         </Typography.Text>
-                        <UiBadge className="build-monitor-flow-status" variant={statusBadgeVariant(step.state)}>
+                        <UiBadge className={css("build-monitor-flow-status")} variant={statusBadgeVariant(step.state)}>
                           <StatusIcon aria-hidden="true" data-icon="inline-start" />
                           {statusLabel(step.state)}
                         </UiBadge>
                       </div>
-                      <Typography.Text className="build-monitor-flow-purpose">{step.purpose}</Typography.Text>
-                      <div className="build-monitor-flow-env-list" aria-label={`${step.title}执行位置`}>
+                      <Typography.Text className={css("build-monitor-flow-purpose")}>{step.purpose}</Typography.Text>
+                      <div className={css("build-monitor-flow-env-list")} aria-label={`${step.title}执行位置`}>
                         {step.environments.map((environment) => (
                           <FlowEnvironmentChip key={environment.key} environment={environment} />
                         ))}
                       </div>
-                      <span className="build-monitor-flow-duration" aria-label={`${step.title}耗时`}>
+                      <span className={css("build-monitor-flow-duration")} aria-label={`${step.title}耗时`}>
                         <Clock size={14} strokeWidth={2.1} aria-hidden="true" />
                         {step.durationLabel}
                       </span>
@@ -590,7 +647,7 @@ function FlowEnvironmentChip({ environment }) {
   const EnvironmentIcon = environment.icon;
 
   return (
-    <UiBadge className={`build-monitor-flow-env build-monitor-flow-env-${environment.key}`} title={environment.detail} variant="outline">
+    <UiBadge className={css("build-monitor-flow-env", `build-monitor-flow-env-${environment.key}`)} title={environment.detail} variant="outline">
       <EnvironmentIcon aria-hidden="true" data-icon="inline-start" />
       <span>{environment.label}</span>
     </UiBadge>
@@ -599,7 +656,7 @@ function FlowEnvironmentChip({ environment }) {
 
 function FlowStepTooltip({ step }) {
   return (
-    <div className="build-monitor-flow-tooltip">
+    <div className={css("build-monitor-flow-tooltip")}>
       <strong>{step.title}</strong>
       <span>状态：{statusLabel(step.state)}</span>
       <span>耗时：{step.durationLabel}</span>
@@ -611,22 +668,86 @@ function FlowStepTooltip({ step }) {
   );
 }
 
+function BundleModuleGraph({ root }) {
+  const children = root?.children || [];
+
+  return (
+    <div className={css("build-monitor-module-graph")}>
+      <div className={css("build-monitor-module-root")}>
+        <Typography.Text strong>{root?.label || SCENE_MODULE_LABEL}</Typography.Text>
+        <Typography.Text type="secondary">
+          {children.reduce((total, child) => total + Number(child.bundleCount || 0), 0)} Bundles
+        </Typography.Text>
+      </div>
+      <div className={css("build-monitor-module-children")}>
+        {children.map((module) => (
+          <div key={module.key} className={css("build-monitor-module-node", `build-monitor-module-node-${module.key}`)}>
+            <div className={css("build-monitor-module-node-header")}>
+              <Typography.Text strong>{module.label}</Typography.Text>
+              <UiBadge variant={module.bundleCount > 0 ? "accent" : "secondary"}>{module.bundleCount || 0}</UiBadge>
+            </div>
+            <div className={css("build-monitor-module-stats")}>
+              <span>{formatBytes(module.totalSizeBytes || 0)}</span>
+              <span>{Number(module.totalAssetCount || 0)} assets</span>
+            </div>
+            <BundleNameList bundles={module.bundles || []} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BundleNameList({ bundles }) {
+  if (!bundles || bundles.length === 0) {
+    return <Empty className={css("build-monitor-module-empty")} description={NO_BUNDLES_LABEL} image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
+
+  return (
+    <ul className={css("build-monitor-module-bundle-list")}>
+      {bundles.map((bundle) => (
+        <li key={bundle.bundleName}>
+          <Typography.Text code>{bundle.bundleName}</Typography.Text>
+          <span>{formatBytes(bundle.sizeBytes || bundle.inputSizeBytes || 0)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function BundleCopyList({ bundles }) {
+  if (!bundles || bundles.length === 0) {
+    return <Typography.Text type="secondary">-</Typography.Text>;
+  }
+
+  return (
+    <div className={css("build-monitor-bundle-copy-list")}>
+      {bundles.map((bundle) => (
+        <UiBadge key={bundle.bundleName} variant="outline">
+          {bundle.bundleName}
+          {bundle.copySizeBytes ? ` · ${formatBytes(bundle.copySizeBytes)}` : ""}
+        </UiBadge>
+      ))}
+    </div>
+  );
+}
+
 function BuildMonitorLoadingScreen({ run }) {
   const loadingText = run
     ? `${run.jobName} #${run.buildNumber || "-"} 指标加载中`
     : "正在启动构建指标面板";
 
   return (
-    <div className="build-monitor-page build-monitor-loading-page">
-      <div className="build-monitor-loader" role="status" aria-live="polite">
-        <div className="build-monitor-loader-mark" aria-hidden="true">
+    <div className={css("build-monitor-page", "build-monitor-loading-page")}>
+      <div className={css("build-monitor-loader")} role="status" aria-live="polite">
+        <div className={css("build-monitor-loader-mark")} aria-hidden="true">
           <span />
         </div>
         <div>
           <h1>构建监控</h1>
           <p>{loadingText}</p>
         </div>
-        <div className="build-monitor-loader-bar" aria-hidden="true" />
+        <div className={css("build-monitor-loader-bar")} aria-hidden="true" />
       </div>
     </div>
   );
@@ -816,11 +937,15 @@ function buildRuntimeDetails(sourceStages) {
   const workspaces = uniqueMetadataValues(sourceStages, "workspace");
   const platforms = uniqueMetadataValues(sourceStages, "platform");
   const unityVersions = uniqueMetadataValues(sourceStages, "unityVersion");
+  const p4Changes = uniqueNestedMetadataValues(sourceStages, ["p4", "changelist"]);
+  const p4Streams = uniqueNestedMetadataValues(sourceStages, ["p4", "stream"]);
 
   details.push(...nodeNames.map((value) => `构建节点：${value}`));
   details.push(...workspaces.map((value) => `工作区：${value}`));
   details.push(...platforms.map((value) => `Unity 平台：${value}`));
   details.push(...unityVersions.map((value) => `Unity 版本：${value}`));
+  details.push(...p4Changes.map((value) => `P4 CL：${value}`));
+  details.push(...p4Streams.map((value) => `P4 Stream：${value}`));
 
   return details;
 }
@@ -833,6 +958,79 @@ function uniqueMetadataValues(sourceStages, key) {
         .filter((value) => typeof value === "string" && value.trim().length > 0),
     ),
   );
+}
+
+function uniqueNestedMetadataValues(sourceStages, path) {
+  return Array.from(
+    new Set(
+      sourceStages
+        .map((stage) => getNestedValue(stage?.metadata, path))
+        .filter((value) => typeof value === "string" && value.trim().length > 0),
+    ),
+  );
+}
+
+function getNestedValue(source, path) {
+  let current = source;
+  for (const key of path) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      return "";
+    }
+    current = current[key];
+  }
+  return current;
+}
+
+function formatRunSubtitle(run, revision) {
+  if (!run) {
+    return "等待构建指标";
+  }
+
+  return [run.jobName ? `${run.jobName} #${run.buildNumber || "-"}` : "", revision.label, run.buildTarget]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function getRunRevision(run) {
+  const revision = run?.revision;
+  if (revision?.type === "perforce" || revision?.type === "git") {
+    return normalizeRevision(revision);
+  }
+
+  const p4 = run?.metadata?.p4;
+  if (p4 && typeof p4 === "object" && !Array.isArray(p4)) {
+    const changelist = String(p4.changelist || p4.change || p4.syncedChange || "").trim();
+    const stream = String(p4.stream || "").trim();
+    const client = String(p4.client || "").trim();
+    if (changelist || stream || client) {
+      return normalizeRevision({
+        type: "perforce",
+        label: changelist ? `P4 CL ${changelist}` : "Perforce",
+        detail: [stream, client].filter(Boolean).join(" · "),
+        changelist,
+        stream,
+        client,
+      });
+    }
+  }
+
+  if (run?.gitCommit || run?.gitRef) {
+    return normalizeRevision({
+      type: "git",
+      label: run.gitCommit ? `Git ${run.gitCommit}` : run.gitRef,
+      detail: run.gitRef || "",
+    });
+  }
+
+  return normalizeRevision({ type: "unknown", label: "版本未知", detail: "" });
+}
+
+function normalizeRevision(revision) {
+  return {
+    type: revision?.type || "unknown",
+    label: String(revision?.label || "版本未知").trim() || "版本未知",
+    detail: String(revision?.detail || "").trim(),
+  };
 }
 
 function getRunElapsedDurationMs(run, summary, state, nowMs) {
@@ -889,6 +1087,130 @@ function compareBundleName(left, right) {
 
 function getBundleSizeForSort(bundle) {
   return Number(bundle?.sizeBytes || bundle?.inputSizeBytes || 0);
+}
+
+function resolveBundleModuleTree(bundleModules, bundles) {
+  if (Array.isArray(bundleModules) && bundleModules.length > 0) {
+    const root = bundleModules[0];
+    return {
+      key: root?.key || "scene",
+      label: root?.label || SCENE_MODULE_LABEL,
+      children: mergeBundleModuleChildren(root?.children || []),
+    };
+  }
+
+  return {
+    key: "scene",
+    label: SCENE_MODULE_LABEL,
+    children: buildBundleModuleChildren(bundles),
+  };
+}
+
+function mergeBundleModuleChildren(children) {
+  const byKey = new Map(
+    BUNDLE_MODULE_DEFINITIONS.map((definition) => [
+      definition.key,
+      {
+        key: definition.key,
+        label: definition.label,
+        bundleCount: 0,
+        totalSizeBytes: 0,
+        totalAssetCount: 0,
+        bundles: [],
+      },
+    ]),
+  );
+
+  for (const child of children || []) {
+    const key = normalizeBundleModuleKey(child?.key || child?.label || "");
+    const current = byKey.get(key);
+    if (!current) {
+      continue;
+    }
+
+    current.label = bundleModuleLabel(key, child.label);
+    current.bundleCount = Number(child.bundleCount || 0);
+    current.totalSizeBytes = Number(child.totalSizeBytes || 0);
+    current.totalAssetCount = Number(child.totalAssetCount || 0);
+    current.bundles = Array.isArray(child.bundles) ? child.bundles : [];
+  }
+
+  return BUNDLE_MODULE_DEFINITIONS.map((definition) => byKey.get(definition.key));
+}
+
+function buildBundleModuleChildren(bundles) {
+  const children = BUNDLE_MODULE_DEFINITIONS.map((definition) => ({
+    key: definition.key,
+    label: definition.label,
+    bundleCount: 0,
+    totalSizeBytes: 0,
+    totalAssetCount: 0,
+    bundles: [],
+  }));
+  const byKey = new Map(children.map((child) => [child.key, child]));
+
+  for (const bundle of bundles || []) {
+    const key = classifyBundleModule(bundle.bundleName);
+    const module = byKey.get(key) || byKey.get("common");
+    const sizeBytes = Number(bundle.sizeBytes || bundle.inputSizeBytes || 0);
+    const assetCount = Number(bundle.assetCount || 0);
+    module.bundles.push({
+      bundleName: bundle.bundleName,
+      sizeBytes,
+      assetCount,
+    });
+    module.bundleCount += 1;
+    module.totalSizeBytes += sizeBytes;
+    module.totalAssetCount += assetCount;
+  }
+
+  for (const module of children) {
+    module.bundles.sort((left, right) => right.sizeBytes - left.sizeBytes || compareBundleName(left, right));
+  }
+
+  return children;
+}
+
+function classifyBundleModule(bundleName) {
+  const normalized = String(bundleName || "").toLowerCase();
+  if (normalized.includes("summer")) {
+    return "summer";
+  }
+  if (normalized.includes("autumn")) {
+    return "autumn";
+  }
+  if (normalized.includes("winter")) {
+    return "winter";
+  }
+  return "common";
+}
+
+function normalizeBundleModuleKey(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "summer" || normalized === "\u590f") {
+    return "summer";
+  }
+  if (normalized === "autumn" || normalized === "\u79cb") {
+    return "autumn";
+  }
+  if (normalized === "winter" || normalized === "\u51ac") {
+    return "winter";
+  }
+  if (normalized === "common" || normalized === "shared" || normalized === "\u516c\u5171") {
+    return "common";
+  }
+  return classifyBundleModule(normalized);
+}
+
+function bundleModuleLabel(key, fallback) {
+  const definition = BUNDLE_MODULE_DEFINITIONS.find((item) => item.key === normalizeBundleModuleKey(key));
+  return definition?.label || fallback || key;
+}
+
+function getAssetName(assetPath) {
+  const normalized = String(assetPath || "").replace(/\\/g, "/");
+  const index = normalized.lastIndexOf("/");
+  return index >= 0 ? normalized.slice(index + 1) : normalized;
 }
 
 function parseTimeMs(value) {
