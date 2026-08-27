@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'built-in' }
+    agent { label 'unity6-cloud-agent' }
 
     options {
         disableConcurrentBuilds()
@@ -13,7 +13,7 @@ pipeline {
     }
 
     environment {
-        DEPLOY_HOST = '172.17.0.1'
+        DEPLOY_HOST = '1.117.232.198'
         DEPLOY_PATH = '/opt/personal-homepage'
         DEPLOY_BRANCH = 'main'
     }
@@ -30,7 +30,8 @@ sh '''#!/usr/bin/env bash
 set -euo pipefail
 
 for attempt in 1 2 3; do
-    if ssh -i "$DEPLOY_SSH_KEY" \
+    set +e
+    ssh -i "$DEPLOY_SSH_KEY" \
         -o IdentitiesOnly=yes \
         -o BatchMode=yes \
         -o StrictHostKeyChecking=no \
@@ -38,15 +39,20 @@ for attempt in 1 2 3; do
         -o ServerAliveInterval=10 \
         -o ServerAliveCountMax=3 \
         "$DEPLOY_SSH_USER@$DEPLOY_HOST" \
-        "cd '$DEPLOY_PATH' && git fetch origin '$DEPLOY_BRANCH' && git checkout '$DEPLOY_BRANCH' && git pull --ff-only origin '$DEPLOY_BRANCH' && BRANCH='$DEPLOY_BRANCH' bash deploy/deploy-from-git.sh"; then
+        "cd '$DEPLOY_PATH' && git fetch origin '$DEPLOY_BRANCH' && git checkout '$DEPLOY_BRANCH' && git pull --ff-only origin '$DEPLOY_BRANCH' && BRANCH='$DEPLOY_BRANCH' bash deploy/deploy-from-git.sh"
+    status="$?"
+    set -e
+
+    if [ "$status" -eq 0 ]; then
         exit 0
     fi
 
-    status="$?"
     if [ "$attempt" -eq 3 ]; then
+        echo "Deploy attempt $attempt failed with exit code $status" >&2
         exit "$status"
     fi
 
+    echo "Deploy attempt $attempt failed with exit code $status; retrying in 60s" >&2
     sleep 60
 done
 '''
