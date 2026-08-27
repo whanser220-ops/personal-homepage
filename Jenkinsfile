@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'unity6-cloud-agent' }
+    agent { label 'personal-homepage-docker-agent' }
 
     options {
         disableConcurrentBuilds()
@@ -13,7 +13,7 @@ pipeline {
     }
 
     environment {
-        DEPLOY_HOST = '1.117.232.198'
+        DEPLOY_HOST = '172.17.0.1'
         DEPLOY_PATH = '/opt/personal-homepage'
         DEPLOY_BRANCH = 'main'
     }
