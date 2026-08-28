@@ -9,7 +9,6 @@ pipeline {
 
     triggers {
         githubPush()
-        pollSCM('H/2 * * * *')
     }
 
     environment {
@@ -41,7 +40,9 @@ chmod 600 "$HOME/.ssh/known_hosts"
         stage('Record SCM Revision') {
             steps {
                 // Records BuildData so GitHub push webhooks can detect new main revisions.
-                checkout scm
+                retry(3) {
+                    checkout scm
+                }
             }
         }
 
