@@ -51,11 +51,11 @@
     "left hero right"
     "notes notes notes";
   grid-template-columns: clamp(260px, 21vw, 322px) minmax(390px, 1fr) clamp(280px, 22vw, 340px);
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
   column-gap: clamp(18px, 2.4vw, 36px);
   row-gap: clamp(18px, 2.2vw, 34px);
-  height: max(var(--note-board-height), var(--note-wall-height));
-  min-height: 0;
+  min-height: max(var(--note-board-height), var(--note-wall-height));
+  min-width: 0;
   padding: clamp(28px, 3.4vw, 52px) clamp(30px, 3.8vw, 58px) clamp(26px, 3.1vw, 48px);
 }
 
@@ -173,12 +173,12 @@
 }
 
 .note-about-card {
-  min-height: clamp(205px, 23vh, 252px);
+  min-height: clamp(246px, 27vh, 292px);
   transform: rotate(0.28deg);
 }
 
 .note-project-card {
-  min-height: clamp(150px, 18vh, 190px);
+  min-height: clamp(236px, 27vh, 282px);
   transform: rotate(-0.22deg);
 }
 
@@ -188,6 +188,113 @@
 
 .note-project-card .note-project-row {
   min-height: 34px;
+}
+
+.project-paper-gallery {
+  display: grid;
+  gap: 9px;
+  align-content: start;
+  padding: 0;
+  padding-top: 7px;
+}
+
+.project-paper-heading {
+  display: flex;
+  padding: 0 8px 2px;
+}
+
+.project-paper-heading h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #f7ead3;
+  font-family: Georgia, "Times New Roman", "STKaiti", "KaiTi", "Microsoft YaHei", serif;
+  font-size: 1.22rem;
+  font-weight: 760;
+  letter-spacing: 0;
+  text-shadow: 0 2px 8px rgba(29, 20, 15, 0.32);
+}
+
+.project-paper-heading svg,
+.project-paper-note svg {
+  color: currentColor;
+  flex: 0 0 auto;
+}
+
+.project-paper-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.project-paper-note {
+  position: relative;
+  isolation: isolate;
+  display: block;
+  height: clamp(66px, 7.6vh, 82px);
+  color: #4b372b;
+  transform: rotate(var(--project-paper-tilt, 0deg));
+  transition:
+    color 190ms ease,
+    filter 190ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.project-paper-note:hover {
+  z-index: 7;
+  color: #2f8279;
+  filter: drop-shadow(0 15px 18px rgba(32, 23, 17, 0.2));
+  transform: translateY(-5px) rotate(0deg);
+}
+
+.project-paper-image {
+  position: absolute;
+  inset: -17% -7% -24%;
+  z-index: -1;
+  width: 114%;
+  max-width: none;
+  height: 141%;
+  object-fit: fill;
+  filter: saturate(1.04) contrast(1.01);
+  pointer-events: none;
+  user-select: none;
+}
+
+.project-paper-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr) 32px;
+  gap: 10px;
+  align-items: center;
+  height: 100%;
+  padding: 15px 26px 12px;
+  font-family: "STKaiti", "KaiTi", "Microsoft YaHei", serif;
+  font-size: 0.96rem;
+  font-weight: 690;
+}
+
+.project-paper-content > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-paper-content strong {
+  color: color-mix(in srgb, currentColor 82%, #7c5638);
+  font-size: 1rem;
+  font-weight: 720;
+  text-align: right;
+}
+
+.project-paper-note-blue {
+  color: #405666;
+}
+
+.project-paper-note-kraft {
+  color: #5b3e2a;
 }
 
 .plan-panel {
@@ -272,6 +379,7 @@
 .contact-note-list a,
 .contact-note-list > span,
 .skill-note-grid a,
+.project-paper-note,
 .sticky-note {
   transition:
     color 190ms ease,
@@ -357,8 +465,8 @@
 .note-chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 9px;
-  margin-top: 17px;
+  gap: 7px;
+  margin-top: 14px;
 }
 
 .skill-note-grid {
@@ -385,7 +493,7 @@
 
 .note-chip-row span,
 .skill-note-grid a {
-  padding: 0 14px;
+  padding: 0 11px;
 }
 
 .note-project-row,
@@ -478,7 +586,7 @@
 }
 
 .article-sticky:hover .article-sticky-image {
-  transform: translateY(-2px);
+  transform: none;
 }
 
 .article-sticky-content {
@@ -537,29 +645,36 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 47px;
-  min-height: 25px;
-  padding: 0 10px;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  min-width: 52px;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid rgba(124, 83, 49, 0.22);
+  border-radius: 7px;
+  background: rgba(197, 151, 107, 0.78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 196, 0.42),
+    0 3px 8px rgba(96, 63, 39, 0.12);
   font-style: normal;
   font-weight: 700;
 }
 
 .article-sticky-warm em {
+  background: rgba(198, 151, 105, 0.8);
   color: #6a4b34;
 }
 
 .article-sticky-blue em {
+  background: rgba(174, 190, 196, 0.78);
   color: #415c6d;
 }
 
 .article-sticky-amber em {
+  background: rgba(204, 156, 92, 0.74);
   color: #6a4b34;
 }
 
 .article-sticky-green em {
+  background: rgba(169, 183, 123, 0.74);
   color: #536437;
 }
 
@@ -786,6 +901,10 @@
 }
 
 @media (max-width: 760px) {
+  .note-homepage {
+    overflow-x: clip;
+  }
+
   .note-board {
     grid-template-areas:
       "left"
@@ -794,6 +913,32 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 18px;
     padding: 24px 16px 36px;
+  }
+
+  .note-stack,
+  .paper-panel,
+  .sticky-note,
+  .project-paper-gallery,
+  .project-paper-grid,
+  .project-paper-note {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .project-paper-image {
+    inset: -13% -4% -19%;
+    width: 108%;
+    height: 132%;
+  }
+
+  .project-paper-content {
+    grid-template-columns: 24px minmax(0, 1fr) 28px;
+    padding: 14px 22px 12px;
+    font-size: 0.92rem;
+  }
+
+  .note-about-body p {
+    overflow-wrap: anywhere;
   }
 
   .note-article-strip {
@@ -811,6 +956,21 @@
 }
 
 @media (max-width: 480px) {
+  .project-paper-note {
+    height: 68px;
+  }
+
+  .project-paper-image {
+    inset: -11% -3% -17%;
+    width: 106%;
+    height: 128%;
+  }
+
+  .project-paper-content {
+    grid-template-columns: 23px minmax(0, 1fr) 26px;
+    padding: 13px 18px 11px;
+  }
+
   .note-article-strip {
     grid-template-columns: minmax(0, 1fr);
   }

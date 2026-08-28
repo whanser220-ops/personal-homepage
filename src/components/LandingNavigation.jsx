@@ -58,9 +58,30 @@ const weeklyPlans = [
 const skillTags = ["UI设计", "插画", "摄影", "前端", "文案", "品牌", "手账"];
 
 const projectRows = [
-  { href: "/projects", icon: FolderKanban, label: "个人作品集", count: 12 },
-  { href: projects[0]?.links[0]?.href || "/projects", icon: PenLine, label: "插画练习计划", count: 8 },
-  { href: "/articles", icon: Archive, label: "旅行手账", count: 5 },
+  {
+    href: "/projects",
+    icon: FolderKanban,
+    label: "个人作品集",
+    count: 12,
+    image: "/assets/project-paper-cream.webp",
+    tone: "cream",
+  },
+  {
+    href: projects[0]?.links[0]?.href || "/projects",
+    icon: PenLine,
+    label: "插画练习计划",
+    count: 8,
+    image: "/assets/project-paper-blue.webp",
+    tone: "blue",
+  },
+  {
+    href: "/articles",
+    icon: Archive,
+    label: "旅行手账",
+    count: 5,
+    image: "/assets/project-paper-kraft.webp",
+    tone: "kraft",
+  },
 ];
 
 const contactRows = [
@@ -135,7 +156,19 @@ export function LandingNavigation() {
       ease: "outCubic",
     });
 
-    return () => entranceAnimation?.pause?.();
+    const clearMotionStyles = window.setTimeout(() => {
+      panels.forEach((panel) => {
+        // Let CSS own transforms again after the entrance motion finishes.
+        panel.style.removeProperty("transform");
+        panel.style.removeProperty("translate");
+        panel.style.removeProperty("scale");
+      });
+    }, 680 + (panels.length - 1) * 80 + 80);
+
+    return () => {
+      window.clearTimeout(clearMotionStyles);
+      entranceAnimation?.pause?.();
+    };
   }, []);
 
   return (
@@ -193,22 +226,37 @@ export function LandingNavigation() {
             </div>
           </section>
 
-          <section className={css("paper-panel", "note-project-card", "note-animate")}>
-            <div className={css("note-section-heading")}>
-              <h2>
+          <section className={css("note-project-card", "project-paper-gallery", "note-animate")} aria-labelledby="project-paper-title">
+            <div className={css("project-paper-heading")}>
+              <h2 id="project-paper-title">
                 项目
                 <FolderKanban aria-hidden="true" size={22} />
               </h2>
             </div>
-            <div className={css("note-project-list")}>
-              {projectRows.map((item) => {
+            <div className={css("project-paper-grid")}>
+              {projectRows.map((item, index) => {
                 const Icon = item.icon;
 
                 return (
-                  <Link className={css("note-project-row")} href={item.href} key={item.label}>
-                    <Icon aria-hidden="true" size={18} />
-                    <span>{item.label}</span>
-                    <strong>{item.count}</strong>
+                  <Link
+                    className={css("project-paper-note", `project-paper-note-${item.tone}`)}
+                    href={item.href}
+                    key={item.label}
+                    style={{ "--project-paper-tilt": `${index % 2 === 0 ? -0.7 : 0.55}deg` }}
+                  >
+                    <img
+                      className={css("project-paper-image")}
+                      src={item.image}
+                      alt=""
+                      width="720"
+                      height="480"
+                      aria-hidden="true"
+                    />
+                    <span className={css("project-paper-content")}>
+                      <Icon aria-hidden="true" size={19} />
+                      <span>{item.label}</span>
+                      <strong>{item.count}</strong>
+                    </span>
                   </Link>
                 );
               })}
