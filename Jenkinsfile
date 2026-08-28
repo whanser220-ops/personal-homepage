@@ -19,6 +19,12 @@ pipeline {
     }
 
     stages {
+        stage('Record SCM Revision') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Deploy from Git') {
             steps {
                 withCredentials([sshUserPrivateKey(
