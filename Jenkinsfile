@@ -40,6 +40,7 @@ chmod 600 "$HOME/.ssh/known_hosts"
 
         stage('Record SCM Revision') {
             steps {
+                // Records BuildData so GitHub push webhooks can detect new main revisions.
                 checkout scm
             }
         }
