@@ -20,6 +20,11 @@ export const metadata = {
   description: "Huang 的个人主页，展示个人介绍、文章、项目作品和联系方式。",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({ children }) {
   return (
     <html data-scroll-behavior="smooth" lang="zh-CN" suppressHydrationWarning>
