@@ -26,13 +26,17 @@ https://github.com/whanser220-ops/personal-homepage
 .
 ├── app/
 │   ├── layout.jsx
-│   └── page.jsx
+│   ├── page.jsx
+│   └── api/
 ├── src/
 │   ├── App.jsx
 │   ├── styles.css
 │   ├── components/
 │   ├── data/
-│   └── hooks/
+│   ├── hooks/
+│   └── server/
+├── docs/
+│   └── current-architecture.md
 ├── public/
 │   └── assets/
 ├── deploy/
@@ -58,13 +62,21 @@ npm install
 npm run dev
 ```
 
-构建静态站点：
+构建生产产物：
 
 ```powershell
 npm run build
 ```
 
-Next.js 配置了 `output: "export"`，构建结果会输出到 `out/`。
+Next.js 当前配置为 `output: "standalone"`，生产运行入口是 `.next/standalone/server.js`。线上通过 Docker 镜像运行，不再使用 `out/` 静态导出目录。
+
+## 当前架构文档
+
+当前技术栈、线上容器、Nginx 代理、PostgreSQL 数据流和 Jenkins 部署边界见：
+
+```text
+docs/current-architecture.md
+```
 
 ## 当前前端实现
 
@@ -110,14 +122,22 @@ BRANCH=main bash deploy/deploy-from-git.sh
 git fetch origin main
 git checkout main
 git pull --ff-only origin main
-npm ci
-npm run build
-copy out/ to /var/www/personal-homepage
+docker build personal-homepage:<commit>
+restart personal-homepage container
+nginx -t
+reload nginx
+health checks
 ```
+
+`npm ci` 和 `npm run build` 在 Docker 镜像构建阶段执行。
 
 ## Nginx 部署思路
 
-服务器上的 Nginx 监听 80 端口。浏览器访问 `warmhanser.com` 或服务器 IP 时，请求先到达 Nginx，Nginx 根据站点配置里的 `server_name` 和 `root` 找到静态站点目录，再把 `index.html`、CSS、JS 和图片返回给浏览器。
+服务器上的 Nginx 监听 80 端口。浏览器访问 `warmhanser.com` 或服务器 IP 时，请求先到达 Nginx，然后被反向代理到宿主机本地的 Next.js 容器端口：
+
+```text
+127.0.0.1:3000
+```
 
 服务器目录：
 
@@ -125,10 +145,10 @@ copy out/ to /var/www/personal-homepage
 /opt/personal-homepage
 ```
 
-Git 工作副本，负责 `git pull`、安装依赖和构建。
+Git 工作副本，负责 `git pull` 和 Docker 镜像构建上下文。
 
 ```text
-/var/www/personal-homepage
+/etc/nginx/conf.d/personal-homepage.conf
 ```
 
-Nginx 静态站点根目录，只保存 `npm run build` 生成的 `out/` 内容。
+Nginx 站点配置，负责把页面、静态资源和 `/api/*` 请求代理到 Next.js 应用容器。
