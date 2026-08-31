@@ -39,6 +39,7 @@ https://github.com/whanser220-ops/personal-homepage
 │   └── current-architecture.md
 ├── public/
 │   └── assets/
+├── compose.yml
 ├── deploy/
 │   ├── deploy-from-git.sh
 │   └── nginx-personal-homepage.conf
@@ -122,14 +123,35 @@ BRANCH=main bash deploy/deploy-from-git.sh
 git fetch origin main
 git checkout main
 git pull --ff-only origin main
-docker build personal-homepage:<commit>
-restart personal-homepage container
+docker build -t whanser220/whanser:personal-homepage-<commit> -t whanser220/whanser:personal-homepage-latest .
+docker push whanser220/whanser:personal-homepage-<commit>
+docker push whanser220/whanser:personal-homepage-latest
+docker compose up -d personal-homepage
 nginx -t
 reload nginx
 health checks
 ```
 
 `npm ci` 和 `npm run build` 在 Docker 镜像构建阶段执行。
+
+Docker Hub 凭据不进入仓库。因为部署需要读取 root 权限的运行环境文件，服务器推荐通过 root Docker CLI 登录：
+
+```bash
+sudo docker login -u whanser220
+```
+
+也可以在服务器本地创建 root 可读的凭据文件：
+
+```text
+/etc/personal-homepage/dockerhub.env
+```
+
+内容格式：
+
+```text
+DOCKERHUB_USERNAME=whanser220
+DOCKERHUB_TOKEN=<Docker Hub access token>
+```
 
 ## Nginx 部署思路
 

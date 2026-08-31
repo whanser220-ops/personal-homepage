@@ -4,6 +4,9 @@
 node_modules
 out
 *.log
+.gitattributes
+compose.yml
 Dockerfile
 README.md
+docs
 skills-lock.json

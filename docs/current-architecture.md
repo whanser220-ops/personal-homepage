@@ -1,6 +1,6 @@
 # 个人网站当前技术栈与架构
 
-最后核对时间：2026-08-30 02:10，Asia/Shanghai。
+最后核对时间：2026-08-31，Asia/Shanghai。
 
 本文记录 `warmhanser.com` 当前线上运行形态。当前站点是 Next.js standalone 容器化动态站点，不是静态 `output: export` 站点。
 
@@ -11,7 +11,7 @@
 - UI 与交互：Ant Design `5.29.3`、`@ant-design/nextjs-registry`、lucide-react、Anime.js、GSAP、自定义 CSS / CSS Modules。
 - 服务端：Next.js Route Handlers，Node.js runtime。
 - 数据访问：`pg 8.22.0` 连接 PostgreSQL。
-- 运行镜像：多阶段 Docker build，基础镜像 `node:26-bookworm-slim`。
+- 运行镜像：多阶段 Docker build，基础镜像 `node:26-bookworm-slim`，发布到 Docker Hub `whanser220/whanser`。
 - 数据库：PostgreSQL 16，线上容器镜像 `postgres:16-alpine`。
 - 反向代理：宿主机 Nginx，监听 80 端口。
 - CI/CD：GitHub `main` 分支，Jenkins Pipeline from SCM，Jenkins Docker Cloud 临时 agent。
@@ -100,9 +100,9 @@ PostgreSQL 表由应用在启动或首次访问时自动确保存在，主要表
 - 云主机：`1.117.232.198`，hostname `VM-0-12-ubuntu`。
 - 线上源码目录：`/opt/personal-homepage`。
 - 线上分支：`main`。
-- 线上提交：`51848f6`。
+- 线上提交：跟随 Jenkins 最后一次成功部署的 `main` 提交。
 - 应用容器：`personal-homepage`。
-- 应用镜像：`personal-homepage:51848f6`。
+- 应用镜像：`whanser220/whanser:personal-homepage-<commit>`。
 - 应用端口：容器 `3000/tcp` 映射到宿主机 `127.0.0.1:3000`。
 - 应用重启策略：`unless-stopped`。
 - 数据库容器：`personal-homepage-postgres`。
@@ -177,9 +177,10 @@ git checkout main
 git pull --ff-only origin main
 检查 /etc/personal-homepage/app.env
 确保 PostgreSQL 容器存在且可用
-docker build -t personal-homepage:<commit> -t personal-homepage:latest .
-删除旧 personal-homepage 容器
-启动新 personal-homepage 容器
+docker build -t whanser220/whanser:personal-homepage-<commit> -t whanser220/whanser:personal-homepage-latest .
+docker push whanser220/whanser:personal-homepage-<commit>
+docker push whanser220/whanser:personal-homepage-latest
+docker compose up -d personal-homepage
 检查 /api/health
 安装 Nginx 配置
 nginx -t
