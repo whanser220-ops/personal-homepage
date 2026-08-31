@@ -1,9 +1,12 @@
 .agents
 .git
+.gitattributes
 .next
 node_modules
 out
 *.log
 Dockerfile
 README.md
+compose.yml
+docs
 skills-lock.json

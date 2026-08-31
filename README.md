@@ -40,8 +40,11 @@ https://github.com/whanser220-ops/personal-homepage
 ├── public/
 │   └── assets/
 ├── deploy/
-│   ├── deploy-from-git.sh
+│   ├── deploy-from-git.sh       手动兼容入口：在服务器本地从 Git 构建
+│   ├── deploy-from-image.sh     Jenkins 正式入口：只拉取 Harbor 镜像并用 compose 启动
+│   ├── jenkins-agent/
 │   └── nginx-personal-homepage.conf
+├── compose.yml
 ├── Jenkinsfile
 ├── next.config.mjs
 ├── package.json
@@ -72,10 +75,16 @@ Next.js 当前配置为 `output: "standalone"`，生产运行入口是 `.next/st
 
 ## 当前架构文档
 
-当前技术栈、线上容器、Nginx 代理、PostgreSQL 数据流和 Jenkins 部署边界见：
+当前技术栈、线上容器、Nginx 代理、PostgreSQL 数据流、Harbor 镜像仓库和 Jenkins 部署边界见：
 
 ```text
 docs/current-architecture.md
+```
+
+本机 Harbor 镜像仓库说明见：
+
+```text
+docs/local-harbor.md
 ```
 
 ## 当前前端实现
@@ -109,27 +118,25 @@ Jenkins 任务：
 personal-homepage-deploy
 ```
 
-Jenkins 从 GitHub `main` 分支读取 `Jenkinsfile`，然后通过 SSH 登录服务器并执行：
+Jenkins 从 GitHub `main` 分支读取 `Jenkinsfile`。流水线在 `personal-homepage-docker-agent` 临时容器里完成镜像构建和推送，然后通过 SSH 登录部署服务器，只让服务器从 Harbor 拉取镜像并用 Docker Compose 启动。
 
-```bash
-cd /opt/personal-homepage
-BRANCH=main bash deploy/deploy-from-git.sh
-```
-
-部署脚本会执行：
+流水线主要步骤：
 
 ```text
-git fetch origin main
-git checkout main
-git pull --ff-only origin main
-docker build personal-homepage:<commit>
-restart personal-homepage container
+checkout main
+docker build -t 127.0.0.1:18081/personal-homepage/personal-homepage:<commit> .
+docker push 127.0.0.1:18081/personal-homepage/personal-homepage:<commit>
+docker push 127.0.0.1:18081/personal-homepage/personal-homepage:latest
+scp compose.yml deploy/deploy-from-image.sh deploy/nginx-personal-homepage.conf /opt/personal-homepage/
+APP_IMAGE=127.0.0.1:18081/personal-homepage/personal-homepage:<commit> bash deploy/deploy-from-image.sh
+docker pull 127.0.0.1:18081/personal-homepage/personal-homepage:<commit>
+docker compose up -d --no-build --force-recreate personal-homepage
 nginx -t
 reload nginx
 health checks
 ```
 
-`npm ci` 和 `npm run build` 在 Docker 镜像构建阶段执行。
+`npm ci` 和 `npm run build` 在 Jenkins agent 容器触发的 Docker 镜像构建阶段执行。部署服务器不再 `git pull`，也不再 `docker build` 应用镜像。
 
 ## Nginx 部署思路
 
@@ -145,7 +152,7 @@ health checks
 /opt/personal-homepage
 ```
 
-Git 工作副本，负责 `git pull` 和 Docker 镜像构建上下文。
+部署工作目录，保存 `compose.yml`、部署脚本和 Nginx 配置；应用代码由镜像承载。
 
 ```text
 /etc/nginx/conf.d/personal-homepage.conf

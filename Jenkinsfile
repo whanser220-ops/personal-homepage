@@ -14,7 +14,10 @@ pipeline {
     environment {
         DEPLOY_HOST = '172.17.0.1'
         DEPLOY_PATH = '/opt/personal-homepage'
-        DEPLOY_BRANCH = 'main'
+        APP_NAME = 'personal-homepage'
+        REGISTRY_HOST = '127.0.0.1:18081'
+        REGISTRY_PROJECT = 'personal-homepage'
+        DOCKER_BUILD_PULL = '0'
     }
 
     stages {
@@ -46,27 +49,103 @@ chmod 600 "$HOME/.ssh/known_hosts"
             }
         }
 
-        stage('Deploy from Git') {
+        stage('Build and Push Image') {
             steps {
-                withCredentials([sshUserPrivateKey(
-                    credentialsId: 'bundle-report-ssh-key',
-                    keyFileVariable: 'DEPLOY_SSH_KEY',
-                    usernameVariable: 'DEPLOY_SSH_USER'
+                withCredentials([usernamePassword(
+                    credentialsId: 'harbor-personal-homepage',
+                    usernameVariable: 'REGISTRY_USERNAME',
+                    passwordVariable: 'REGISTRY_PASSWORD'
                 )]) {
 sh '''#!/usr/bin/env bash
 set -euo pipefail
 
+commit_sha="$(git rev-parse --short HEAD)"
+image_repository="${REGISTRY_HOST}/${REGISTRY_PROJECT}/${APP_NAME}"
+image_ref="${image_repository}:${commit_sha}"
+latest_image_ref="${image_repository}:latest"
+
+mkdir -p .ci
+cat > .ci/image.env <<EOF
+COMMIT_SHA=${commit_sha}
+IMAGE_REF=${image_ref}
+LATEST_IMAGE_REF=${latest_image_ref}
+EOF
+
+docker version
+
+docker_config="$(mktemp -d)"
+cleanup() {
+    rm -rf "$docker_config"
+}
+trap cleanup EXIT
+export DOCKER_CONFIG="$docker_config"
+
+auth="$(printf '%s:%s' "$REGISTRY_USERNAME" "$REGISTRY_PASSWORD" | base64 | tr -d '\\n')"
+cat > "$DOCKER_CONFIG/config.json" <<EOF
+{"auths":{"${REGISTRY_HOST}":{"auth":"${auth}"}}}
+EOF
+
+build_args=()
+case "${DOCKER_BUILD_PULL:-0}" in
+    0|false|False|FALSE|no|No|NO) ;;
+    *) build_args+=(--pull) ;;
+esac
+
+docker build "${build_args[@]}" \
+    -t "$image_ref" \
+    -t "$latest_image_ref" \
+    .
+
+docker push "$image_ref"
+docker push "$latest_image_ref"
+'''
+                }
+            }
+        }
+
+        stage('Deploy from Harbor') {
+            steps {
+                withCredentials([
+                    sshUserPrivateKey(
+                        credentialsId: 'bundle-report-ssh-key',
+                        keyFileVariable: 'DEPLOY_SSH_KEY',
+                        usernameVariable: 'DEPLOY_SSH_USER'
+                    ),
+                    usernamePassword(
+                        credentialsId: 'harbor-personal-homepage',
+                        usernameVariable: 'REGISTRY_USERNAME',
+                        passwordVariable: 'REGISTRY_PASSWORD'
+                    )
+                ]) {
+sh '''#!/usr/bin/env bash
+set -euo pipefail
+
+. .ci/image.env
+
+ssh_opts=(
+    -i "$DEPLOY_SSH_KEY"
+    -o IdentitiesOnly=yes
+    -o BatchMode=yes
+    -o StrictHostKeyChecking=no
+    -o ConnectTimeout=10
+    -o ServerAliveInterval=10
+    -o ServerAliveCountMax=3
+)
+
+ssh "${ssh_opts[@]}" "$DEPLOY_SSH_USER@$DEPLOY_HOST" \
+    "mkdir -p '$DEPLOY_PATH/deploy'"
+
+scp "${ssh_opts[@]}" compose.yml \
+    "$DEPLOY_SSH_USER@$DEPLOY_HOST:$DEPLOY_PATH/compose.yml"
+
+scp "${ssh_opts[@]}" deploy/deploy-from-image.sh deploy/nginx-personal-homepage.conf \
+    "$DEPLOY_SSH_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy/"
+
 for attempt in 1 2 3; do
     set +e
-    ssh -i "$DEPLOY_SSH_KEY" \
-        -o IdentitiesOnly=yes \
-        -o BatchMode=yes \
-        -o StrictHostKeyChecking=no \
-        -o ConnectTimeout=10 \
-        -o ServerAliveInterval=10 \
-        -o ServerAliveCountMax=3 \
+    printf '%s\\n%s\\n%s\\n' "$REGISTRY_USERNAME" "$REGISTRY_PASSWORD" "$IMAGE_REF" | ssh "${ssh_opts[@]}" \
         "$DEPLOY_SSH_USER@$DEPLOY_HOST" \
-        "cd '$DEPLOY_PATH' && git fetch origin '$DEPLOY_BRANCH' && git checkout '$DEPLOY_BRANCH' && git pull --ff-only origin '$DEPLOY_BRANCH' && BRANCH='$DEPLOY_BRANCH' bash deploy/deploy-from-git.sh"
+        "set -eu; read -r REGISTRY_USERNAME; read -r REGISTRY_PASSWORD; read -r APP_IMAGE; export REGISTRY_USERNAME REGISTRY_PASSWORD APP_IMAGE; cd '$DEPLOY_PATH' && chmod +x deploy/deploy-from-image.sh && REGISTRY_HOST='$REGISTRY_HOST' REGISTRY_PROJECT='$REGISTRY_PROJECT' APP_NAME='$APP_NAME' bash deploy/deploy-from-image.sh"
     status="$?"
     set -e
 
