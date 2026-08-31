@@ -1,6 +1,6 @@
 # 个人网站当前技术栈与架构
 
-最后核对时间：2026-08-30 02:10，Asia/Shanghai。
+最后核对时间：2026-08-31，Asia/Shanghai。
 
 本文记录 `warmhanser.com` 当前线上运行形态。当前站点是 Next.js standalone 容器化动态站点，不是静态 `output: export` 站点。
 
@@ -14,7 +14,7 @@
 - 运行镜像：多阶段 Docker build，基础镜像 `node:26-bookworm-slim`。
 - 数据库：PostgreSQL 16，线上容器镜像 `postgres:16-alpine`。
 - 反向代理：宿主机 Nginx，监听 80 端口。
-- CI/CD：GitHub `main` 分支，Jenkins Pipeline from SCM，Jenkins Docker Cloud 临时 agent。
+- CI/CD：GitHub `main` 分支，Jenkins Pipeline from SCM，Jenkins Docker Cloud 临时 agent，本机 Harbor 镜像仓库。
 
 ## 应用结构
 
@@ -100,9 +100,9 @@ PostgreSQL 表由应用在启动或首次访问时自动确保存在，主要表
 - 云主机：`1.117.232.198`，hostname `VM-0-12-ubuntu`。
 - 线上源码目录：`/opt/personal-homepage`。
 - 线上分支：`main`。
-- 线上提交：`51848f6`。
+- 线上版本：以运行中的 Harbor 镜像 tag 为准。
 - 应用容器：`personal-homepage`。
-- 应用镜像：`personal-homepage:51848f6`。
+- 应用镜像：`127.0.0.1:18081/personal-homepage/personal-homepage:<commit>`。
 - 应用端口：容器 `3000/tcp` 映射到宿主机 `127.0.0.1:3000`。
 - 应用重启策略：`unless-stopped`。
 - 数据库容器：`personal-homepage-postgres`。
@@ -111,6 +111,7 @@ PostgreSQL 表由应用在启动或首次访问时自动确保存在，主要表
 - Docker 网络：`personal-homepage-net`。
 - 运行环境文件：`/etc/personal-homepage/app.env`。
 - Nginx 配置：`/etc/nginx/conf.d/personal-homepage.conf`。
+- 镜像仓库：本机 Harbor `127.0.0.1:18081/personal-homepage/personal-homepage`。
 
 ## Nginx 代理
 
@@ -159,27 +160,41 @@ label: personal-homepage-docker-agent
 image: personal-homepage-jenkins-agent:latest
 remoteFs: /home/jenkins/agent
 docker api: unix:///var/run/docker.sock
+docker socket: /var/run/docker.sock mounted into agent
 ```
 
 部署边界：
 
 - Jenkins 控制器运行在 `jenkins/jenkins:lts` 容器内。
 - Jenkins Docker Cloud 通过宿主机 Docker API 拉起临时 agent。
-- Pipeline 在 agent 内执行，但真正的站点部署目录属于宿主机。
+- Pipeline 在 agent 内执行 checkout、`docker build` 和 `docker push`。
+- Agent 容器通过挂载的宿主机 Docker socket 构建镜像；镜像标签写入 Harbor 仓库地址。
 - Pipeline 使用 Jenkins 凭据 `bundle-report-ssh-key` SSH 到宿主机网关 `172.17.0.1`。
-- 宿主机执行 `/opt/personal-homepage/deploy/deploy-from-git.sh`。
+- Pipeline 只把 `compose.yml`、`deploy/deploy-from-image.sh` 和 Nginx 配置同步到 `/opt/personal-homepage`。
+- 宿主机执行 `/opt/personal-homepage/deploy/deploy-from-image.sh`，只做 `docker pull` 和 `docker compose up`。
+- 镜像发布到本机 Harbor：`127.0.0.1:18081/personal-homepage/personal-homepage`。
+- Harbor 如果运行在 Windows 本机，云服务器需要反向 SSH 隧道才能访问同一个 `127.0.0.1:18081` registry 地址；Jenkins 控制器容器内通过宿主机桥接地址 `172.17.0.1:18081` 检查 Harbor 可达性。
 
-部署脚本做的事情：
+流水线做的事情：
 
 ```text
-git fetch origin main
-git checkout main
-git pull --ff-only origin main
+checkout main
+检查 Docker socket
+生成 Harbor 镜像标签
+docker build -t 127.0.0.1:18081/personal-homepage/personal-homepage:<commit> -t 127.0.0.1:18081/personal-homepage/personal-homepage:latest .
+docker push 127.0.0.1:18081/personal-homepage/personal-homepage:<commit>
+docker push 127.0.0.1:18081/personal-homepage/personal-homepage:latest
+通过 SSH 同步 compose.yml、deploy-from-image.sh 和 Nginx 配置
+```
+
+部署服务器上的 `deploy-from-image.sh` 做的事情：
+
+```text
 检查 /etc/personal-homepage/app.env
 确保 PostgreSQL 容器存在且可用
-docker build -t personal-homepage:<commit> -t personal-homepage:latest .
-删除旧 personal-homepage 容器
-启动新 personal-homepage 容器
+登录 Harbor
+docker pull 127.0.0.1:18081/personal-homepage/personal-homepage:<commit>
+docker compose up -d --no-build --force-recreate personal-homepage
 检查 /api/health
 安装 Nginx 配置
 nginx -t
@@ -187,7 +202,7 @@ systemctl reload nginx
 检查 /api/build-metrics/runs/latest
 ```
 
-如果新应用容器健康检查失败，脚本会尝试回滚到之前的镜像。
+如果新应用容器健康检查失败，脚本会尝试回滚到之前运行的镜像。
 
 ## 当前验证结果
 

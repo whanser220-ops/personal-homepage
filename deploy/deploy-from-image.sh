@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BRANCH="${BRANCH:-main}"
 APP_NAME="${APP_NAME:-personal-homepage}"
 CONTAINER_NAME="${CONTAINER_NAME:-personal-homepage}"
 HOST_PORT="${HOST_PORT:-3000}"
@@ -12,8 +11,7 @@ DOCKER_NETWORK="${DOCKER_NETWORK:-personal-homepage-net}"
 REGISTRY_HOST="${REGISTRY_HOST:-127.0.0.1:18081}"
 REGISTRY_PROJECT="${REGISTRY_PROJECT:-personal-homepage}"
 IMAGE_REPOSITORY="${IMAGE_REPOSITORY:-${REGISTRY_HOST}/${REGISTRY_PROJECT}/${APP_NAME}}"
-PUSH_IMAGE="${PUSH_IMAGE:-1}"
-DOCKER_BUILD_PULL="${DOCKER_BUILD_PULL:-0}"
+APP_IMAGE="${APP_IMAGE:-${IMAGE_REPOSITORY}:latest}"
 REGISTRY_AUTH_FILE="${REGISTRY_AUTH_FILE:-/etc/personal-homepage/registry.env}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-personal-homepage-postgres}"
 POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:16-alpine}"
@@ -46,7 +44,7 @@ docker_cli() {
 compose_cli() {
     if [ "$USE_SUDO_DOCKER" -eq 1 ]; then
         sudo env \
-            APP_IMAGE="$image_ref" \
+            APP_IMAGE="$APP_IMAGE" \
             CONTAINER_NAME="$CONTAINER_NAME" \
             HOST_PORT="$HOST_PORT" \
             ENV_FILE="$ENV_FILE" \
@@ -54,24 +52,13 @@ compose_cli() {
             docker compose "$@"
     else
         env \
-            APP_IMAGE="$image_ref" \
+            APP_IMAGE="$APP_IMAGE" \
             CONTAINER_NAME="$CONTAINER_NAME" \
             HOST_PORT="$HOST_PORT" \
             ENV_FILE="$ENV_FILE" \
             DOCKER_NETWORK="$DOCKER_NETWORK" \
             docker compose "$@"
     fi
-}
-
-is_false() {
-    case "$1" in
-        0|false|False|FALSE|no|No|NO)
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
 }
 
 load_registry_credentials() {
@@ -100,15 +87,6 @@ load_registry_credentials() {
     fi
 }
 
-git fetch origin "$BRANCH"
-git checkout "$BRANCH"
-git pull --ff-only origin "$BRANCH"
-
-commit_sha="$(git rev-parse --short HEAD)"
-image_ref="${APP_IMAGE:-${IMAGE_REPOSITORY}:${commit_sha}}"
-latest_image_ref="${LATEST_APP_IMAGE:-${IMAGE_REPOSITORY}:latest}"
-local_image_ref="${APP_NAME}:${commit_sha}"
-local_latest_image_ref="${APP_NAME}:latest"
 previous_image="$(docker_cli inspect --format '{{.Config.Image}}' "$CONTAINER_NAME" 2>/dev/null || true)"
 
 if ! sudo test -f "$ENV_FILE"; then
@@ -172,31 +150,7 @@ for attempt in $(seq 1 60); do
 done
 
 load_registry_credentials
-
-build_args=()
-if ! is_false "$DOCKER_BUILD_PULL"; then
-    build_args+=(--pull)
-fi
-
-docker_cli build "${build_args[@]}" \
-    -t "$image_ref" \
-    -t "$latest_image_ref" \
-    -t "$local_image_ref" \
-    -t "$local_latest_image_ref" \
-    .
-
-if ! is_false "$PUSH_IMAGE"; then
-    if ! docker_cli push "$image_ref"; then
-        echo "Registry push failed for $image_ref. Check REGISTRY_HOST, credentials, and registry reachability." >&2
-        exit 1
-    fi
-
-    if ! docker_cli push "$latest_image_ref"; then
-        echo "Registry push failed for $latest_image_ref. Check REGISTRY_HOST, credentials, and registry reachability." >&2
-        exit 1
-    fi
-fi
-
+docker_cli pull "$APP_IMAGE"
 compose_cli -f "$COMPOSE_FILE" config >/dev/null
 
 compose_project="$(docker_cli inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$CONTAINER_NAME" 2>/dev/null || true)"
@@ -227,7 +181,7 @@ for attempt in $(seq 1 30); do
 
         if [ -n "$previous_image" ]; then
             echo "Attempting rollback to $previous_image" >&2
-            image_ref="$previous_image" compose_cli -f "$COMPOSE_FILE" up -d --no-build --force-recreate "$COMPOSE_SERVICE" || true
+            APP_IMAGE="$previous_image" compose_cli -f "$COMPOSE_FILE" up -d --no-build --force-recreate "$COMPOSE_SERVICE" || true
         fi
 
         exit 1
@@ -243,4 +197,4 @@ sudo systemctl reload nginx
 curl --fail --silent --show-error "$HEALTH_URL" >/dev/null
 curl --fail --silent --show-error "$METRICS_URL" >/dev/null
 
-echo "Deployed ${commit_sha} as ${image_ref} on 127.0.0.1:${HOST_PORT}"
+echo "Deployed ${APP_IMAGE} on 127.0.0.1:${HOST_PORT}"
