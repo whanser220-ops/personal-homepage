@@ -216,7 +216,7 @@ export function LandingNavigation() {
               </h2>
             </div>
             <div className={css("note-about-body")}>
-              <img src="/assets/site-logo.webp" alt="" width="72" height="72" />
+              <img src="/assets/site-logo.png" alt="" width="72" height="72" />
               <p>喜欢记录生活里的灵感与美好，用画笔和文字收藏每一刻心动。</p>
             </div>
             <div className={css("note-chip-row")} aria-label="个人关键词">

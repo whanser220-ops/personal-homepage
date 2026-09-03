@@ -50,7 +50,7 @@ export function NavigationDock({ className = "" }) {
         onMouseEnter={() => setSpotIndex(0)}
         title="首页"
       >
-        <img src="/assets/site-logo.webp" alt="" width="54" height="54" />
+        <img src="/assets/site-logo.png" alt="" width="54" height="54" />
       </Link>
 
       {dockItems.map((item, index) => {

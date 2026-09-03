@@ -460,7 +460,7 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
       <header className={css("build-monitor-topbar")}>
         <UiButton asChild className={css("build-monitor-home")} variant="ghost">
           <Link href="/" aria-label="返回首页">
-            <img src="/assets/site-logo.webp" alt="" width="34" height="34" />
+            <img src="/assets/site-logo.png" alt="" width="34" height="34" />
             <span>Huang</span>
           </Link>
         </UiButton>
