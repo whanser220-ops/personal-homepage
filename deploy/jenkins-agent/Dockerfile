@@ -4,7 +4,9 @@ FROM jenkins/inbound-agent:latest-jdk21
 
 USER root
 
-ARG DOCKER_GID=988
+# Docker Desktop exposes its socket as root:root (0660). The dedicated agent
+# joins that group so image builds stay on the local Docker engine.
+ARG DOCKER_GID=0
 
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 

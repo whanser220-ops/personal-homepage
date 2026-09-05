@@ -12,7 +12,9 @@ pipeline {
     }
 
     environment {
-        DEPLOY_HOST = '172.17.0.1'
+        // The build agent runs on the local Docker Desktop cloud. Deploy over
+        // SSH to the cloud host instead of resolving the agent's local gateway.
+        DEPLOY_HOST = '1.117.232.198'
         DEPLOY_PATH = '/opt/personal-homepage'
         APP_NAME = 'personal-homepage'
         REGISTRY_HOST = '127.0.0.1:18081'
