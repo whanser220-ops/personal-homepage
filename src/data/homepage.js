@@ -10,18 +10,21 @@ export const articles = [
     title: "个人主页的前端结构",
     body: "记录从静态页、Vite、React、Next.js 到组件库接入的项目演进。",
     date: "07-18",
+    tags: ["Next.js", "结构", "复盘"],
   },
   {
     status: "计划中",
     title: "部署流水线笔记",
     body: "整理 GitHub PR、Jenkins 自动构建和 Nginx 静态托管的流程。",
     date: "07-20",
+    tags: ["Jenkins", "部署", "流水线"],
   },
   {
     status: "计划中",
     title: "交互动画实验",
     body: "沉淀 Anime.js、组件状态和页面动效之间的协作方式。",
     date: "07-22",
+    tags: ["交互", "动效", "React"],
   },
 ];
 
@@ -87,9 +90,11 @@ export const projects = [
   {
     title: "Unity6 构建监控",
     year: "2026",
+    status: "已上线",
     subtitle: "CI observability",
     summary: "展示 Unity 云构建内部业务打点，关注阶段耗时、Bundle 构建和资源类型占用。",
     icon: "CI",
+    image: "/assets/unity-build-pipeline-sketch.webp",
     tags: ["Unity", "Jenkins", "PostgreSQL", "SSE"],
     links: [{ href: "/build-monitor", label: "Monitor" }],
   },
