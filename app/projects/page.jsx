@@ -1,6 +1,5 @@
-import { PageFrame } from "../../src/components/PageFrame.jsx";
+import { IllustratedPageFrame } from "../../src/components/IllustratedPageFrame.jsx";
 import { Projects } from "../../src/components/Projects.jsx";
-import styles from "./page.module.css";
 
 export const metadata = {
   title: "项目 | Huang",
@@ -9,10 +8,13 @@ export const metadata = {
 
 export default function ProjectsPage() {
   return (
-    <PageFrame>
-      <main className={styles.projectsPage}>
-        <Projects />
-      </main>
-    </PageFrame>
+    <IllustratedPageFrame
+      active="projects"
+      description="从构建链路到实时监控，把复杂工程整理成可见、可验证的系统。"
+      eyebrow="PROJECTS / 持续构建"
+      title="项目"
+    >
+      <Projects />
+    </IllustratedPageFrame>
   );
 }
