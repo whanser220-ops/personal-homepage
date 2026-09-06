@@ -12,8 +12,8 @@ pipeline {
     }
 
     environment {
-        // The build agent runs on the local Docker Desktop cloud. Deploy over
-        // SSH to the cloud host instead of resolving the agent's local gateway.
+        // The build agent runs on the long-running local Linux Docker Engine.
+        // Deploy over SSH while the cloud host only pulls the finished image.
         DEPLOY_HOST = '1.117.232.198'
         DEPLOY_PATH = '/opt/personal-homepage'
         APP_NAME = 'personal-homepage'
@@ -134,20 +134,19 @@ ssh_opts=(
     -o ServerAliveCountMax=3
 )
 
-ssh "${ssh_opts[@]}" "$DEPLOY_SSH_USER@$DEPLOY_HOST" \
-    "mkdir -p '$DEPLOY_PATH/deploy'"
-
-scp "${ssh_opts[@]}" compose.yml \
-    "$DEPLOY_SSH_USER@$DEPLOY_HOST:$DEPLOY_PATH/compose.yml"
-
-scp "${ssh_opts[@]}" deploy/deploy-from-image.sh deploy/nginx-personal-homepage.conf \
-    "$DEPLOY_SSH_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy/"
-
 for attempt in 1 2 3; do
     set +e
-    printf '%s\\n%s\\n%s\\n' "$REGISTRY_USERNAME" "$REGISTRY_PASSWORD" "$IMAGE_REF" | ssh "${ssh_opts[@]}" \
-        "$DEPLOY_SSH_USER@$DEPLOY_HOST" \
-        "set -eu; read -r REGISTRY_USERNAME; read -r REGISTRY_PASSWORD; read -r APP_IMAGE; export REGISTRY_USERNAME REGISTRY_PASSWORD APP_IMAGE; cd '$DEPLOY_PATH' && chmod +x deploy/deploy-from-image.sh && REGISTRY_HOST='$REGISTRY_HOST' REGISTRY_PROJECT='$REGISTRY_PROJECT' APP_NAME='$APP_NAME' bash deploy/deploy-from-image.sh"
+    {
+        ssh "${ssh_opts[@]}" "$DEPLOY_SSH_USER@$DEPLOY_HOST" \
+            "mkdir -p '$DEPLOY_PATH/deploy'" \
+        && scp "${ssh_opts[@]}" compose.yml \
+            "$DEPLOY_SSH_USER@$DEPLOY_HOST:$DEPLOY_PATH/compose.yml" \
+        && scp "${ssh_opts[@]}" deploy/deploy-from-image.sh deploy/nginx-personal-homepage.conf \
+            "$DEPLOY_SSH_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy/" \
+        && printf '%s\\n%s\\n%s\\n' "$REGISTRY_USERNAME" "$REGISTRY_PASSWORD" "$IMAGE_REF" | ssh "${ssh_opts[@]}" \
+            "$DEPLOY_SSH_USER@$DEPLOY_HOST" \
+            "set -eu; read -r REGISTRY_USERNAME; read -r REGISTRY_PASSWORD; read -r APP_IMAGE; export REGISTRY_USERNAME REGISTRY_PASSWORD APP_IMAGE; cd '$DEPLOY_PATH' && chmod +x deploy/deploy-from-image.sh && REGISTRY_HOST='$REGISTRY_HOST' REGISTRY_PROJECT='$REGISTRY_PROJECT' APP_NAME='$APP_NAME' bash deploy/deploy-from-image.sh"
+    }
     status="$?"
     set -e
 
