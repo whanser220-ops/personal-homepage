@@ -80,6 +80,7 @@
 .archiveTopbar {
   position: relative;
   z-index: 10;
+  box-sizing: border-box;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -90,45 +91,38 @@
 
 .identityCard {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 64px;
-  gap: 10px;
+  display: block;
   width: min(260px, 70vw);
-  min-height: 94px;
-  padding: 14px 14px 12px 19px;
-  border: 1px solid var(--line);
-  border-radius: 5px 8px 6px 7px;
-  color: var(--ink);
-  background:
-    linear-gradient(112deg, rgba(255, 255, 255, 0.22), transparent 42%),
-    var(--paper);
-  box-shadow: var(--paper-shadow);
+  aspect-ratio: 1040 / 340;
+  min-height: 0;
+  color: #352b24;
+  clip-path: polygon(1% 3%, 13% 1%, 27% 2%, 42% 1%, 57% 2%, 72% 1%, 88% 2%, 99% 1%, 100% 48%, 99% 98%, 84% 99%, 68% 98%, 51% 100%, 34% 98%, 18% 99%, 1% 97%, 0 53%);
+  filter: drop-shadow(0 15px 22px rgba(37, 27, 20, 0.24));
   transform: rotate(-0.55deg);
-  transition: transform 180ms ease, box-shadow 180ms ease;
-}
-
-.identityCard::before {
-  position: absolute;
-  top: -9px;
-  left: 19px;
-  width: 58px;
-  height: 19px;
-  border: 1px solid rgba(126, 91, 55, 0.18);
-  content: "";
-  background: rgba(225, 185, 117, 0.72);
-  box-shadow: 0 4px 8px rgba(48, 34, 23, 0.18);
-  transform: rotate(-8deg);
+  transition: filter 180ms ease, transform 180ms ease;
 }
 
 .identityCard:hover,
 .identityCard:focus-visible {
-  box-shadow: 0 26px 52px rgba(37, 27, 20, 0.28);
+  filter: drop-shadow(0 19px 25px rgba(37, 27, 20, 0.32));
   transform: translateY(-3px) rotate(0deg);
 }
 
+.identityArt {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
 .identityCopy {
+  position: absolute;
+  top: 17%;
+  left: 8.5%;
   display: flex;
-  min-width: 0;
+  width: 53%;
   flex-direction: column;
   justify-content: center;
   line-height: 1.22;
@@ -141,54 +135,43 @@
 }
 
 .identityCopy small {
-  color: var(--muted-ink);
+  color: #6f5949;
   font-family: "Microsoft YaHei", sans-serif;
   font-size: 0.7rem;
 }
 
-.identityAvatar {
-  width: 60px;
-  height: 60px;
-  align-self: center;
-  border: 3px solid color-mix(in srgb, var(--paper-bright) 86%, white);
-  border-radius: 50%;
-  background-image: url("/assets/hero-character-wall.png");
-  background-position: 48% 44%;
-  background-size: 525%;
-  box-shadow: 0 4px 12px rgba(48, 32, 22, 0.22);
-}
-
 .portfolioNavigation {
   display: flex;
+  box-sizing: border-box;
   align-items: center;
-  gap: clamp(3px, 0.8vw, 12px);
-  min-height: 62px;
-  padding: 8px 10px;
+  gap: clamp(4px, 0.7vw, 10px);
+  min-height: 66px;
+  padding: 7px 10px;
   border: 1px solid var(--line);
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--paper-bright) 92%, transparent);
+  border-radius: 28px;
+  background: color-mix(in srgb, var(--paper-bright) 95%, transparent);
   box-shadow: var(--paper-shadow);
-  transform: rotate(0.15deg);
-  backdrop-filter: blur(5px);
+  backdrop-filter: blur(8px);
 }
 
 .portfolioNavigation a,
 .portfolioThemeToggle {
   display: inline-flex;
-  min-width: 62px;
-  min-height: 44px;
+  box-sizing: border-box;
+  width: 50px;
+  height: 50px;
+  min-width: 50px;
+  min-height: 50px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 12px;
+  padding: 0;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: 50%;
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 0.98rem;
   cursor: pointer;
-  transition: color 160ms ease, border-color 160ms ease, transform 160ms ease;
+  transition: background-color 160ms ease, box-shadow 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
 .portfolioNavigation a:hover,
@@ -196,16 +179,22 @@
 .portfolioNavigation a.isActive,
 .portfolioThemeToggle:hover,
 .portfolioThemeToggle:focus-visible {
-  border-bottom-color: var(--olive);
   color: var(--olive);
   transform: translateY(-2px);
 }
 
-.portfolioThemeToggle {
-  min-width: 44px;
-  padding-inline: 9px;
+.portfolioNavigation a:hover,
+.portfolioNavigation a:focus-visible,
+.portfolioNavigation a.isActive {
+  background: color-mix(in srgb, var(--olive-soft) 82%, var(--paper-bright));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--olive) 28%, transparent), 0 5px 12px rgba(54, 45, 36, 0.12);
 }
 
+.portfolioThemeToggle {
+  border: 2px solid currentColor;
+}
+
+.portfolioNavigation a span,
 .portfolioThemeToggle span {
   position: absolute;
   width: 1px;
@@ -775,25 +764,25 @@
 
   .identityCard {
     width: min(252px, 78vw);
-    min-height: 90px;
   }
 
   .portfolioNavigation {
-    width: 100%;
+    width: calc(100vw - 32px);
+    max-width: calc(100vw - 32px);
+    flex: none;
     justify-content: space-between;
-    overflow-x: auto;
+    overflow: visible;
     padding: 6px;
   }
 
   .portfolioNavigation a,
   .portfolioThemeToggle {
-    min-width: 48px;
-    padding-inline: 7px;
-    font-size: 0.82rem;
-  }
-
-  .portfolioNavigation a svg {
-    display: none;
+    width: 46px;
+    height: 46px;
+    min-width: 0;
+    min-height: 46px;
+    flex: 1 1 0;
+    max-width: 52px;
   }
 
   .homeLayout {

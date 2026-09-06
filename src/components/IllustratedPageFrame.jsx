@@ -8,18 +8,25 @@ const navigationItems = [
   { href: "/", key: "home", label: "首页", icon: Home },
   { href: "/articles", key: "articles", label: "文章", icon: BookOpen },
   { href: "/projects", key: "projects", label: "项目", icon: FolderKanban },
-  { href: "/about", key: "about", label: "关于", icon: UserRound },
+  { href: "/about", key: "about", label: "关于我", icon: UserRound },
 ];
 
 export function IdentityCard() {
   return (
-    <Link aria-label="返回首页" className={styles.identityCard} href="/">
+    <Link aria-label="查看关于我" className={styles.identityCard} href="/about">
+      <img
+        alt=""
+        aria-hidden="true"
+        className={styles.identityArt}
+        height="340"
+        src="/assets/identity-card-art-v2.webp"
+        width="1040"
+      />
       <span className={styles.identityCopy}>
         <strong>Hi，Huang</strong>
         <small>脑海中天马行空</small>
         <small>把想法慢慢做出来～</small>
       </span>
-      <span aria-hidden="true" className={styles.identityAvatar} />
     </Link>
   );
 }
@@ -32,11 +39,13 @@ export function PortfolioNavigation({ active }) {
         return (
           <Link
             aria-current={active === item.key ? "page" : undefined}
+            aria-label={item.label}
             className={active === item.key ? styles.isActive : undefined}
             href={item.href}
             key={item.key}
+            title={item.label}
           >
-            <Icon aria-hidden="true" size={18} />
+            <Icon aria-hidden="true" size={25} strokeWidth={1.85} />
             <span>{item.label}</span>
           </Link>
         );
