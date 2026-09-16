@@ -14,7 +14,9 @@ pipeline {
     environment {
         // The build agent runs on the long-running local Linux Docker Engine.
         // Deploy over SSH while the cloud host only pulls the finished image.
-        DEPLOY_HOST = '1.117.232.198'
+        // Route deployment through the persistent WSL-to-cloud SSH tunnel.
+        DEPLOY_HOST = '172.17.0.1'
+        DEPLOY_PORT = '10022'
         DEPLOY_PATH = '/opt/personal-homepage'
         APP_NAME = 'personal-homepage'
         REGISTRY_HOST = '127.0.0.1:18081'
@@ -126,6 +128,7 @@ set -euo pipefail
 
 ssh_opts=(
     -i "$DEPLOY_SSH_KEY"
+    -p "$DEPLOY_PORT"
     -o IdentitiesOnly=yes
     -o BatchMode=yes
     -o StrictHostKeyChecking=no
