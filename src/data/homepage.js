@@ -6,6 +6,14 @@ export const navItems = [
 
 export const articles = [
   {
+    status: "已发布",
+    title: "事件驱动：从“谁来调用函数”理解一套系统",
+    body: "从状态变化、事件数据、分发器和处理者出发，理解事件驱动与异步、事件循环、消息队列的边界。",
+    date: "09-17",
+    href: "/articles/event-driven",
+    tags: ["事件驱动", "架构", "异步"],
+  },
+  {
     status: "计划中",
     title: "个人主页的前端结构",
     body: "记录从静态页、Vite、React、Next.js 到组件库接入的项目演进。",

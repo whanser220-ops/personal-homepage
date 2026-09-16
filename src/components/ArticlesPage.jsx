@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { BookOpen } from "lucide-react";
 
 import { articles } from "../data/homepage.js";
@@ -18,7 +19,9 @@ export function ArticlesPage() {
               <span>{String(index + 1).padStart(2, "0")}</span>
               <time>{article.date}</time>
             </div>
-            <h2>{article.title}</h2>
+            <h2>
+              {article.href ? <Link href={article.href}>{article.title}</Link> : article.title}
+            </h2>
             <p>{article.body}</p>
             <div className={styles.archiveArticleFooter}>
               <span>
