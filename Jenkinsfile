@@ -137,15 +137,11 @@ ssh_opts=(
 for attempt in 1 2 3; do
     set +e
     {
-        ssh "${ssh_opts[@]}" "$DEPLOY_SSH_USER@$DEPLOY_HOST" \
-            "mkdir -p '$DEPLOY_PATH/deploy'" \
-        && scp "${ssh_opts[@]}" compose.yml \
-            "$DEPLOY_SSH_USER@$DEPLOY_HOST:$DEPLOY_PATH/compose.yml" \
-        && scp "${ssh_opts[@]}" deploy/deploy-from-image.sh deploy/nginx-personal-homepage.conf \
-            "$DEPLOY_SSH_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy/" \
-        && printf '%s\\n%s\\n%s\\n' "$REGISTRY_USERNAME" "$REGISTRY_PASSWORD" "$IMAGE_REF" | ssh "${ssh_opts[@]}" \
-            "$DEPLOY_SSH_USER@$DEPLOY_HOST" \
-            "set -eu; read -r REGISTRY_USERNAME; read -r REGISTRY_PASSWORD; read -r APP_IMAGE; export REGISTRY_USERNAME REGISTRY_PASSWORD APP_IMAGE; cd '$DEPLOY_PATH' && chmod +x deploy/deploy-from-image.sh && REGISTRY_HOST='$REGISTRY_HOST' REGISTRY_PROJECT='$REGISTRY_PROJECT' APP_NAME='$APP_NAME' bash deploy/deploy-from-image.sh"
+        {
+            printf '%s\\n%s\\n%s\\n' "$REGISTRY_USERNAME" "$REGISTRY_PASSWORD" "$IMAGE_REF"
+            tar -cf - compose.yml deploy/deploy-from-image.sh deploy/nginx-personal-homepage.conf
+        } | ssh "${ssh_opts[@]}" "$DEPLOY_SSH_USER@$DEPLOY_HOST" \
+            "set -eu; read -r REGISTRY_USERNAME; read -r REGISTRY_PASSWORD; read -r APP_IMAGE; mkdir -p '$DEPLOY_PATH'; tar -xf - -C '$DEPLOY_PATH'; export REGISTRY_USERNAME REGISTRY_PASSWORD APP_IMAGE; cd '$DEPLOY_PATH' && chmod +x deploy/deploy-from-image.sh && REGISTRY_HOST='$REGISTRY_HOST' REGISTRY_PROJECT='$REGISTRY_PROJECT' APP_NAME='$APP_NAME' bash deploy/deploy-from-image.sh"
     }
     status="$?"
     set -e
