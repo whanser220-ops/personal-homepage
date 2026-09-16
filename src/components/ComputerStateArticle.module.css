@@ -1,0 +1,70 @@
+.articleShell {
+  width: min(100%, 1160px);
+  margin: 0 auto;
+  padding: 26px clamp(20px, 4vw, 54px) 92px;
+  color: var(--foreground);
+}
+
+.backLink { display: inline-flex; margin-bottom: 34px; color: var(--accent); font-size: .92rem; font-weight: 760; }
+.backLink:hover, .backLink:focus-visible, .articleBody a:hover, .articleBody a:focus-visible, .toc a:hover, .toc a:focus-visible, .mobileToc a:hover, .mobileToc a:focus-visible { color: var(--ring); text-decoration: underline; text-underline-offset: 3px; }
+.articleHeader { max-width: 960px; padding: clamp(26px, 5vw, 54px) 0 clamp(38px, 6vw, 68px); border-bottom: 1px solid var(--line); }
+.kicker, .tocLabel { margin: 0 0 16px; color: var(--accent); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .82rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.articleHeader h1 { max-width: 950px; margin: 0; color: var(--primary); font-size: clamp(2.2rem, 5.5vw, 4.65rem); letter-spacing: -.05em; line-height: 1.08; }
+.lead { max-width: 790px; margin: 28px 0 0; color: var(--muted-foreground); font-size: clamp(1.08rem, 1.7vw, 1.28rem); line-height: 1.8; }
+.meta { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 24px; color: var(--muted-foreground); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .8rem; }
+.articleLayout { display: grid; grid-template-columns: minmax(0, 790px) minmax(208px, 240px); gap: clamp(42px, 7vw, 82px); align-items: start; }
+.articleBody { min-width: 0; padding-top: clamp(38px, 6vw, 62px); font-size: 1.04rem; line-height: 1.9; }
+.articleBody p { margin: 0 0 22px; color: var(--muted-foreground); }
+.articleBody h2 { margin: 64px 0 19px; scroll-margin-top: 112px; color: var(--primary); font-size: clamp(1.6rem, 3vw, 2.28rem); letter-spacing: -.025em; line-height: 1.25; }
+.articleBody strong { color: var(--foreground); }
+.articleBody code { padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line)); border-radius: 4px; background: color-mix(in srgb, var(--secondary) 70%, var(--card)); color: var(--primary); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .87em; }
+.codeBlock { max-width: 100%; margin: 24px 0 28px; padding: 18px 20px; overflow-x: auto; border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line)); border-radius: 7px 5px 8px 4px; background: #292522; color: #f7efe7; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .83rem; line-height: 1.7; white-space: pre; }
+.codeBlock code { padding: 0; border: 0; background: transparent; color: inherit; font-size: inherit; }
+.keyword { color: #ffbd72; }
+.string { color: #b9e6a7; }
+.comment { color: #aaa19a; font-style: italic; }
+.articleBody ol { margin: 0 0 24px; padding-left: 1.5em; color: var(--muted-foreground); }
+.articleBody li { margin: 8px 0; padding-left: 5px; }
+.articleBody a { color: var(--primary); font-weight: 700; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 65%, transparent); text-underline-offset: 3px; }
+.articleBody table { width: 100%; margin: 26px 0 30px; border-collapse: collapse; color: var(--muted-foreground); font-size: .94rem; line-height: 1.6; }
+.articleBody th, .articleBody td { padding: 11px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.articleBody th { background: color-mix(in srgb, var(--secondary) 78%, var(--card)); color: var(--foreground); font-weight: 800; }
+.diagram { margin: 34px 0 38px; }
+.diagram img { display: block; width: 100%; height: auto; border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line)); border-radius: 10px 7px 12px 8px; background: var(--card); }
+.diagram figcaption { margin-top: 11px; color: var(--muted-foreground); font-size: .86rem; line-height: 1.6; }
+.takeaway, .closing { padding: 19px 22px; border-left: 4px solid var(--accent); border-radius: 4px; background: color-mix(in srgb, var(--accent) 10%, var(--card)); color: var(--foreground) !important; }
+.formula { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin: 28px 0 32px; padding: 20px 16px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--secondary) 52%, var(--card)); color: var(--foreground); }
+.formula span, .formula strong { padding: 7px 10px; border-radius: 5px; background: var(--card); font-size: .92rem; }
+.formula b { color: var(--accent); }
+.twoLoops { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 26px 0 30px; }
+.twoLoops > div { padding: 18px 19px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--secondary) 42%, var(--card)); }
+.twoLoops > div:last-child { background: color-mix(in srgb, #f6e3d8 72%, var(--card)); }
+.twoLoops span { color: var(--foreground); font-weight: 800; }
+.twoLoops p { margin: 9px 0 0; font-size: .95rem; }
+.toc { position: sticky; top: 112px; padding-top: clamp(42px, 6vw, 66px); }
+.tocList { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.tocList a { display: grid; grid-template-columns: 25px minmax(0, 1fr); gap: 8px; align-items: start; padding: 7px 8px; border-left: 2px solid transparent; color: var(--muted-foreground); font-size: .86rem; line-height: 1.45; }
+.tocList a span { color: var(--accent); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .75rem; }
+.tocList a.tocActive { border-left-color: var(--accent); background: color-mix(in srgb, var(--secondary) 72%, transparent); color: var(--foreground); font-weight: 800; }
+.mobileTocWrap { display: none; }
+.mobileTocWrap .toc { display: none; }
+.articleLayout > .mobileToc { display: none !important; }
+.mobileToc { display: none; }
+
+@media (max-width: 900px) {
+  .articleLayout { grid-template-columns: minmax(0, 1fr); }
+  .articleLayout > .toc { display: none; }
+  .mobileTocWrap { display: block; }
+  .mobileTocWrap .mobileToc { display: block; margin: 20px 0 0; padding: 13px 16px; border: 1px solid var(--line); border-radius: 7px; background: color-mix(in srgb, var(--card) 88%, transparent); }
+  .mobileToc summary { cursor: pointer; color: var(--foreground); font-weight: 800; }
+  .mobileToc .tocList { margin-top: 12px; }
+}
+
+@media (max-width: 620px) {
+  .articleShell { padding-right: 18px; padding-left: 18px; }
+  .articleBody { font-size: 1rem; line-height: 1.82; }
+  .articleHeader h1 { font-size: clamp(2.25rem, 12vw, 3.4rem); }
+  .articleBody table { display: block; overflow-x: auto; white-space: normal; }
+  .twoLoops { grid-template-columns: 1fr; }
+  .formula { justify-content: flex-start; }
+}
