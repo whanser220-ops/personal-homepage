@@ -55,7 +55,7 @@ export function PortfolioNavigation({ active }) {
   );
 }
 
-export function IllustratedPageFrame({ active, eyebrow, title, description, children }) {
+export function IllustratedPageFrame({ active, eyebrow, title, description, children, showHero = true }) {
   return (
     <main className={styles.illustratedPage}>
       <img
@@ -74,11 +74,13 @@ export function IllustratedPageFrame({ active, eyebrow, title, description, chil
       </header>
 
       <div className={styles.archiveBody}>
-        <header className={styles.archiveHero}>
-          <p>{eyebrow}</p>
-          <h1>{title}</h1>
-          <span>{description}</span>
-        </header>
+        {showHero ? (
+          <header className={styles.archiveHero}>
+            <p>{eyebrow}</p>
+            <h1>{title}</h1>
+            <span>{description}</span>
+          </header>
+        ) : null}
         {children}
       </div>
     </main>

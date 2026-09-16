@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" role="img" aria-labelledby="title desc">
+  <title id="title">Pi Agent 事件分发链路</title>
+  <desc id="desc">prompt 启动 Agent loop，模型流产生 text_delta，核心包装成 message_update，再由 session 分发给 listener。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#36586b"/></marker>
+    <style>
+      .bg{fill:#fffdf9}.title{font:700 25px 'Microsoft YaHei',sans-serif;fill:#243f50}.small{font:500 17px 'Microsoft YaHei',sans-serif;fill:#52646a}.label{font:700 18px 'Microsoft YaHei',sans-serif;fill:#243f50}.mono{font:700 16px Consolas,monospace;fill:#36586b}.line{stroke:#36586b;stroke-width:3;fill:none;marker-end:url(#arrow)}.dash{stroke:#b78b57;stroke-width:2;stroke-dasharray:8 8;fill:none}.box{stroke:#b8c8c2;stroke-width:2}.producer{fill:#e8f0ed}.stream{fill:#f6eadb}.consumer{fill:#e8eef3}.note{fill:#f8f1e6;stroke:#d5b27f;stroke-width:2}
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="560" rx="18"/>
+  <text class="title" x="50" y="54">一轮 prompt 中，事件怎样走到你的回调</text>
+  <text class="small" x="50" y="84">箭头表示调用或数据传递；它不表示天然开了新线程。</text>
+  <rect class="box producer" x="48" y="140" width="210" height="112" rx="14"/>
+  <text class="label" x="72" y="177">你的程序</text><text class="mono" x="72" y="210">subscribe(listener)</text><text class="mono" x="72" y="235">prompt(input)</text>
+  <rect class="box stream" x="330" y="140" width="245" height="112" rx="14"/>
+  <text class="label" x="354" y="177">Agent loop</text><text class="small" x="354" y="210">创建生命周期事件</text><text class="mono" x="354" y="235">agent_start</text>
+  <rect class="box stream" x="647" y="140" width="210" height="112" rx="14"/>
+  <text class="label" x="671" y="177">模型流</text><text class="small" x="671" y="210">返回文字增量</text><text class="mono" x="671" y="235">text_delta</text>
+  <rect class="box consumer" x="928" y="140" width="224" height="112" rx="14"/>
+  <text class="label" x="952" y="177">事件分发</text><text class="small" x="952" y="210">包装并发给 listener</text><text class="mono" x="952" y="235">message_update</text>
+  <path class="line" d="M258 196H330"/><path class="line" d="M575 196H647"/><path class="line" d="M857 196H928"/>
+  <text class="small" x="271" y="178">启动</text><text class="small" x="590" y="178">请求</text><text class="small" x="870" y="178">包装</text>
+  <path class="dash" d="M1040 252V354H158V252"/>
+  <rect class="note" x="330" y="354" width="540" height="118" rx="14"/>
+  <text class="label" x="370" y="392">_emit(event) 的关键动作</text>
+  <text class="mono" x="370" y="426">for (const listener of listeners) listener(event)</text>
+  <text class="small" x="370" y="454">subscribe 只保存关系；emit 才让回调真正执行。</text>
+</svg>

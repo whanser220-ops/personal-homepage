@@ -530,6 +530,7 @@
 .illustratedPage {
   min-height: 100svh;
   overflow: visible;
+  overflow-x: clip;
   background: #cdb99f;
 }
 

@@ -7,11 +7,11 @@ export const navItems = [
 export const articles = [
   {
     status: "已发布",
-    title: "事件驱动：从“谁来调用函数”理解一套系统",
-    body: "从状态变化、事件数据、分发器和处理者出发，理解事件驱动与异步、事件循环、消息队列的边界。",
+    title: "事件驱动：从 Pi Agent 的回调链路看懂“谁在什么时候调用谁”",
+    body: "沿着 Pi Agent 的真实事件链路，理解事件产生、分发、回调，以及事件驱动与异步、事件循环的边界。",
     date: "09-17",
     href: "/articles/event-driven",
-    tags: ["事件驱动", "架构", "异步"],
+    tags: ["事件驱动", "Pi Agent", "架构"],
   },
   {
     status: "计划中",
