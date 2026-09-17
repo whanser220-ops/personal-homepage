@@ -1,0 +1,39 @@
+{
+  "articles": [
+    {
+      "id": "computer-state",
+      "title": "状态：计算机如何记住“现在是什么”",
+      "slug": "computer-state",
+      "status": "published",
+      "concepts": ["state", "session", "agent-message"]
+    },
+    {
+      "id": "message-system",
+      "title": "消息系统：Pi Agent 怎样把“发生了什么”传给模型和界面",
+      "slug": "message-system",
+      "status": "published",
+      "concepts": ["agent-message", "llm-message", "message-event", "steering-queue", "context-conversion"]
+    },
+    {
+      "id": "event-driven",
+      "title": "事件驱动：从 Pi Agent 的回调链路看懂“谁在什么时候调用谁”",
+      "slug": "event-driven",
+      "status": "published",
+      "concepts": ["message-event", "event-dispatch", "callback"]
+    }
+  ],
+  "relations": [
+    {
+      "from": "computer-state",
+      "to": "message-system",
+      "type": "mechanism-extension",
+      "reason": "状态文章说明消息历史是 Agent 的可继续状态；本篇进一步拆开消息结构和恢复前的上下文重建。"
+    },
+    {
+      "from": "message-system",
+      "to": "event-driven",
+      "type": "comparison-boundary",
+      "reason": "本篇区分消息是状态记录、事件是运行时通知；事件驱动文章继续解释通知如何被分发给回调。"
+    }
+  ]
+}

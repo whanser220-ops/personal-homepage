@@ -7,6 +7,14 @@ export const navItems = [
 export const articles = [
   {
     status: "已发布",
+    title: "消息系统：Pi Agent 怎样把“发生了什么”传给模型和界面",
+    body: "从 AgentMessage、Message 到 message_update、steer 和 followUp，看懂 Pi Agent 的消息系统。",
+    date: "09-17",
+    href: "/articles/message-system",
+    tags: ["消息系统", "Pi Agent", "架构"],
+  },
+  {
+    status: "已发布",
     title: "状态：计算机如何记住“现在是什么”",
     body: "从进程、HTTP、会话和业务状态，到 Pi Agent 的消息历史、上下文与运行状态。",
     date: "09-17",
