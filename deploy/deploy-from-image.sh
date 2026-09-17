@@ -87,6 +87,15 @@ load_registry_credentials() {
     fi
 }
 
+reclaim_obsolete_build_cache() {
+    # Images are built by Jenkins on the local Linux engine. Cloud-side build
+    # cache is therefore historical waste and can exhaust this host's small
+    # root disk before a pull.
+    if ! docker_cli builder prune --all --force >/dev/null; then
+        echo "Warning: unable to prune unused Docker builder cache." >&2
+    fi
+}
+
 previous_image="$(docker_cli inspect --format '{{.Config.Image}}' "$CONTAINER_NAME" 2>/dev/null || true)"
 
 if ! sudo test -f "$ENV_FILE"; then
@@ -150,6 +159,7 @@ for attempt in $(seq 1 60); do
 done
 
 load_registry_credentials
+reclaim_obsolete_build_cache
 docker_cli pull "$APP_IMAGE"
 compose_cli -f "$COMPOSE_FILE" config >/dev/null
 

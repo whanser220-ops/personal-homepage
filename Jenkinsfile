@@ -4,9 +4,13 @@ pipeline {
     agent none
 
     options {
-        disableConcurrentBuilds()
+        // A newer main revision supersedes an older deployment. Keeping stale
+        // revisions alive only consumes the single Docker agent.
+        disableConcurrentBuilds(abortPrevious: true)
+        buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '5'))
         skipDefaultCheckout(true)
         timestamps()
+        timeout(time: 45, unit: 'MINUTES')
     }
 
     triggers {
@@ -76,11 +80,19 @@ printf 'SOURCE_COMMIT_SHA=%s\n' "$(git rev-parse --short HEAD)" > .ci/source.env
 '''
                 // Do not transfer the controller's Git object database to the agent.
                 stash name: 'source', includes: '**/*', excludes: '.git/**', useDefaultExcludes: false
+                // Deployment runs on a fresh ephemeral agent, so carry the
+                // runtime manifest explicitly instead of relying on stale
+                // server-side copies.
+                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf'
             }
         }
 
         stage('Build and Push Image') {
             agent { label 'personal-homepage-docker-agent' }
+            options {
+                retry(2)
+                timeout(time: 30, unit: 'MINUTES')
+            }
             steps {
                 deleteDir()
                 unstash 'source'
@@ -140,8 +152,13 @@ docker push "$latest_image_ref"
 
         stage('Deploy from Harbor') {
             agent { label 'personal-homepage-docker-agent' }
+            options {
+                retry(2)
+                timeout(time: 20, unit: 'MINUTES')
+            }
             steps {
                 deleteDir()
+                unstash 'deploy-manifest'
                 unstash 'build-metadata'
                 withCredentials([
                     sshUserPrivateKey(
@@ -160,6 +177,27 @@ set -euo pipefail
 
 . .ci/image.env
 
+deploy_files=(
+    compose.yml
+    deploy/deploy-from-image.sh
+    deploy/nginx-personal-homepage.conf
+)
+for deploy_file in "${deploy_files[@]}"; do
+    if [ ! -f "$deploy_file" ]; then
+        echo "Missing deployment file from Jenkins stash: $deploy_file" >&2
+        exit 2
+    fi
+done
+
+# Finish the archive before opening SSH. A failed tar must never leave the
+# remote command free to reuse files from a previous deployment.
+deploy_archive="$(mktemp)"
+cleanup_deploy_archive() {
+    rm -f "$deploy_archive"
+}
+trap cleanup_deploy_archive EXIT
+tar -cf "$deploy_archive" "${deploy_files[@]}"
+
 ssh_opts=(
     -i "$DEPLOY_SSH_KEY"
     -p "$DEPLOY_PORT"
@@ -176,7 +214,7 @@ for attempt in 1 2 3; do
     {
         {
             printf '%s\\n%s\\n%s\\n' "$REGISTRY_USERNAME" "$REGISTRY_PASSWORD" "$IMAGE_REF"
-            tar -cf - compose.yml deploy/deploy-from-image.sh deploy/nginx-personal-homepage.conf
+            cat "$deploy_archive"
         } | ssh "${ssh_opts[@]}" "$DEPLOY_SSH_USER@$DEPLOY_HOST" \
             "set -eu; read -r REGISTRY_USERNAME; read -r REGISTRY_PASSWORD; read -r APP_IMAGE; mkdir -p '$DEPLOY_PATH'; tar -xf - -C '$DEPLOY_PATH'; export REGISTRY_USERNAME REGISTRY_PASSWORD APP_IMAGE; cd '$DEPLOY_PATH' && chmod +x deploy/deploy-from-image.sh && REGISTRY_HOST='$REGISTRY_HOST' REGISTRY_PROJECT='$REGISTRY_PROJECT' APP_NAME='$APP_NAME' bash deploy/deploy-from-image.sh"
     }
@@ -203,12 +241,20 @@ done
         stage('Verify Site') {
             agent { label 'built-in' }
             steps {
+                retry(3) {
                 sh '''#!/usr/bin/env bash
 set -euo pipefail
 
-curl --fail --silent --show-error http://1.117.232.198/ -o homepage.html
+curl --fail --silent --show-error --connect-timeout 10 --max-time 30 http://1.117.232.198/api/health \
+    | grep -q '"ok":true'
+curl --fail --silent --show-error --connect-timeout 10 --max-time 30 http://1.117.232.198/ -o homepage.html
 grep -q '/_next/static/' homepage.html
+for route in about articles projects build-monitor; do
+    curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+        "http://1.117.232.198/$route" -o /dev/null
+done
 '''
+                }
             }
         }
     }

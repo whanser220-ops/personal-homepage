@@ -170,7 +170,7 @@ docker socket: /var/run/docker.sock mounted into agent
 - Pipeline 在 agent 内执行 checkout、`docker build` 和 `docker push`。
 - Agent 容器通过挂载的宿主机 Docker socket 构建镜像；镜像标签写入 Harbor 仓库地址。
 - Pipeline 使用 Jenkins 凭据 `bundle-report-ssh-key` SSH 到宿主机网关 `172.17.0.1`。
-- Pipeline 只把 `compose.yml`、`deploy/deploy-from-image.sh` 和 Nginx 配置同步到 `/opt/personal-homepage`。
+- Pipeline 将 `compose.yml`、`deploy/deploy-from-image.sh` 和 Nginx 配置作为独立的 Jenkins stash 传给部署 agent，先完整生成归档，再同步到 `/opt/personal-homepage`；缺文件或传输不完整时不会继续沿用服务器旧文件。
 - 宿主机执行 `/opt/personal-homepage/deploy/deploy-from-image.sh`，只做 `docker pull` 和 `docker compose up`。
 - 镜像发布到本机 Harbor：`127.0.0.1:18081/personal-homepage/personal-homepage`。
 - Harbor 如果运行在 Windows 本机，云服务器需要反向 SSH 隧道才能访问同一个 `127.0.0.1:18081` registry 地址；Jenkins 控制器容器内通过宿主机桥接地址 `172.17.0.1:18081` 检查 Harbor 可达性。
@@ -194,6 +194,7 @@ docker push 127.0.0.1:18081/personal-homepage/personal-homepage:latest
 确保 PostgreSQL 容器存在且可用
 登录 Harbor
 docker pull 127.0.0.1:18081/personal-homepage/personal-homepage:<commit>
+清理云主机上已经不再使用的 Docker builder cache
 docker compose up -d --no-build --force-recreate personal-homepage
 检查 /api/health
 安装 Nginx 配置
@@ -203,6 +204,8 @@ systemctl reload nginx
 ```
 
 如果新应用容器健康检查失败，脚本会尝试回滚到之前运行的镜像。
+
+流水线只保留最近 20 次构建；同一时间有新 `main` 提交到达时，会终止已过时的部署并只继续最新版本。构建和部署阶段会在临时 agent 通道中断时重新申请 agent 后重试。
 
 ## 当前验证结果
 
