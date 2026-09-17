@@ -2,10 +2,10 @@
   "articles": [
     {
       "id": "computer-state",
-      "title": "状态：计算机如何记住“现在是什么”",
+      "title": "计算机中的状态：谁保存了“现在”，谁决定下一步？",
       "slug": "computer-state",
       "status": "published",
-      "concepts": ["state", "session", "agent-message"]
+      "concepts": ["state", "session", "runtime-state", "business-state", "context-reconstruction"]
     },
     {
       "id": "message-system",
@@ -22,12 +22,25 @@
       "concepts": ["message-event", "event-dispatch", "callback"]
     }
   ],
+  "concepts": [
+    { "id": "state", "name": "状态", "definition": "某个对象在某个时间点、会影响下一步行为的当前事实", "articles": ["computer-state"] },
+    { "id": "session", "name": "会话", "definition": "把后续操作关联到同一条持续工作的标识与边界", "articles": ["computer-state"] },
+    { "id": "runtime-state", "name": "运行时状态", "definition": "当前进程或 Agent 循环中的模型、队列、流式输出和待处理调用", "articles": ["computer-state"] },
+    { "id": "business-state", "name": "业务状态", "definition": "由业务规则和权威执行者确认的任务、角色或世界当前事实", "articles": ["computer-state"] },
+    { "id": "context-reconstruction", "name": "上下文重建", "definition": "从历史和动态信息中筛选、压缩、转换出本次模型请求", "articles": ["computer-state", "message-system"] },
+    { "id": "agent-message", "name": "AgentMessage", "definition": "Agent 内部用于表达对话、工具结果和扩展记录的消息类型", "articles": ["message-system"] },
+    { "id": "message-event", "name": "消息事件", "definition": "消息或运行过程发生变化时供外部观察者接收的通知", "articles": ["message-system", "event-driven"] },
+    { "id": "event-dispatch", "name": "事件分发", "definition": "事件产生后查找已注册监听器并调用回调的运行时过程", "articles": ["event-driven"] }
+  ],
+  "groups": [
+    { "id": "state-and-execution", "question": "系统如何从当前事实走到下一步？", "description": "连接状态、消息、上下文和事件的执行边界", "articles": ["computer-state", "message-system", "event-driven"] }
+  ],
   "relations": [
     {
       "from": "computer-state",
       "to": "message-system",
       "type": "mechanism-extension",
-      "reason": "状态文章说明消息历史是 Agent 的可继续状态；本篇进一步拆开消息结构和恢复前的上下文重建。"
+      "reason": "状态文章先区分会话记录、运行时状态和本轮上下文；消息系统文章再具体拆开 AgentMessage、消息更新和队列如何承载这些变化。"
     },
     {
       "from": "message-system",

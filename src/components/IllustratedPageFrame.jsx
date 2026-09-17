@@ -55,9 +55,9 @@ export function PortfolioNavigation({ active }) {
   );
 }
 
-export function IllustratedPageFrame({ active, eyebrow, title, description, children, showHero = true }) {
+export function IllustratedPageFrame({ active, eyebrow, title, description, children, showHero = true, readingPage = false }) {
   return (
-    <main className={styles.illustratedPage}>
+    <main className={`${styles.illustratedPage} ${readingPage ? styles.readingPage : ""}`}>
       <img
         alt=""
         aria-hidden="true"

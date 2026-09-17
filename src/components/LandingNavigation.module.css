@@ -22,6 +22,22 @@
   font-family: Georgia, "STKaiti", "KaiTi", "Microsoft YaHei", serif;
 }
 
+.readingPage {
+  background: #faf9f5;
+  color: #262621;
+  font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
+}
+
+.readingPage .archiveWallImage,
+.readingPage .archiveScrim {
+  display: none;
+}
+
+.readingPage .archiveBody {
+  width: min(100%, 1240px);
+  padding-top: 22px;
+}
+
 :global(.dark) .noteHomepage,
 :global(.dark) .illustratedPage {
   --paper: #382e27;
@@ -532,6 +548,10 @@
   overflow: visible;
   overflow-x: clip;
   background: #cdb99f;
+}
+
+.illustratedPage.readingPage {
+  background: #faf9f5;
 }
 
 .archiveWallImage {
