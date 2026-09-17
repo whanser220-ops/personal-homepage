@@ -128,7 +128,7 @@ prune_old_app_images() {
         else
             removable_refs+=("$image_ref")
         fi
-    done < <(docker_cli image ls "$IMAGE_REPOSITORY" --format '{{.Repository}}:{{.Tag}} {{.ID}}')
+    done < <(docker_cli image ls --no-trunc "$IMAGE_REPOSITORY" --format '{{.Repository}}:{{.Tag}} {{.ID}}')
 
     if [ "${#removable_refs[@]}" -gt 0 ]; then
         docker_cli image rm "${removable_refs[@]}" >/dev/null 2>&1 || \
