@@ -69,7 +69,8 @@ git config --global protocol.version 0
                         ]]
                     ])
                 }
-                stash name: 'source', useDefaultExcludes: false
+                // Do not transfer the controller's Git object database to the agent.
+                stash name: 'source', includes: '**/*', excludes: '.git/**', useDefaultExcludes: false
             }
         }
 
