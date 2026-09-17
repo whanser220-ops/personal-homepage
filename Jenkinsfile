@@ -1,5 +1,7 @@
 pipeline {
-    agent { label 'personal-homepage-docker-agent' }
+    // Keep the GitHub checkout on the controller, where the warmed Git cache
+    // lives. Docker agents receive the source through Jenkins' local stash.
+    agent none
 
     options {
         disableConcurrentBuilds()
@@ -26,6 +28,7 @@ pipeline {
 
     stages {
         stage('Prepare GitHub SSH Host Key') {
+            agent { label 'built-in' }
             steps {
                 sh '''#!/usr/bin/env bash
 set -euo pipefail
@@ -49,16 +52,21 @@ git config --global protocol.version 0
         }
 
         stage('Record SCM Revision') {
+            agent { label 'built-in' }
             steps {
                 // Records BuildData so GitHub push webhooks can detect new main revisions.
                 retry(3) {
                     checkout scm
                 }
+                stash name: 'source', useDefaultExcludes: false
             }
         }
 
         stage('Build and Push Image') {
+            agent { label 'personal-homepage-docker-agent' }
             steps {
+                deleteDir()
+                unstash 'source'
                 withCredentials([usernamePassword(
                     credentialsId: 'harbor-personal-homepage',
                     usernameVariable: 'REGISTRY_USERNAME',
@@ -107,12 +115,16 @@ docker build "${build_args[@]}" \
 docker push "$image_ref"
 docker push "$latest_image_ref"
 '''
+                    stash name: 'build-metadata', includes: '.ci/image.env'
                 }
             }
         }
 
         stage('Deploy from Harbor') {
+            agent { label 'personal-homepage-docker-agent' }
             steps {
+                deleteDir()
+                unstash 'build-metadata'
                 withCredentials([
                     sshUserPrivateKey(
                         credentialsId: 'bundle-report-ssh-key',
@@ -171,6 +183,7 @@ done
         }
 
         stage('Verify Site') {
+            agent { label 'built-in' }
             steps {
                 sh '''#!/usr/bin/env bash
 set -euo pipefail
