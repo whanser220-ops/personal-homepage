@@ -12,6 +12,7 @@ REGISTRY_HOST="${REGISTRY_HOST:-127.0.0.1:18081}"
 REGISTRY_PROJECT="${REGISTRY_PROJECT:-personal-homepage}"
 IMAGE_REPOSITORY="${IMAGE_REPOSITORY:-${REGISTRY_HOST}/${REGISTRY_PROJECT}/${APP_NAME}}"
 APP_IMAGE="${APP_IMAGE:-${IMAGE_REPOSITORY}:latest}"
+APP_IMAGE_KEEP="${APP_IMAGE_KEEP:-3}"
 REGISTRY_AUTH_FILE="${REGISTRY_AUTH_FILE:-/etc/personal-homepage/registry.env}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-personal-homepage-postgres}"
 POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:16-alpine}"
@@ -94,6 +95,46 @@ reclaim_obsolete_build_cache() {
     if ! docker_cli builder prune --all --force >/dev/null; then
         echo "Warning: unable to prune unused Docker builder cache." >&2
     fi
+}
+
+prune_old_app_images() {
+    if ! [[ "$APP_IMAGE_KEEP" =~ ^[1-9][0-9]*$ ]]; then
+        echo "APP_IMAGE_KEEP must be a positive integer." >&2
+        return 1
+    fi
+
+    local current_id image_ref image_id
+    local kept_count=0
+    local -A kept_ids=()
+    local -a removable_refs=()
+
+    current_id="$(docker_cli image inspect --format '{{.Id}}' "$APP_IMAGE" 2>/dev/null || true)"
+    if [ -n "$current_id" ]; then
+        kept_ids["$current_id"]=1
+        kept_count=1
+    fi
+
+    # Docker lists newest images first. Keep the active image plus the newest
+    # distinct predecessors so an operator still has immediate rollback tags.
+    while read -r image_ref image_id; do
+        [ -n "$image_ref" ] || continue
+        if [ -n "${kept_ids[$image_id]+x}" ]; then
+            continue
+        fi
+
+        if [ "$kept_count" -lt "$APP_IMAGE_KEEP" ]; then
+            kept_ids["$image_id"]=1
+            kept_count=$((kept_count + 1))
+        else
+            removable_refs+=("$image_ref")
+        fi
+    done < <(docker_cli image ls "$IMAGE_REPOSITORY" --format '{{.Repository}}:{{.Tag}} {{.ID}}')
+
+    if [ "${#removable_refs[@]}" -gt 0 ]; then
+        docker_cli image rm "${removable_refs[@]}" >/dev/null 2>&1 || \
+            echo "Warning: some old application image tags could not be removed." >&2
+    fi
+    docker_cli image prune --force >/dev/null 2>&1 || true
 }
 
 previous_image="$(docker_cli inspect --format '{{.Config.Image}}' "$CONTAINER_NAME" 2>/dev/null || true)"
@@ -206,5 +247,6 @@ sudo systemctl reload nginx
 
 curl --fail --silent --show-error "$HEALTH_URL" >/dev/null
 curl --fail --silent --show-error "$METRICS_URL" >/dev/null
+prune_old_app_images
 
 echo "Deployed ${APP_IMAGE} on 127.0.0.1:${HOST_PORT}"

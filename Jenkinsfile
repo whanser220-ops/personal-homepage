@@ -144,6 +144,16 @@ docker build "${build_args[@]}" \
 
 docker push "$image_ref"
 docker push "$latest_image_ref"
+
+# Harbor is the release store; the build engine only needs the latest tag for
+# layer reuse. Remove old commit tags for this application so repeated deploys
+# cannot slowly fill the local WSL Docker disk.
+while IFS= read -r local_image_ref; do
+    if [ -n "$local_image_ref" ] && [ "$local_image_ref" != "$latest_image_ref" ]; then
+        docker image rm "$local_image_ref" >/dev/null 2>&1 || true
+    fi
+done < <(docker image ls "$image_repository" --format '{{.Repository}}:{{.Tag}}')
+docker image prune --force --filter 'until=168h' >/dev/null 2>&1 || true
 '''
                     stash name: 'build-metadata', includes: '.ci/image.env'
                 }
