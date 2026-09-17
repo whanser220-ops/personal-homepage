@@ -1,21 +1,8 @@
 import Link from "next/link";
 import { BookOpen, FolderKanban, Home, UserRound } from "lucide-react";
-import { Noto_Sans_SC, Noto_Serif_SC } from "next/font/google";
 
 import { ThemeToggle } from "./ThemeToggle.jsx";
 import styles from "./LandingNavigation.module.css";
-
-const articleSerif = Noto_Serif_SC({
-  display: "swap",
-  preload: false,
-  variable: "--font-article-serif",
-});
-
-const articleSans = Noto_Sans_SC({
-  display: "swap",
-  preload: false,
-  variable: "--font-article-sans",
-});
 
 const navigationItems = [
   { href: "/", key: "home", label: "首页", icon: Home },
@@ -70,7 +57,7 @@ export function PortfolioNavigation({ active }) {
 
 export function IllustratedPageFrame({ active, eyebrow, title, description, children, showHero = true }) {
   return (
-    <main className={`${styles.illustratedPage} ${showHero ? "" : `${styles.articlePage} ${articleSerif.variable} ${articleSans.variable}`}`}>
+    <main className={`${styles.illustratedPage} ${showHero ? "" : styles.articlePage}`}>
       {showHero ? (
         <>
           <img

@@ -552,7 +552,7 @@
 .illustratedPage.articlePage {
   background: #FAF9F5;
   color: #262621;
-  font-family: var(--font-article-serif), "Noto Serif SC", "Songti SC", "STSong", serif;
+  font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
 }
 
 :global(.dark) .illustratedPage.articlePage {
