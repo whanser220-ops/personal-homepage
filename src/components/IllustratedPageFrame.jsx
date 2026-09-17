@@ -1,8 +1,21 @@
 import Link from "next/link";
 import { BookOpen, FolderKanban, Home, UserRound } from "lucide-react";
+import { Noto_Sans_SC, Noto_Serif_SC } from "next/font/google";
 
 import { ThemeToggle } from "./ThemeToggle.jsx";
 import styles from "./LandingNavigation.module.css";
+
+const articleSerif = Noto_Serif_SC({
+  display: "swap",
+  preload: false,
+  variable: "--font-article-serif",
+});
+
+const articleSans = Noto_Sans_SC({
+  display: "swap",
+  preload: false,
+  variable: "--font-article-sans",
+});
 
 const navigationItems = [
   { href: "/", key: "home", label: "首页", icon: Home },
@@ -57,16 +70,20 @@ export function PortfolioNavigation({ active }) {
 
 export function IllustratedPageFrame({ active, eyebrow, title, description, children, showHero = true }) {
   return (
-    <main className={styles.illustratedPage}>
-      <img
-        alt=""
-        aria-hidden="true"
-        className={styles.archiveWallImage}
-        height="1271"
-        src="/assets/hero-character-wall.png"
-        width="1672"
-      />
-      <div aria-hidden="true" className={styles.archiveScrim} />
+    <main className={`${styles.illustratedPage} ${showHero ? "" : `${styles.articlePage} ${articleSerif.variable} ${articleSans.variable}`}`}>
+      {showHero ? (
+        <>
+          <img
+            alt=""
+            aria-hidden="true"
+            className={styles.archiveWallImage}
+            height="1271"
+            src="/assets/hero-character-wall.png"
+            width="1672"
+          />
+          <div aria-hidden="true" className={styles.archiveScrim} />
+        </>
+      ) : null}
 
       <header className={styles.archiveTopbar}>
         <IdentityCard />

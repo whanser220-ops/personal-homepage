@@ -22,6 +22,21 @@
   font-family: Georgia, "STKaiti", "KaiTi", "Microsoft YaHei", serif;
 }
 
+.articlePage {
+  background: #FAF9F5;
+  color: #262621;
+  font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+}
+
+.articlePage .archiveBody {
+  width: min(1180px, calc(100% - 44px));
+}
+
+:global(.dark) .articlePage {
+  background: #1e1916;
+  color: #f5e8dc;
+}
+
 :global(.dark) .noteHomepage,
 :global(.dark) .illustratedPage {
   --paper: #382e27;
@@ -532,6 +547,17 @@
   overflow: visible;
   overflow-x: clip;
   background: #cdb99f;
+}
+
+.illustratedPage.articlePage {
+  background: #FAF9F5;
+  color: #262621;
+  font-family: var(--font-article-serif), "Noto Serif SC", "Songti SC", "STSong", serif;
+}
+
+:global(.dark) .illustratedPage.articlePage {
+  background: #1e1916;
+  color: #f5e8dc;
 }
 
 .archiveWallImage {
