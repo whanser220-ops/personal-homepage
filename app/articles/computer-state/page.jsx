@@ -13,7 +13,6 @@ export default function ComputerStateArticlePage() {
       description="技术笔记、项目复盘，以及把想法逐渐说清楚的过程。"
       eyebrow="ARTICLE / COMPUTER STATE"
       showHero={false}
-      readingPage
       title="状态"
     >
       <ComputerStateArticle />

@@ -121,8 +121,8 @@
   overflow-x: auto;
   border: 1px solid color-mix(in srgb, var(--blue-deep) 18%, var(--line));
   border-radius: 7px 5px 8px 4px;
-  background: color-mix(in srgb, var(--blue-deep) 7%, var(--paper-bright));
-  color: var(--blue-deep);
+  background: #292522;
+  color: #f7efe7;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 0.83rem;
   line-height: 1.7;
@@ -135,6 +135,25 @@
   background: transparent;
   color: inherit;
   font-size: inherit;
+}
+
+.codeBlock :global(.hljs-keyword),
+.codeBlock :global(.hljs-selector-tag),
+.codeBlock :global(.hljs-built_in),
+.codeBlock :global(.hljs-title.function_) {
+  color: #ffbd72;
+}
+
+.codeBlock :global(.hljs-string),
+.codeBlock :global(.hljs-attr),
+.codeBlock :global(.hljs-number) {
+  color: #b9e6a7;
+}
+
+.codeBlock :global(.hljs-comment),
+.codeBlock :global(.hljs-quote) {
+  color: #aaa19a;
+  font-style: italic;
 }
 
 .articleBody ol {

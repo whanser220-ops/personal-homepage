@@ -22,20 +22,19 @@
   font-family: Georgia, "STKaiti", "KaiTi", "Microsoft YaHei", serif;
 }
 
-.readingPage {
-  background: #faf9f5;
+.articlePage {
+  background: #FAF9F5;
   color: #262621;
-  font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
 }
 
-.readingPage .archiveWallImage,
-.readingPage .archiveScrim {
-  display: none;
+.articlePage .archiveBody {
+  width: min(1180px, calc(100% - 44px));
 }
 
-.readingPage .archiveBody {
-  width: min(100%, 1240px);
-  padding-top: 22px;
+:global(.dark) .articlePage {
+  background: #1e1916;
+  color: #f5e8dc;
 }
 
 :global(.dark) .noteHomepage,
@@ -550,8 +549,15 @@
   background: #cdb99f;
 }
 
-.illustratedPage.readingPage {
-  background: #faf9f5;
+.illustratedPage.articlePage {
+  background: #FAF9F5;
+  color: #262621;
+  font-family: var(--font-article-serif), "Noto Serif SC", "Songti SC", "STSong", serif;
+}
+
+:global(.dark) .illustratedPage.articlePage {
+  background: #1e1916;
+  color: #f5e8dc;
 }
 
 .archiveWallImage {

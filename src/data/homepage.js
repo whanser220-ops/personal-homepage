@@ -7,6 +7,14 @@ export const navItems = [
 export const articles = [
   {
     status: "已发布",
+    title: "工具系统：模型说“调用工具”后，代码究竟怎么执行",
+    body: "从 toolCall 开始，追踪 Agent Runtime 如何查找工具、校验参数、执行代码并回填结果。",
+    date: "09-17",
+    href: "/articles/tool-execution",
+    tags: ["工具系统", "Pi Agent", "架构"],
+  },
+  {
+    status: "已发布",
     title: "消息系统：Pi Agent 怎样把“发生了什么”传给模型和界面",
     body: "从 AgentMessage、Message 到 message_update、steer 和 followUp，看懂 Pi Agent 的消息系统。",
     date: "09-17",
