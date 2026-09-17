@@ -56,7 +56,18 @@ git config --global protocol.version 0
             steps {
                 // Records BuildData so GitHub push webhooks can detect new main revisions.
                 retry(3) {
-                    checkout scm
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: '*/main']],
+                        doGenerateSubmoduleConfigurations: false,
+                        extensions: [[$class: 'CloneOption', noTags: true, shallow: false]],
+                        submoduleCfg: [],
+                        userRemoteConfigs: [[
+                            credentialsId: 'personal-homepage-github-deploy-key',
+                            refspec: '+refs/heads/main:refs/remotes/origin/main',
+                            url: 'ssh://git@ssh.github.com:443/whanser220-ops/personal-homepage.git'
+                        ]]
+                    ])
                 }
                 stash name: 'source', useDefaultExcludes: false
             }
