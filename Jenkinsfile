@@ -69,6 +69,11 @@ git config --global protocol.version 0
                         ]]
                     ])
                 }
+                sh '''#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p .ci
+printf 'SOURCE_COMMIT_SHA=%s\n' "$(git rev-parse --short HEAD)" > .ci/source.env
+'''
                 // Do not transfer the controller's Git object database to the agent.
                 stash name: 'source', includes: '**/*', excludes: '.git/**', useDefaultExcludes: false
             }
@@ -87,7 +92,8 @@ git config --global protocol.version 0
 sh '''#!/usr/bin/env bash
 set -euo pipefail
 
-commit_sha="$(git rev-parse --short HEAD)"
+. .ci/source.env
+commit_sha="$SOURCE_COMMIT_SHA"
 image_repository="${REGISTRY_HOST}/${REGISTRY_PROJECT}/${APP_NAME}"
 image_ref="${image_repository}:${commit_sha}"
 latest_image_ref="${image_repository}:latest"
