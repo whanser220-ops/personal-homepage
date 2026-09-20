@@ -639,6 +639,16 @@
   text-shadow: none;
 }
 
+.archiveMapLink {
+  margin-left: auto;
+  color: var(--olive);
+  font-family: "Microsoft YaHei", sans-serif;
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .articleArchiveGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -2,13 +2,20 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import hljs from "highlight.js/lib/core";
+import javascript from "highlight.js/lib/languages/javascript";
+import json from "highlight.js/lib/languages/json";
 
 import styles from "./EventDrivenArticle.module.css";
+
+hljs.registerLanguage("javascript", javascript);
+hljs.registerLanguage("json", json);
 
 const sections = [
   { id: "scene", label: "从 Pi 的一行代码开始" },
   { id: "event", label: "事件是数据，不是函数" },
   { id: "chain", label: "事件到底怎样触发回调" },
+  { id: "direction", label: "不要把两种方向画反" },
   { id: "boundary", label: "事件驱动不等于异步" },
   { id: "architecture", label: "从回调 API 到系统架构" },
   { id: "reliability", label: "跨进程后，可靠性才出现" },
@@ -19,8 +26,17 @@ function SourceLink({ href, children }) {
   return <a href={href} rel="noreferrer" target="_blank">{children}</a>;
 }
 
-function CodeBlock({ children }) {
-  return <pre className={styles.codeBlock}><code>{children}</code></pre>;
+function CodeBlock({ children, language = "javascript" }) {
+  const code = String(children).replace(/^\n/, "").replace(/\n\s*$/, "");
+  const highlighted = language === "text"
+    ? code
+    : hljs.highlight(code, { language }).value;
+
+  return (
+    <pre className={styles.codeBlock} data-language={language}>
+      <code dangerouslySetInnerHTML={{ __html: highlighted }} />
+    </pre>
+  );
 }
 
 function TocLinks({ activeId }) {
@@ -80,6 +96,7 @@ export function EventDrivenArticle() {
   return (
     <article className={styles.articleShell}>
       <Link className={styles.backLink} href="/articles">← 返回文章列表</Link>
+      <Link className={styles.mapLink} href="/articles/knowledge-map">查看这篇文章在知识地图中的位置 →</Link>
 
       <header className={styles.articleHeader}>
         <p className={styles.kicker}>学习文章 · 事件驱动</p>
@@ -125,7 +142,7 @@ await agent.prompt("用一句话介绍你自己。");`}</CodeBlock>
 
           <h2 id="event">事件是数据，不是函数</h2>
           <p>一个事件首先是对“某件事发生了”的描述。例如 Pi 的事件可以是一个带类型的数据对象：</p>
-          <CodeBlock>{`{
+          <CodeBlock language="json">{`{
   "type": "message_update",
   "assistantMessageEvent": {
     "type": "text_delta",
@@ -149,7 +166,7 @@ await agent.prompt("用一句话介绍你自己。");`}</CodeBlock>
 
           <h2 id="chain">事件到底怎样触发回调</h2>
           <p>把事件系统压缩成最小实现，三个动作就足够了。订阅保存函数，发布查找函数，最后由分发器直接调用它：</p>
-          <CodeBlock>{`class EventSource {
+          <CodeBlock language="javascript">{`class EventSource {
   listeners = new Set();
 
   subscribe(listener) {
@@ -164,18 +181,31 @@ await agent.prompt("用一句话介绍你自己。");`}</CodeBlock>
   }
 }`}</CodeBlock>
           <p>
-            在本机的 Pi 0.85.1 实现里，<code>Agent.subscribe</code> 保存 listener，内部的 <code>_emit</code> 遍历 listeners 并调用它们。Agent loop 会主动发出生命周期事件；模型供应商返回一段文字增量后，核心把它包装成 <code>message_update</code>，再沿同一条分发路径送到你的 listener。也就是说，<code>text_delta</code> 是模型流中的细粒度事件，<code>message_update</code> 是 Agent 对外暴露的更高一层事件。
+            在本机安装的 Pi 0.85.1 实现里，<code>Agent.subscribe</code> 把 listener 放入一个 <code>Set</code>，返回的函数负责移除它。Agent loop 把事件交给 <code>processEvents(event)</code>；这个方法先更新 Agent 自己的运行时状态，再按注册顺序执行 <code>await listener(event, signal)</code>。模型供应商返回一段文字增量后，Agent loop 把它包装成 <code>message_update</code>，再沿这条分发路径送到你的 listener。也就是说，<code>text_delta</code> 是模型流中的细粒度事件，<code>message_update</code> 是 Agent 对外暴露的更高一层事件。
           </p>
           <p>因此可以把这段运行过程逐步读成：</p>
           <ol>
             <li><code>subscribe</code> 把回调函数放进监听器集合。</li>
             <li><code>prompt</code> 启动 Agent loop，并把用户输入加入上下文。</li>
             <li>Agent loop 发出开始事件；模型流返回 <code>text_delta</code>。</li>
-            <li>核心把增量更新包装成 <code>message_update</code>，再执行 <code>_emit(event)</code>。</li>
+            <li>核心把增量更新包装成 <code>message_update</code>，再交给 <code>processEvents(event)</code>。</li>
             <li>你的 listener 收到事件，累加文字、显示界面或记录错误。</li>
           </ol>
           <p>
             这就是“控制反转”的具体含义。普通调用是当前代码写出 <code>target()</code>；事件回调是当前代码先登记 <code>listener</code>，未来由事件源在条件满足时调用它。注册并不等于执行，类型名也不等于触发器。
+          </p>
+
+          <h2 id="direction">不要把两种方向的箭头画反了</h2>
+          <p>
+            这里还有一个比术语更容易造成误解的地方：上面的 <code>subscribe</code> 是“外部代码观察 Agent”。调用 <code>subscribe</code> 的是你的应用代码，事件的流向是 <strong>Agent → 外部观察者</strong>；它不表示 Agent 开始监听 Webhook、定时器或按钮。
+          </p>
+          <Diagram
+            alt="两种事件方向对比：Agent 通过 subscribe 通知外部观察者，外部事件先进入应用层再通过 session.prompt 触发 Agent"
+            caption="图 2：观察 Agent 与从外部事件触发 Agent 是两条相反方向的控制流。应用层负责把外部输入变成一次有边界的 Agent 调用。"
+            src="/assets/articles/event-driven-directions.png"
+          />
+          <p>
+            反方向通常是 <strong>外部事件 → 应用层 → Agent</strong>：Webhook、定时器或按钮先到达应用层，由应用层做路由、鉴权、去重和并发控制，然后主动调用 <code>session.prompt()</code> 或其他业务入口。这样画箭头，才能把“谁产生事件”和“谁决定启动 Agent”分开。
           </p>
 
           <h2 id="boundary">事件驱动不等于异步</h2>
@@ -183,7 +213,7 @@ await agent.prompt("用一句话介绍你自己。");`}</CodeBlock>
             这三个词经常同时出现，却回答不同问题：事件驱动问“谁决定调用谁”；异步问“当前函数是否把等待交给 Promise 或其他调度机制”；事件循环问“运行时何时从队列中取出下一项工作”。
           </p>
           <p>事件可以同步分发。Node.js 的 <SourceLink href="https://nodejs.org/api/events.html#asynchronous-vs-synchronous">EventEmitter 文档</SourceLink>明确说明，<code>emit</code> 会按注册顺序同步调用监听器：</p>
-          <CodeBlock>{`emitter.on("paid", () => console.log("handler"));
+          <CodeBlock language="javascript">{`emitter.on("paid", () => console.log("handler"));
 emitter.emit("paid");
 console.log("after");
 
@@ -208,7 +238,7 @@ console.log("after");
           </p>
           <Diagram
             alt="事件驱动系统架构：生产者发布事实，事件通道转发，多个消费者分别处理通知、统计和索引"
-            caption="图 2：系统级事件驱动把生产者与多个消费者隔开，但事件契约和失败处理仍然存在。"
+            caption="图 3：系统级事件驱动把生产者与多个消费者隔开，但事件契约和失败处理仍然存在。"
             src="/assets/articles/event-driven-system-boundary.svg"
           />
           <p>

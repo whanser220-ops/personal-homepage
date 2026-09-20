@@ -10,6 +10,7 @@ export function ArticlesPage() {
       <div className={styles.archiveSectionHeading}>
         <BookOpen aria-hidden="true" size={25} />
         <span>THOUGHTS ON PAPER</span>
+        <Link className={styles.archiveMapLink} href="/articles/knowledge-map">查看知识地图 →</Link>
       </div>
 
       <div className={styles.articleArchiveGrid}>

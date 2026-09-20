@@ -1,0 +1,306 @@
+.mapShell {
+  width: min(100%, 1160px);
+  margin: 0 auto;
+  padding: 28px clamp(20px, 4vw, 54px) 92px;
+  color: #262621;
+  font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+}
+
+.mapHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 28px;
+  align-items: end;
+  padding: clamp(28px, 5vw, 58px) 0 34px;
+  border-bottom: 1px solid #c9c3b7;
+}
+
+.mapHeader h1 {
+  margin: 0;
+  color: #344f67;
+  font-size: clamp(2.5rem, 6vw, 4.7rem);
+  letter-spacing: -0.06em;
+}
+
+.mapHeader p:not(.kicker) {
+  max-width: 700px;
+  margin: 20px 0 0;
+  color: #746052;
+  font-size: 1.08rem;
+  line-height: 1.85;
+}
+
+.kicker,
+.detailLabel {
+  margin: 0 0 14px;
+  color: #68784f;
+  font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.backLink {
+  flex: 0 0 auto;
+  color: #344f67;
+  font-size: 0.92rem;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: end;
+  padding: 26px 0 14px;
+}
+
+.controls label {
+  display: grid;
+  gap: 7px;
+  min-width: min(300px, 100%);
+  color: #746052;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.controls input,
+.controls select,
+.focusButton {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #c9c3b7;
+  border-radius: 6px;
+  background: #fff;
+  color: #262621;
+  font: inherit;
+}
+
+.focusButton {
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.focusButton[aria-pressed="true"] {
+  border-color: #68784f;
+  background: #dfe2c5;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding: 10px 0 24px;
+  color: #746052;
+  font-size: 0.84rem;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.dotCausal { background: #c9822b; }
+.dotComposition { background: #68784f; }
+.dotHierarchy { background: #587085; }
+.dotRelated { background: #b8b4a8; }
+
+.mapLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.72fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.conceptGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.conceptCard,
+.conceptCardActive {
+  display: grid;
+  gap: 8px;
+  min-height: 132px;
+  padding: 17px;
+  border: 1px solid #d1cbc0;
+  border-radius: 9px;
+  background: #f1eee5;
+  color: #262621;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.conceptCard:hover,
+.conceptCard:focus-visible,
+.conceptCardActive {
+  border-color: #68784f;
+  box-shadow: 0 10px 26px rgba(54, 45, 36, 0.08);
+}
+
+.conceptCardActive {
+  background: #f6e3d8;
+}
+
+.conceptCard strong,
+.conceptCardActive strong {
+  color: #344f67;
+  font-size: 1.15rem;
+}
+
+.conceptCard small,
+.conceptCardActive small {
+  color: #746052;
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.domain {
+  color: #68784f;
+  font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.detailPanel {
+  position: sticky;
+  top: 112px;
+  padding: 24px;
+  border: 1px solid #d1cbc0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.detailPanel h2 {
+  color: #344f67;
+  font-size: 2rem;
+}
+
+.detailPanel h3 {
+  margin: 27px 0 10px;
+  color: #262621;
+  font-size: 1.05rem;
+}
+
+.detailPanel > p:not(.detailLabel) {
+  color: #746052;
+  line-height: 1.8;
+}
+
+.aliases {
+  color: #68784f;
+  font-size: 0.82rem;
+}
+
+.articleLinks,
+.allRelations ul {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+.articleLinks a {
+  color: #344f67;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.7;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.relationList {
+  display: grid;
+  gap: 8px;
+}
+
+.relationList details {
+  border-top: 1px solid #e2ddd4;
+  padding-top: 8px;
+}
+
+.relationList summary {
+  cursor: pointer;
+  color: #344f67;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.relationList summary span {
+  display: block;
+  color: #68784f;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.relationList p,
+.relationList small {
+  color: #746052;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.allRelations {
+  margin-top: 24px;
+  color: #746052;
+}
+
+.allRelations summary {
+  cursor: pointer;
+  color: #344f67;
+  font-weight: 800;
+}
+
+.allRelations li {
+  margin: 9px 0;
+  line-height: 1.65;
+}
+
+.allRelations b {
+  margin-right: 7px;
+  color: #68784f;
+}
+
+.empty {
+  color: #746052;
+}
+
+@media (max-width: 820px) {
+  .mapHeader {
+    display: block;
+  }
+
+  .backLink {
+    display: inline-block;
+    margin-top: 22px;
+  }
+
+  .mapLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .detailPanel {
+    position: static;
+  }
+}
+
+@media (max-width: 560px) {
+  .mapShell {
+    padding-right: 21px;
+    padding-left: 21px;
+  }
+
+  .conceptGrid {
+    grid-template-columns: 1fr;
+  }
+}

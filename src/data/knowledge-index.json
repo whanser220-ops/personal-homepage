@@ -1,4 +1,6 @@
 {
+  "schemaVersion": 2,
+  "revision": 2,
   "articles": [
     {
       "id": "computer-state",
@@ -19,34 +21,50 @@
       "title": "事件驱动：从 Pi Agent 的回调链路看懂“谁在什么时候调用谁”",
       "slug": "event-driven",
       "status": "published",
-      "concepts": ["message-event", "event-dispatch", "callback"]
+      "concepts": ["event-driven", "event", "event-dispatch", "callback", "event-channel", "external-trigger", "async-control-flow"]
+    },
+    {
+      "id": "tool-execution",
+      "title": "工具系统：模型说“调用工具”后，代码究竟怎么执行",
+      "slug": "tool-execution",
+      "status": "published",
+      "concepts": ["tool-call", "tool-execution"]
     }
   ],
   "concepts": [
-    { "id": "state", "name": "状态", "definition": "某个对象在某个时间点、会影响下一步行为的当前事实", "articles": ["computer-state"] },
-    { "id": "session", "name": "会话", "definition": "把后续操作关联到同一条持续工作的标识与边界", "articles": ["computer-state"] },
-    { "id": "runtime-state", "name": "运行时状态", "definition": "当前进程或 Agent 循环中的模型、队列、流式输出和待处理调用", "articles": ["computer-state"] },
-    { "id": "business-state", "name": "业务状态", "definition": "由业务规则和权威执行者确认的任务、角色或世界当前事实", "articles": ["computer-state"] },
-    { "id": "context-reconstruction", "name": "上下文重建", "definition": "从历史和动态信息中筛选、压缩、转换出本次模型请求", "articles": ["computer-state", "message-system"] },
-    { "id": "agent-message", "name": "AgentMessage", "definition": "Agent 内部用于表达对话、工具结果和扩展记录的消息类型", "articles": ["message-system"] },
-    { "id": "message-event", "name": "消息事件", "definition": "消息或运行过程发生变化时供外部观察者接收的通知", "articles": ["message-system", "event-driven"] },
-    { "id": "event-dispatch", "name": "事件分发", "definition": "事件产生后查找已注册监听器并调用回调的运行时过程", "articles": ["event-driven"] }
+    { "id": "state", "name": "状态", "definition": "某个对象在某个时间点、会影响下一步行为的当前事实", "aliases": ["state"], "domain": "执行基础", "status": "confirmed", "articles": ["computer-state"] },
+    { "id": "session", "name": "会话", "definition": "把后续操作关联到同一条持续工作的标识与边界", "aliases": ["session"], "domain": "执行基础", "status": "confirmed", "articles": ["computer-state"] },
+    { "id": "runtime-state", "name": "运行时状态", "definition": "当前进程或 Agent 循环中的模型、队列、流式输出和待处理调用", "aliases": ["runtime state"], "domain": "执行基础", "status": "confirmed", "articles": ["computer-state"] },
+    { "id": "business-state", "name": "业务状态", "definition": "由业务规则和权威执行者确认的任务、角色或世界当前事实", "aliases": ["business state"], "domain": "执行基础", "status": "confirmed", "articles": ["computer-state"] },
+    { "id": "context-reconstruction", "name": "上下文重建", "definition": "从历史和动态信息中筛选、压缩、转换出本次模型请求", "aliases": ["context reconstruction"], "domain": "执行基础", "status": "confirmed", "articles": ["computer-state"] },
+    { "id": "agent-message", "name": "AgentMessage", "definition": "Agent 内部用于表达对话、工具结果和扩展记录的消息类型", "aliases": ["Agent Message"], "domain": "消息", "status": "confirmed", "articles": ["message-system"] },
+    { "id": "llm-message", "name": "模型消息", "definition": "按模型协议转换后用于请求或解释模型输出的消息表示", "aliases": ["LLM message"], "domain": "消息", "status": "confirmed", "articles": ["message-system"] },
+    { "id": "message-event", "name": "消息事件", "definition": "消息或运行过程发生变化时供外部观察者接收的通知", "aliases": ["message_update"], "domain": "事件", "status": "confirmed", "articles": ["message-system", "event-driven"] },
+    { "id": "steering-queue", "name": "引导队列", "definition": "在 Agent 运行过程中暂存并按规则注入下一步处理的消息队列", "aliases": ["steering queue"], "domain": "消息", "status": "confirmed", "articles": ["message-system"] },
+    { "id": "context-conversion", "name": "上下文转换", "definition": "把内部消息和运行记录转换成模型请求所需结构的过程", "aliases": ["context conversion"], "domain": "消息", "status": "confirmed", "articles": ["message-system"] },
+    { "id": "event-driven", "name": "事件驱动", "definition": "控制流由事实发生后的事件分发来选择和调用处理者，而不是由生产者直接调用固定消费者", "aliases": ["Event-driven", "EDA"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven"] },
+    { "id": "event", "name": "事件", "definition": "对某个已经发生事实的结构化描述；它本身是数据，不是会执行的函数", "aliases": ["event"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven"] },
+    { "id": "event-dispatch", "name": "事件分发", "definition": "事件产生后查找已注册监听器并调用回调的运行时过程", "aliases": ["dispatch", "emit"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven"] },
+    { "id": "callback", "name": "回调", "definition": "先交给另一个对象保存、在约定条件满足时由该对象调用的函数", "aliases": ["callback", "listener"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven"] },
+    { "id": "event-channel", "name": "事件通道", "definition": "在事件生产者和消费者之间负责传递事件的进程内集合、队列或消息基础设施", "aliases": ["event channel", "broker"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven"] },
+    { "id": "external-trigger", "name": "外部触发", "definition": "由 Webhook、定时器、按钮等应用边界外的输入启动一次业务处理", "aliases": ["external event"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven"] },
+    { "id": "async-control-flow", "name": "异步控制流", "definition": "调用者把等待或后续完成交给 Promise、队列或其他调度机制的控制方式", "aliases": ["async", "await"], "domain": "执行与调度", "status": "confirmed", "articles": ["event-driven"] },
+    { "id": "tool-call", "name": "工具调用", "definition": "模型或 Agent 请求应用执行某个具有名称和参数的工具动作", "aliases": ["tool call"], "domain": "工具", "status": "confirmed", "articles": ["tool-execution"] },
+    { "id": "tool-execution", "name": "工具执行", "definition": "运行时校验工具请求、调用实现并把结果回填到 Agent 流程的过程", "aliases": ["tool execution"], "domain": "工具", "status": "confirmed", "articles": ["tool-execution"] }
   ],
   "groups": [
-    { "id": "state-and-execution", "question": "系统如何从当前事实走到下一步？", "description": "连接状态、消息、上下文和事件的执行边界", "articles": ["computer-state", "message-system", "event-driven"] }
+    { "id": "state-and-execution", "question": "系统如何从当前事实走到下一步？", "description": "连接状态、消息、上下文、事件和工具的执行边界", "concepts": ["state", "agent-message", "event-driven", "tool-execution"], "articles": ["computer-state", "message-system", "event-driven", "tool-execution"] }
   ],
   "relations": [
-    {
-      "from": "computer-state",
-      "to": "message-system",
-      "type": "mechanism-extension",
-      "reason": "状态文章先区分会话记录、运行时状态和本轮上下文；消息系统文章再具体拆开 AgentMessage、消息更新和队列如何承载这些变化。"
-    },
-    {
-      "from": "message-system",
-      "to": "event-driven",
-      "type": "comparison-boundary",
-      "reason": "本篇区分消息是状态记录、事件是运行时通知；事件驱动文章继续解释通知如何被分发给回调。"
-    }
-  ]
+    { "id": "r-event-driven-dispatch", "from": "event-driven", "to": "event-dispatch", "type": "composition", "reason": "事件驱动的运行时链路包含事件产生后由分发器选择并调用处理者的步骤。", "scope": "进程内事件通知和系统级事件通道都适用，但可靠投递需要额外机制。", "evidence": "event-driven#chain" },
+    { "id": "r-event-driven-channel", "from": "event-driven", "to": "event-channel", "type": "composition", "reason": "系统级事件驱动需要一个在生产者和消费者之间传递事件的通道。", "scope": "跨进程场景；最小进程内示例可由监听器集合承担。", "evidence": "event-driven#architecture" },
+    { "id": "r-dispatch-callback", "from": "event-dispatch", "to": "callback", "type": "causal", "reason": "分发器遍历注册关系并调用 listener，因而使回调函数在事件到达时执行。", "scope": "Pi 0.85.1 的 processEvents 以及同步事件源；异步 listener 是否被等待取决于具体实现。", "evidence": "event-driven#chain" },
+    { "id": "r-event-message-event", "from": "event", "to": "message-event", "type": "hierarchy", "reason": "消息事件是用来通知消息或运行过程变化的一类事件。", "scope": "Pi Agent 的 message_update 等生命周期通知。", "evidence": "event-driven#event" },
+    { "id": "r-event-async", "from": "event-driven", "to": "async-control-flow", "type": "related", "reason": "事件驱动回答谁根据事实选择处理者，异步控制流回答调用者如何等待；两者可以同时出现，也可以分别出现。", "scope": "进程内回调和跨进程消息均适用。", "evidence": "event-driven#boundary" },
+    { "id": "r-agent-message-event", "from": "agent-message", "to": "message-event", "type": "related", "reason": "AgentMessage 是可继续的内部记录，消息事件是这类记录变化时对外发出的运行时通知。", "scope": "Pi Agent 的消息系统与事件观察边界。", "evidence": "message-system#event-boundary" },
+    { "id": "r-external-trigger-event", "from": "external-trigger", "to": "event", "type": "causal", "reason": "外部输入先被应用层识别为发生的事实，随后才能作为事件或命令进入业务处理；它不自动等于 Agent 订阅。", "scope": "Webhook、定时器和按钮进入应用层的边界。", "evidence": "event-driven#direction" },
+    { "id": "r-tool-call-execution", "from": "tool-call", "to": "tool-execution", "type": "causal", "reason": "工具调用提供名称和参数，运行时据此查找、校验并执行工具。", "scope": "Pi Agent 工具运行时。", "evidence": "tool-execution" }
+  ],
+  "redirects": {},
+  "navigation": { "mapPath": "/articles/knowledge-map", "articlePath": "/articles" }
 }

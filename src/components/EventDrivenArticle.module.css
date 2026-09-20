@@ -7,8 +7,16 @@
 
 .backLink {
   display: inline-flex;
-  margin-bottom: 34px;
+  margin: 0 24px 34px 0;
   color: var(--blue-deep);
+  font-size: 0.92rem;
+  font-weight: 760;
+}
+
+.mapLink {
+  display: inline-flex;
+  margin-bottom: 34px;
+  color: var(--olive);
   font-size: 0.92rem;
   font-weight: 760;
 }
@@ -56,7 +64,7 @@
   max-width: 790px;
   margin: 28px 0 0;
   color: var(--muted-ink);
-  font-family: "Microsoft YaHei", sans-serif;
+  font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
   font-size: clamp(1.08rem, 1.7vw, 1.28rem);
   line-height: 1.8;
 }
@@ -81,7 +89,7 @@
 .articleBody {
   min-width: 0;
   padding-top: clamp(38px, 6vw, 62px);
-  font-family: "Microsoft YaHei", sans-serif;
+  font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
   font-size: 1.04rem;
   line-height: 1.9;
 }
@@ -110,7 +118,7 @@
   border-radius: 4px;
   background: color-mix(in srgb, var(--olive-soft) 55%, var(--paper-bright));
   color: var(--blue-deep);
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
   font-size: 0.87em;
 }
 
@@ -123,7 +131,7 @@
   border-radius: 7px 5px 8px 4px;
   background: #292522;
   color: #f7efe7;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
   font-size: 0.83rem;
   line-height: 1.7;
   white-space: pre;
@@ -154,6 +162,18 @@
 .codeBlock :global(.hljs-quote) {
   color: #aaa19a;
   font-style: italic;
+}
+
+.codeBlock :global(.hljs-title),
+.codeBlock :global(.hljs-title.function_),
+.codeBlock :global(.hljs-variable.language_),
+.codeBlock :global(.hljs-built_in) {
+  color: #f78c6c;
+}
+
+.codeBlock :global(.hljs-params),
+.codeBlock :global(.hljs-variable) {
+  color: #f8f8f2;
 }
 
 .articleBody ol {
