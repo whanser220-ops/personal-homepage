@@ -18,10 +18,10 @@
     },
     {
       "id": "event-driven",
-      "title": "事件驱动：从 Pi Agent 的回调链路看懂“谁在什么时候调用谁”",
+      "title": "订阅之后，回调为什么没有立即执行？从一次 Agent 输出看懂事件驱动",
       "slug": "event-driven",
       "status": "published",
-      "concepts": ["event-driven", "event", "event-dispatch", "callback", "event-channel", "external-trigger", "async-control-flow"]
+      "concepts": ["event-driven", "event", "event-dispatch", "callback", "external-trigger", "async-control-flow"]
     },
     {
       "id": "tool-execution",
@@ -46,7 +46,6 @@
     { "id": "event", "name": "事件", "definition": "对某个已经发生事实的结构化描述；它本身是数据，不是会执行的函数", "aliases": ["event"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven"] },
     { "id": "event-dispatch", "name": "事件分发", "definition": "事件产生后查找已注册监听器并调用回调的运行时过程", "aliases": ["dispatch", "emit"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven"] },
     { "id": "callback", "name": "回调", "definition": "先交给另一个对象保存、在约定条件满足时由该对象调用的函数", "aliases": ["callback", "listener"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven"] },
-    { "id": "event-channel", "name": "事件通道", "definition": "在事件生产者和消费者之间负责传递事件的进程内集合、队列或消息基础设施", "aliases": ["event channel", "broker"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven"] },
     { "id": "external-trigger", "name": "外部触发", "definition": "由 Webhook、定时器、按钮等应用边界外的输入启动一次业务处理", "aliases": ["external event"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven"] },
     { "id": "async-control-flow", "name": "异步控制流", "definition": "调用者把等待或后续完成交给 Promise、队列或其他调度机制的控制方式", "aliases": ["async", "await"], "domain": "执行与调度", "status": "confirmed", "articles": ["event-driven"] },
     { "id": "tool-call", "name": "工具调用", "definition": "模型或 Agent 请求应用执行某个具有名称和参数的工具动作", "aliases": ["tool call"], "domain": "工具", "status": "confirmed", "articles": ["tool-execution"] },
@@ -57,7 +56,6 @@
   ],
   "relations": [
     { "id": "r-event-driven-dispatch", "from": "event-driven", "to": "event-dispatch", "type": "composition", "reason": "事件驱动的运行时链路包含事件产生后由分发器选择并调用处理者的步骤。", "scope": "进程内事件通知和系统级事件通道都适用，但可靠投递需要额外机制。", "evidence": "event-driven#chain" },
-    { "id": "r-event-driven-channel", "from": "event-driven", "to": "event-channel", "type": "composition", "reason": "系统级事件驱动需要一个在生产者和消费者之间传递事件的通道。", "scope": "跨进程场景；最小进程内示例可由监听器集合承担。", "evidence": "event-driven#architecture" },
     { "id": "r-dispatch-callback", "from": "event-dispatch", "to": "callback", "type": "causal", "reason": "分发器遍历注册关系并调用 listener，因而使回调函数在事件到达时执行。", "scope": "Pi 0.85.1 的 processEvents 以及同步事件源；异步 listener 是否被等待取决于具体实现。", "evidence": "event-driven#chain" },
     { "id": "r-event-message-event", "from": "event", "to": "message-event", "type": "hierarchy", "reason": "消息事件是用来通知消息或运行过程变化的一类事件。", "scope": "Pi Agent 的 message_update 等生命周期通知。", "evidence": "event-driven#event" },
     { "id": "r-event-async", "from": "event-driven", "to": "async-control-flow", "type": "related", "reason": "事件驱动回答谁根据事实选择处理者，异步控制流回答调用者如何等待；两者可以同时出现，也可以分别出现。", "scope": "进程内回调和跨进程消息均适用。", "evidence": "event-driven#boundary" },

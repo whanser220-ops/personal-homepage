@@ -2,8 +2,8 @@ import { EventDrivenArticle } from "../../../src/components/EventDrivenArticle.j
 import { IllustratedPageFrame } from "../../../src/components/IllustratedPageFrame.jsx";
 
 export const metadata = {
-  title: "事件驱动：从 Pi Agent 的回调链路看懂“谁在什么时候调用谁” | Huang",
-  description: "沿着 Pi Agent 的真实事件链路，理解事件产生、分发、回调，以及事件驱动与异步、事件循环的边界。",
+  title: "订阅之后，回调为什么没有立即执行？从一次 Agent 输出看懂事件驱动 | Huang",
+  description: "从 Pi 0.85.1 的 subscribe、emit、processEvents 和 message_update 链路，理解事件驱动、回调、异步控制流与事件循环的边界。",
 };
 
 export default function EventDrivenArticlePage() {

@@ -31,9 +31,9 @@ export const articles = [
   },
   {
     status: "已发布",
-    title: "事件驱动：从 Pi Agent 的回调链路看懂“谁在什么时候调用谁”",
-    body: "沿着 Pi Agent 的真实事件链路，理解事件产生、分发、回调，以及事件驱动与异步、事件循环的边界。",
-    date: "09-17",
+    title: "订阅之后，回调为什么没有立即执行？从一次 Agent 输出看懂事件驱动",
+    body: "从 subscribe、emit、processEvents 到 message_update，追踪 Pi Agent 中事件产生、分发与回调执行的真实链路。",
+    date: "09-21",
     href: "/articles/event-driven",
     tags: ["事件驱动", "Pi Agent", "架构"],
   },
