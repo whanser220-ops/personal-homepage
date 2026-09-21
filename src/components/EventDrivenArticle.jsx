@@ -4,20 +4,20 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import hljs from "highlight.js/lib/core";
 import javascript from "highlight.js/lib/languages/javascript";
-import json from "highlight.js/lib/languages/json";
+import typescript from "highlight.js/lib/languages/typescript";
 
 import styles from "./EventDrivenArticle.module.css";
 
 hljs.registerLanguage("javascript", javascript);
-hljs.registerLanguage("json", json);
+hljs.registerLanguage("typescript", typescript);
 
 const sections = [
-  { id: "scene", label: "subscribe 只是登记" },
-  { id: "chain", label: "prompt 怎样走到 listener" },
-  { id: "event", label: "text_delta 怎样变成 message_update" },
-  { id: "boundary", label: "事件、异步和事件循环" },
-  { id: "direction", label: "两个方向的事件" },
-  { id: "architecture", label: "回到开头：驱动在哪里" },
+  { id: "problem", label: "总控直接调用哪里会变难" },
+  { id: "fact", label: "先确认发生了什么" },
+  { id: "dispatch", label: "谁真正调用函数" },
+  { id: "timing", label: "事件不等于异步" },
+  { id: "boundary", label: "提案、命令与事实" },
+  { id: "pi", label: "最后映射回 Pi" },
 ];
 
 function SourceLink({ href, children }) {
@@ -26,49 +26,21 @@ function SourceLink({ href, children }) {
 
 function CodeBlock({ children, language = "javascript" }) {
   const code = String(children).replace(/^\n/, "").replace(/\n\s*$/, "");
-  const highlighted = language === "text"
-    ? code
-    : hljs.highlight(code, { language }).value;
-
-  return (
-    <pre className={styles.codeBlock} data-language={language}>
-      <code dangerouslySetInnerHTML={{ __html: highlighted }} />
-    </pre>
-  );
+  const highlighted = hljs.highlight(code, { language }).value;
+  return <pre className={styles.codeBlock} data-language={language}><code dangerouslySetInnerHTML={{ __html: highlighted }} /></pre>;
 }
 
 function TocLinks({ activeId }) {
-  return (
-    <ul className={styles.tocList}>
-      {sections.map((section, index) => (
-        <li key={section.id}>
-          <a
-            aria-current={activeId === section.id ? "location" : undefined}
-            className={activeId === section.id ? styles.tocActive : undefined}
-            href={`#${section.id}`}
-          >
-            <span>{String(index + 1).padStart(2, "0")}</span>
-            {section.label}
-          </a>
-        </li>
-      ))}
-    </ul>
-  );
+  return <ul className={styles.tocList}>{sections.map((section, index) => (
+    <li key={section.id}><a aria-current={activeId === section.id ? "location" : undefined} className={activeId === section.id ? styles.tocActive : undefined} href={`#${section.id}`}><span>{String(index + 1).padStart(2, "0")}</span>{section.label}</a></li>
+  ))}</ul>;
 }
 
 function ArticleToc({ activeId }) {
-  return (
-    <>
-      <aside className={styles.toc} aria-label="文章目录">
-        <p className={styles.tocLabel}>ON THIS PAGE</p>
-        <TocLinks activeId={activeId} />
-      </aside>
-      <details className={styles.mobileToc}>
-        <summary>本页目录</summary>
-        <nav aria-label="本页目录"><TocLinks activeId={activeId} /></nav>
-      </details>
-    </>
-  );
+  return <>
+    <aside className={styles.toc} aria-label="文章目录"><p className={styles.tocLabel}>ON THIS PAGE</p><TocLinks activeId={activeId} /></aside>
+    <details className={styles.mobileToc}><summary>本页目录</summary><nav aria-label="本页目录"><TocLinks activeId={activeId} /></nav></details>
+  </>;
 }
 
 function Diagram({ alt, caption, src }) {
@@ -82,150 +54,100 @@ export function EventDrivenArticle() {
     const headings = sections.map(({ id }) => document.getElementById(id)).filter(Boolean);
     if (!headings.length) return undefined;
     const observer = new IntersectionObserver((entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
       if (visible[0]) setActiveId(visible[0].target.id);
     }, { rootMargin: "-112px 0px -62% 0px", threshold: [0, 1] });
     headings.forEach((heading) => observer.observe(heading));
     return () => observer.disconnect();
   }, []);
 
-  return (
-    <article className={styles.articleShell}>
-      <Link className={styles.backLink} href="/articles">← 返回文章列表</Link>
-      <Link className={styles.mapLink} href="/articles/knowledge-map">查看这篇文章在知识地图中的位置 →</Link>
+  return <article className={styles.articleShell}>
+    <Link className={styles.backLink} href="/articles">← 返回文章列表</Link>
+    <Link className={styles.mapLink} href="/articles/knowledge-map">查看这篇文章在知识地图中的位置 →</Link>
+    <header className={styles.articleHeader}>
+      <p className={styles.kicker}>学习文章 · 事件驱动</p>
+      <h1>事件驱动：剧情发生变化后，该由谁安排接下来的反应？</h1>
+      <p className={styles.lead}>当总控确认一件剧情事实后，界面、日志、线索索引和时间轴都要更新。为什么新增一个模块，总控就要再改一次？从“林遥发现纸条”开始，先解释这个问题，再看事件如何被登记、发布、分发和处理，最后映射回 Pi Agent。</p>
+      <div className={styles.meta}><time dateTime="2026-09-21">2026-09-21</time><span>阅读约 9 分钟</span><span>问题导向重写 · Pi 0.85.1 映射</span></div>
+    </header>
+    <div className={styles.mobileTocWrap}><ArticleToc activeId={activeId} /></div>
+    <div className={styles.articleLayout}>
+      <div className={styles.articleBody}>
+        <p>你正在做一个剧情 Agent 应用：剧情总控组织场景，人物 Agent 根据各自知道的信息提出台词和行动，总控决定哪些提案进入故事，并生成正文。现在，林遥在书房发现一张纸条。总控确认这件事进入剧情后，要更新阅读界面、记录剧情日志、把纸条加入线索索引。后来你又想增加时间轴展示。</p>
+        <p className={styles.takeaway}><strong>问题是：能不能让总控专心确认剧情变化，让其他模块自己声明如何反应？</strong></p>
 
-      <header className={styles.articleHeader}>
-        <p className={styles.kicker}>学习文章 · 事件驱动</p>
-        <h1>订阅之后，回调为什么没有立即执行？从一次 Agent 输出看懂事件驱动</h1>
-        <p className={styles.lead}>
-          事件驱动不是程序自己会动，而是先保存处理函数，运行过程显式发出事件，再由分发代码调用保存下来的函数。沿着 Pi 0.85.1 的一次 Agent 输出，这条链路可以逐步追踪。
-        </p>
-        <div className={styles.meta}>
-          <time dateTime="2026-09-21">2026-09-21</time>
-          <span>阅读约 8 分钟</span>
-          <span>基于 Pi 0.85.1 实现观察</span>
-        </div>
-      </header>
+        <h2 id="problem">1. 总控直接调用所有模块，哪里会变难？</h2>
+        <p>最初的实现很自然：总控确认发现纸条，接着调用界面更新、日志记录和线索索引函数。每一步写在一个地方，排查起来很容易。</p>
+        <p>变化发生在需求增加时。新增时间轴要改总控，替换界面要检查总控，增加另一种剧情观察功能还是要回到总控。决定剧情的规则没有变，它却承担了越来越多外围模块的连接工作。</p>
+        <p>直接调用本身很有用，尤其适合明确的步骤依赖。这里需要改变的是：<strong>确认一件事发生的代码，是否必须同时知道所有对它感兴趣的模块？</strong>事件驱动提供另一种安排：总控确认事实，其他模块把自己的反应登记到事实上。</p>
 
-      <div className={styles.mobileTocWrap}><ArticleToc activeId={activeId} /></div>
+        <h2 id="fact">2. 先确认发生了什么，再决定谁来反应</h2>
+        <p>总控确认剧情变化并写入状态后，可以产生一份数据：</p>
+        <CodeBlock>{String.raw`const event = {
+  type: "StoryFactCommitted",
+  eventId: "event-17",
+  sceneId: "study-1",
+  fact: "林遥在书房发现纸条",
+  visibleTo: ["林遥"],
+};`}</CodeBlock>
+        <p>这个事件描述的是一件已经被应用接受、写入剧情状态的事实。它没有宣称纸条上的约定一定真实，也没有宣称其他人物已经知道内容。人物 Agent 提议“让林遥发现纸条”，与总控确认“林遥已经发现纸条”处在不同阶段；模型生成的一句话不会自动成为世界事实。</p>
+        <p>于是角色变得清楚：总控是事实生产者，事件通道负责传递，界面、日志和线索索引是消费者。消费者可以各自订阅 <code>StoryFactCommitted</code>，按自己的规则处理，不需要事件数据告诉它们“必须按某个顺序做什么”。生产者—通道—消费者的划分可与 <SourceLink href="https://learn.microsoft.com/en-us/azure/architecture/guide/architecture-styles/event-driven">Microsoft 的事件驱动架构说明</SourceLink>对照。</p>
+        <p>信息边界仍由输入构造决定。林遥可以获得她观察到的纸条，场外人物不能因为应用发布了事件就自动获得秘密。订阅关系负责通知谁，不负责替你筛选谁有权知道。</p>
 
-      <div className={styles.articleLayout}>
-        <div className={styles.articleBody}>
-          <p>
-            调用 <code>agent.subscribe(listener)</code> 后，终端没有输出；直到执行 <code>agent.prompt(...)</code>，收到 <code>message_update</code> 事件，回调里的打印代码才开始运行。真正需要解释的是中间三步：谁保存回调，谁发出事件，谁最终调用回调。
-          </p>
+        <h2 id="dispatch">3. 订阅以后，到底是谁把函数叫起来？</h2>
+        <p>初始化时，通道保存一张关系表：</p>
+        <table><thead><tr><th>事实类型</th><th>已登记的处理函数</th></tr></thead><tbody><tr><td><code>StoryFactCommitted</code></td><td>更新界面、记录日志、更新线索索引</td></tr></tbody></table>
+        <p>此时没有新剧情发生，三个函数也没有执行。表里保存的是“之后要调用的函数”。总控发布事件后，通道读取事件类型，查表取得函数，再把事件交给它们；这个动作叫分发。</p>
+        <p className={styles.takeaway}><strong>处理函数开始运行有一个具体原因：分发代码执行了 <code>handler(event)</code>。</strong>事件数据提供信息，订阅关系提供函数，分发器完成调用；事件对象不会自己触发代码。</p>
+        <CodeBlock>{String.raw`const subscriptions = new Map();
 
-          <h2 id="scene">subscribe 做的是登记，函数体还没有执行</h2>
-          <p>在已经核对的 Pi 0.85.1 实现中，<code>Agent.subscribe</code> 把传入的 <code>listener</code> 保存到一个 <code>Set</code>。可以用下面的简化代码理解它：</p>
-          <CodeBlock>{String.raw`const listeners = new Set();
-
-function subscribe(listener) {
-  listeners.add(listener);
+function subscribe(type, handler) {
+  const handlers = subscriptions.get(type) ?? [];
+  handlers.push(handler);               // 保存函数，尚未调用
+  subscriptions.set(type, handlers);
 }
 
-subscribe(async (event, signal) => {
-  console.log(event);
-});`}</CodeBlock>
-          <p>
-            执行 <code>subscribe(...)</code> 时，调用的是登记函数。箭头函数被创建，并作为一个函数值传进去；<code>listeners.add(listener)</code> 保存的是这个函数的引用，并没有执行它的函数体。只有后续代码执行 <code>listener(event, signal)</code>，里面的 <code>console.log</code> 才会运行。
-          </p>
-          <p>
-            订阅完成只能说明“以后分发事件时，可以找到这个函数”。如果后面没有事件被发出并送入分发流程，回调就不会因为时间过去、状态改变或者订阅成功而自动执行。登记监听器和重放历史，也是两项需要分别实现的行为。
-          </p>
-
-          <h2 id="chain">prompt 怎样走到 listener</h2>
-          <p>
-            <code>prompt</code> 启动了一次实际的 Agent 运行。<code>runPromptMessages</code> 会把 <code>event =&gt; this.processEvents(event)</code> 作为 <code>emit</code> 传给 <code>runAgentLoop</code>：循环决定何时产生事件，Agent 负责接收事件、更新状态并通知订阅者。
-          </p>
-          <CodeBlock>{String.raw`// Agent.runPromptMessages：把事件接收函数交给循环。
-await runAgentLoop(
-  prompts,
-  context,
-  config,
-  (event) => this.processEvents(event),
-  signal,
-  streamFn,
-);
-
-// runAgentLoop：在相应位置显式发出事件。
-await emit(lifecycleEvent);
-
-// processEvents：先更新状态，再通知订阅者。
-updateState(event);
-for (const listener of listeners) {
-  await listener(event, signal);
+function publish(event) {
+  const handlers = subscriptions.get(event.type) ?? [];
+  for (const handler of handlers) {
+    handler(event);                      // 这里才真正调用
+  }
 }`}</CodeBlock>
-          <p>
-            这里的 <code>emit</code> 首先只是一个普通函数参数。执行 <code>await emit(event)</code>，会进入传入的箭头函数，再调用 <code>this.processEvents(event)</code>；随后，<code>processEvents</code> 先根据事件更新 Agent 的 <code>state</code>，再按订阅顺序逐个执行并等待 <code>listener(event, signal)</code>。
-          </p>
-          <p className={styles.takeaway}>
-            <strong>更新状态和调用回调，是 processEvents 中依次执行的两个动作。</strong>回调不是看到状态变化后自己醒来；没有继续调用分发代码，就不会仅凭“发生了变化”触发监听器。
-          </p>
+        <p><code>subscribe("StoryFactCommitted", recordLog)</code> 只是保存日志函数；<code>publish(event)</code> 才让分发器取得它并调用 <code>recordLog(event)</code>。只创建事件对象、没有发布，日志不会自动增加；删掉日志订阅，其他处理函数仍可运行。</p>
+        <Diagram alt="剧情事实发生后总控直接调用与发布事件分发的对照：左侧总控直接调用界面、日志、线索索引；右侧先登记 StoryFactCommitted 处理函数，再由分发器调用三个消费者" caption="图：两种安排处理同一件已确认的剧情事实。虚线表示事先登记，实线表示本次执行；右侧也可以同步执行。" src="/assets/articles/event-driven-story-fact-vs-direct.png" />
+        <p>增加时间轴时，直接调用要修改总控；发布事件则可以增加时间轴处理函数并登记订阅。在事件含义稳定的前提下，新增消费者不必让生产者认识它的函数名。控制流从“总控现在调用谁”变成“总控宣告发生了什么，再由关系表选择调用谁”。</p>
 
-          <h2 id="event">text_delta 为什么会变成 message_update</h2>
-          <p>
-            模型生成文本时，底层 <code>pi-ai</code> 会提供 <code>text_delta</code>，表示本次新产生的一小段文本。Agent 循环收到这种流式更新后，将它包装为 <code>message_update</code> 事件，再通过上面的 <code>emit</code> 路径向外发送。
-          </p>
-          <p>
-            外层 <code>message_update</code> 表示“一条消息正在更新”；内部的 <code>text_delta</code> 表示“这次更新具体是新增文本”。当前最小项目的 <code>index.ts</code> 会检查这两层类型，条件满足后才输出 <code>delta</code>：
-          </p>
-          <CodeBlock>{String.raw`agent.subscribe((event) => {
-  if (
-    event.type === "message_update" &&
-    event.assistantMessageEvent.type === "text_delta"
-  ) {
-    process.stdout.write(event.assistantMessageEvent.delta);
+        <h2 id="timing">4. 换成事件，处理就自动异步了吗？</h2>
+        <p>不一定。上面的 <code>publish</code> 在循环里直接调用函数，因此同步分发的顺序是：发布 → 界面更新返回 → 日志记录返回 → 线索索引返回 → 发布返回。某个处理函数慢，后面的函数就还没开始；它抛错而分发器没有捕获，后续处理也可能中断。</p>
+        <p>真实的 <SourceLink href="https://nodejs.org/api/events.html#asynchronous-vs-synchronous">Node.js EventEmitter 文档</SourceLink>同样说明监听器默认按注册顺序同步调用。事件机制可以不借助队列。</p>
+        <p>如果希望处理稍后发生、不拖住当前流程，就要改变传递方式：把事件交给消息系统或队列，消费者之后再取得并调用函数。此时“消息系统接收”不等于“所有消费者处理完成”。队列还带来投递失败、积压、重试和重复处理等新责任。</p>
+        <table><thead><tr><th>概念</th><th>它回答的问题</th></tr></thead><tbody><tr><td>事件驱动</td><td>事实发生后，依据什么关系找到并调用处理者？</td></tr><tr><td>异步控制流</td><td>当前函数如何等待，后续工作何时继续？</td></tr><tr><td>事件循环</td><td>运行环境何时给待执行工作继续机会？</td></tr><tr><td>消息队列</td><td>消息如何留待消费者稍后取得和处理？</td></tr></tbody></table>
+        <p>给监听器加上 <code>async</code> 也不会让它自动跑到后台线程；是否等待 Promise，取决于分发器写的是 <code>handler(event)</code> 还是 <code>await handler(event)</code>。这些概念可以同时出现，但不是同义词。</p>
+
+        <h2 id="boundary">5. 人物提案、命令和已确认事实，能都用广播吗？</h2>
+        <p>发现纸条后，总控还要决定下一段情节。假设它必须先得到林遥的反应，再决定是否安排她前往钟楼。这里总控是在请求一个人物 Agent 提出反应，并要检查结果是否符合人物认知和当前剧情。</p>
+        <p>“请提出林遥发现纸条后的反应”是一个请求；“林遥决定烧掉纸条”在总控审核前只是提案；只有总控接受并更新状态后，才可以发布“纸条已被烧毁”这一事实。</p>
+        <table><thead><tr><th>表达</th><th>它意味着什么</th><th>下一步</th></tr></thead><tbody><tr><td>请提出林遥的反应</td><td>请求一个指定对象完成生成</td><td>人物 Agent 返回提案，总控决定是否采用</td></tr><tr><td>林遥发现纸条已确认</td><td>事实已进入剧情状态</td><td>有权接收的模块据此更新自己的内容</td></tr></tbody></table>
+        <p>这就是为什么应用会混用两种方式：总控明确安排必需的人物生成和结果审核；确认剧情事实后，再发布事件，让界面、日志、索引和时间轴各自反应。事件通知改变的是后续反应的连接，不会替总控完成需要结果的决策。</p>
+        <p className={styles.closing}><strong>判断边界：</strong>必须取得接收者结果才能继续的动作，保留明确调用或命令；已经确认的事实，如果有多个独立模块各自反应，再考虑事件。是否使用事件，和是否把工作排到稍后，是两个决定。</p>
+
+        <h2 id="pi">6. 最后映射回 Pi：subscribe 和 prompt 分别在哪一环？</h2>
+        <p>现在再看熟悉的 Pi 操作：Agent 运行过程中产生消息更新，输出函数观察这些更新；外部代码调用 <code>prompt</code> 启动一轮工作。</p>
+        <CodeBlock language="typescript">{String.raw`agent.subscribe((event) => {
+  if (event.type === "message_update") {
+    const update = event.assistantMessageEvent;
+    if (update.type === "text_delta") {
+      process.stdout.write(update.delta);
+    }
   }
 });
 
-await agent.prompt("解释一下事件驱动。");`}</CodeBlock>
-          <p>
-            从提示词到终端文字，实际经过了明确的调用链：<code>prompt</code> 启动运行，底层产生文本增量，循环包装事件并调用 <code>emit</code>，<code>processEvents</code> 更新状态并分发，最后由订阅回调输出文本。看不到文字，不能直接推断回调从未运行，因为其他生命周期事件也可能进入回调，只是没有通过这里的过滤条件。
-          </p>
-
-          <h2 id="boundary">事件、回调、分发和事件循环不是同一个东西</h2>
-          <table>
-            <thead><tr><th>概念</th><th>在这条链路中的含义</th><th>决定了什么</th></tr></thead>
-            <tbody>
-              <tr><td>事件对象</td><td>带有 <code>type</code>、文本增量等字段的数据</td><td>这次发生了什么</td></tr>
-              <tr><td>回调</td><td>订阅时保存的 <code>listener</code> 函数</td><td>收到通知后做什么</td></tr>
-              <tr><td>分发</td><td>遍历 <code>Set</code> 并调用监听器</td><td>通知谁、按什么顺序通知</td></tr>
-              <tr><td>异步控制流</td><td><code>await emit</code>、<code>await listener</code></td><td>当前流程等待哪项工作完成</td></tr>
-              <tr><td>Node.js 事件循环</td><td>运行时调度异步任务的机制</td><td>异步任务何时获得继续执行机会</td></tr>
-            </tbody>
-          </table>
-          <p>
-            事件对象是数据，本身不会执行代码；回调是函数，但被保存不等于被调用；分发才是具体的程序逻辑：取出函数，传入事件，执行它。Node.js 事件循环位于更底层，参与网络 I/O、定时器等异步工作的调度，但它不知道 Agent 的 <code>listeners</code> 集合应该通知谁。回答“这个回调为什么此刻运行”，仍然要回到应用代码，找到实际执行的那一行 <code>listener(event, signal)</code>。
-          </p>
-          <p>
-            <code>await</code> 也不意味着“另开一个线程去通知”。由于这里逐个 <code>await listener(...)</code>，后一个监听器要等前一个完成后才会被调用；较慢的监听器会延迟此次分发完成，以及等待它的上游流程继续推进。这是 Pi 当前实现的分发策略，不是所有事件系统的共同规则。Node.js 的 <SourceLink href="https://nodejs.org/api/events.html#asynchronous-vs-synchronous">EventEmitter 文档</SourceLink>也说明，监听器默认按注册顺序同步调用。
-          </p>
-
-          <h2 id="direction">Agent 发出事件，与事件触发 Agent，是两个方向</h2>
-          <p>
-            当前例子的方向是：<strong>Agent → 外部观察者</strong>。Agent 运行时发出消息更新，应用层订阅这些更新，用来打印文字、刷新界面或记录运行过程。订阅者是在观察一次已经启动的运行。
-          </p>
-          <Diagram
-            alt="事件驱动的两个方向：外部事件经应用层启动 Agent，Agent 再向外部观察者发送运行事件"
-            caption="图：上方是 Agent 向外通知运行事件，下方是外部输入先到应用层，再由应用层决定是否调用 Agent。"
-            src="/assets/articles/event-driven-directions.png"
-          />
-          <p>
-            另一个方向是：<strong>外部事件 → 应用层 → Agent</strong>。例如用户点击发送按钮，应用层的按钮处理函数读取输入，再调用 <code>agent.prompt(...)</code>。按钮事件触发的是应用层逻辑，由应用层决定是否启动 Agent、传入什么内容。订阅 Agent 的消息更新，并没有定义按钮点击后该怎样调用 Agent；调用 <code>prompt</code>，也没有规定消息到来时界面应该怎样显示。
-          </p>
-
-          <h2 id="architecture">回到开头：事件驱动的“驱动”在哪里</h2>
-          <p>
-            在这个最小 Agent 里，<code>runAgentLoop</code> 知道运行到了哪里，<code>processEvents</code> 维护状态并通知观察者，<code>index.ts</code> 决定如何展示文本。事件驱动不是程序自己会动，也不等于用了异步 API，而是控制流从“我现在直接调用谁”变成了“我先登记谁对什么事实感兴趣，事实发生后由分发者调用谁”。
-          </p>
-          <p className={styles.closing}>
-            <strong>所以，subscribe 后没有立即输出是正常的：</strong>它只登记了函数。直到 <code>prompt</code> 启动循环，循环产生 <code>message_update</code>，<code>emit</code> 把事件交给 <code>processEvents</code>，后者才调用 <code>listener</code>；如果 listener 过滤到 <code>text_delta</code>，终端才会出现文字。沿着“谁产生、谁传递、谁处理、何时处理”走完整条链路，事件驱动就从一个架构口号变成了可以追踪的执行过程。
-          </p>
-        </div>
-        <ArticleToc activeId={activeId} />
+await agent.prompt("让人物提出下一步反应。");`}</CodeBlock>
+        <p><code>subscribe</code> 保存观察者，尚未启动模型；<code>prompt</code> 启动 Agent。运行代码取得文字增量，包装成 <code>message_update</code>，再由内部事件处理路径更新状态并调用监听器。这里的方向是 <strong>Agent → 外部观察者</strong>，不是 Agent 自动订阅 Webhook 或剧情事实。</p>
+        <p>本机核对的 <code>@earendil-works/pi-agent-core</code> 0.85.1 中，必要链路可以压缩成：保存 listener → prompt 启动运行 → 产生并包装消息更新 → 分发器调用 listener。Pi 的事件通知说明运行进展，不会自动完成“调用人物、审核提案、更新剧情状态”的应用流程。</p>
+        <p>回到开头：增加时间轴时，理想的修改位置是新增处理函数和订阅关系。总控仍负责确认剧情事实，人物 Agent 仍返回待审核的提案，分发器则负责把已确认的变化交给关心它的模块。事件驱动解决的，是这些职责怎样通过真实的调用连接起来。</p>
       </div>
-    </article>
-  );
+      <ArticleToc activeId={activeId} />
+    </div>
+  </article>;
 }

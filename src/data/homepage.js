@@ -31,11 +31,19 @@ export const articles = [
   },
   {
     status: "已发布",
-    title: "订阅之后，回调为什么没有立即执行？从一次 Agent 输出看懂事件驱动",
-    body: "从 subscribe、emit、processEvents 到 message_update，追踪 Pi Agent 中事件产生、分发与回调执行的真实链路。",
+    title: "事件驱动：剧情发生变化后，该由谁安排接下来的反应？",
+    body: "从剧情 Agent 的‘发现纸条’场景出发，理解事件为什么存在，以及它与直接调用、异步和队列的边界。",
     date: "09-21",
     href: "/articles/event-driven",
     tags: ["事件驱动", "Pi Agent", "架构"],
+  },
+  {
+    status: "已发布",
+    title: "事件驱动的 Agent：谁在什么时候把什么交给谁？",
+    body: "从部署日志告警出发，追踪事件对象、分发器、队列和 Agent 循环，分清 Agent 的运行通知与外部输入。",
+    date: "09-21",
+    href: "/articles/event-driven-agent",
+    tags: ["事件驱动", "Agent", "架构"],
   },
   {
     status: "计划中",
