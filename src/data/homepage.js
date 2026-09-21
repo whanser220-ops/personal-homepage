@@ -23,9 +23,9 @@ export const articles = [
   },
   {
     status: "已发布",
-    title: "计算机中的状态：谁保存了“现在”，谁决定下一步？",
-    body: "从变量、进程和 HTTP 请求，到 Pi Agent 的会话、运行时、上下文与业务事实。",
-    date: "09-17",
+    title: "计算机中的状态：同一个输入，为什么会得到不同结果？",
+    body: "从闸机、变量和状态转移，理解进程、HTTP 请求、游戏与 Agent 中的状态边界。",
+    date: "09-21",
     href: "/articles/computer-state",
     tags: ["状态", "Pi Agent", "架构"],
   },

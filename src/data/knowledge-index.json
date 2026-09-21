@@ -4,7 +4,7 @@
   "articles": [
     {
       "id": "computer-state",
-      "title": "计算机中的状态：谁保存了“现在”，谁决定下一步？",
+      "title": "计算机中的状态：同一个输入，为什么会得到不同结果？",
       "slug": "computer-state",
       "status": "published",
       "concepts": ["state", "session", "runtime-state", "business-state", "context-reconstruction"]
