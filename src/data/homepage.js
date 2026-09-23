@@ -7,6 +7,14 @@ export const navItems = [
 export const articles = [
   {
     status: "已发布",
+    title: "调用—返回风格：从子程序到面向对象",
+    body: "跟随原视频的调用栈、主程序—子程序和借书系统画面，理解两种调用—返回架构的职责与取舍。",
+    date: "09-23",
+    href: "/articles/call-return-architecture",
+    tags: ["软件体系结构", "视频图文", "调用—返回"],
+  },
+  {
+    status: "已发布",
     title: "工具系统：模型说“调用工具”后，代码究竟怎么执行",
     body: "从 toolCall 开始，追踪 Agent Runtime 如何查找工具、校验参数、执行代码并回填结果。",
     date: "09-17",

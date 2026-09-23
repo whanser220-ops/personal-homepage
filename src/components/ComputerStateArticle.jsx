@@ -6,7 +6,7 @@ import hljs from "highlight.js/lib/core";
 import javascript from "highlight.js/lib/languages/javascript";
 import plaintext from "highlight.js/lib/languages/plaintext";
 
-import styles from "./ComputerStateArticle.module.css";
+import styles from "./ArticleReading.module.css";
 
 hljs.registerLanguage("javascript", javascript);
 hljs.registerLanguage("text", plaintext);
