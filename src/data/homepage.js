@@ -7,6 +7,14 @@ export const navItems = [
 export const articles = [
   {
     status: "已发布",
+    title: "事件驱动软件体系结构：从直接调用到发布订阅",
+    body: "跟随原视频的订单服务、GUI 保存按钮和校园铃声，理解观察者、发布订阅与消息中间件。",
+    date: "09-23",
+    href: "/articles/event-driven-architecture-video",
+    tags: ["软件体系结构", "视频图文", "事件驱动"],
+  },
+  {
+    status: "已发布",
     title: "调用—返回风格：从子程序到面向对象",
     body: "跟随原视频的调用栈、主程序—子程序和借书系统画面，理解两种调用—返回架构的职责与取舍。",
     date: "09-23",

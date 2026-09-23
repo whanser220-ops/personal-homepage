@@ -26,6 +26,8 @@ function ChapterLinks({ chapters, activeId }) {
 
 export function VideoTimelineArticle({ article }) {
   const [activeId, setActiveId] = useState(article.chapters[0].id);
+  const assetBase = article.assetBase || "/articles/call-return-architecture/frames";
+  const imageUrl = (frame) => `${assetBase}/${frame.replace(/\.png$/, ".webp")}`;
 
   useEffect(() => {
     const headings = article.chapters.map(({ id }) => document.getElementById(id)).filter(Boolean);
@@ -59,7 +61,7 @@ export function VideoTimelineArticle({ article }) {
         <h1>{article.title}</h1>
         <p className={styles.lead}>{article.lead}</p>
         <div className={styles.meta}>
-          <time dateTime="2026-09-23">2026-09-23</time>
+          <time dateTime={article.publishedAt || "2026-09-23"}>{article.publishedAt || "2026-09-23"}</time>
           <span>视频 {article.duration}</span>
           <span>{article.captionType}</span>
         </div>
@@ -77,7 +79,7 @@ export function VideoTimelineArticle({ article }) {
                 <figure className={styles.diagram}>
                   <a
                     aria-label={`打开原视频画面：${chapter.frameTime}`}
-                    href={`/articles/call-return-architecture/frames/${chapter.frame.replace(/\.png$/, ".webp")}`}
+                    href={imageUrl(chapter.frame)}
                     rel="noopener noreferrer"
                     target="_blank"
                   >
@@ -86,7 +88,7 @@ export function VideoTimelineArticle({ article }) {
                       decoding="async"
                       height="900"
                       loading="lazy"
-                      src={`/articles/call-return-architecture/frames/${chapter.frame.replace(/\.png$/, ".webp")}`}
+                      src={imageUrl(chapter.frame)}
                       width="1600"
                     />
                   </a>
