@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { createInsetWater } from "./createInsetWater.js";
 import { createIcedCoffee } from "./createIcedCoffee.js";
+import { createCafeAO } from "./createCafeAO.js";
 
 // A restrained illustrated palette: world-space light creates the same diagonal
 // afternoon sun across every surface, with real shadow maps for local occlusion.
@@ -13,12 +15,15 @@ function illustratedMaterial(source, character) {
       : source.name.includes("Painted brick")
         ? "wall"
         : "other";
-  const material = new THREE.MeshLambertMaterial({
+  const material = new THREE.MeshStandardMaterial({
     map: source.map,
     color: source.color,
     side: THREE.DoubleSide,
     alphaTest: character ? 0.04 : 0,
     transparent: false,
+    roughness: 0.9,
+    metalness: 0,
+    envMapIntensity: 0.35,
   });
   material.onBeforeCompile = (shader) => {
     shader.vertexShader =
@@ -50,7 +55,10 @@ function illustratedMaterial(source, character) {
       ${surface === "cabinet" ? "float luminance = dot(pigment,vec3(.2126,.7152,.0722)); pigment=mix(vec3(luminance)*vec3(.43,.62,.60),pigment*vec3(.55,.78,.88),.3);" : ""}
       ${surface === "wall" ? "pigment *= vec3(.86,.95,1.11);" : ""}
       ${source.name.includes("Music woven grille") ? "float weave=step(.48,fract(vCafePosition.x*95.))*step(.48,fract(vCafePosition.y*95.)); pigment*=.78+.22*weave;" : ""}
-      outgoingLight = pigment * mix(shade, light, daylight) * contact * form;
+      // Keep the painted palette, with a restrained contribution from actual
+      // hemisphere light and the room's prefiltered environment illumination.
+      vec3 bounce = clamp(reflectedLight.indirectDiffuse / max(diffuseColor.rgb, vec3(.01)), vec3(0.), vec3(2.));
+      outgoingLight = pigment * mix(shade, light, daylight) * contact * form * (.94 + .06 * bounce);
       // Very fine pigment variation prevents perfectly digital flat surfaces.
       float grain = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898,78.233))) * 43758.5453);
       outgoingLight *= 0.985 + grain * 0.03;
@@ -58,7 +66,7 @@ function illustratedMaterial(source, character) {
     );
   };
   material.customProgramCacheKey = () =>
-    character ? "cafe-character-v6" : "cafe-environment-v6-" + surface + source.name;
+    character ? "cafe-character-v7" : "cafe-environment-v7-" + surface + source.name;
   return material;
 }
 
@@ -103,6 +111,12 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   host.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color("#d5bba0");
+  const environmentRoom = new RoomEnvironment();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const environment = pmrem.fromScene(environmentRoom, 0.04);
+  scene.environment = environment.texture;
+  environmentRoom.dispose();
+  pmrem.dispose();
   const camera = new THREE.OrthographicCamera(-10, 10, 12.71, 0, 0.1, 70);
   const target = new THREE.Vector3(0, 6.355, 0);
   const sun = new THREE.DirectionalLight(0xffffff, 1);
@@ -121,7 +135,11 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   });
   sun.shadow.bias = -0.0003;
   sun.shadow.normalBias = 0.025;
-  scene.add(sun, sun.target, new THREE.AmbientLight(0xffffff, 1));
+  // Three r186 folds the old PCFSoftShadowMap into PCFShadowMap; radius controls softness.
+  sun.shadow.radius = 2.5;
+  const sky = new THREE.HemisphereLight(0xe0efff, 0xb7a18b, 0.85);
+  scene.add(sun, sun.target, sky);
+  const ao = createCafeAO(renderer, scene, camera);
   const tank = createInsetWater(renderer, scene);
   const coffee = createIcedCoffee(renderer, scene);
   let root;
@@ -158,7 +176,7 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     tank.update(reduced.matches ? 0 : time * 0.001);
     coffee.update(time * .001, !reduced.matches);
     tank.capture(camera);
-    coffee.render(camera);
+    coffee.render(camera, ao.apply);
     if (host.dataset.ready !== "true") { host.dataset.ready = "true"; onReady?.(); }
     if (!reduced.matches) frame = requestAnimationFrame(draw);
   }
@@ -189,6 +207,7 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     renderer.setSize(w, h, false);
     tank.resize();
     coffee.resize();
+    ao.resize();
     schedule();
   }
   function onMotion() {
@@ -269,6 +288,9 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
     tank.dispose();
     coffee.dispose();
+    ao.dispose();
+    scene.environment = null;
+    environment.dispose();
     disposeTree(scene);
     sun.shadow.dispose();
     renderer.dispose();

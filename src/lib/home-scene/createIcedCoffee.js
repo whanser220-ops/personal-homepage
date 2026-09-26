@@ -37,7 +37,7 @@ const liquidVertex = `
 `;
 
 function target(depth = true) {
-  const rt = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: depth });
+  const rt = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: depth, type: THREE.HalfFloatType });
   rt.texture.colorSpace = THREE.LinearSRGBColorSpace;
   if (depth) rt.depthTexture = new THREE.DepthTexture(1, 1, THREE.UnsignedIntType);
   return rt;
@@ -237,7 +237,7 @@ export function createIcedCoffee(renderer, world) {
     liquidBuffer.setSize(Math.min(512,w),Math.min(512,h));iceBuffer.setSize(Math.min(512,w),Math.min(512,h));
     uniforms.uDepthRange.value=camera.far-camera.near;
   }
-  function render(camera) {
+  function render(camera, processColor) {
     if(!ready){renderer.render(world,camera);return;}
     const previous=renderer.getRenderTarget(),clear=renderer.getClearColor(new THREE.Color()),alpha=renderer.getClearAlpha(),auto=renderer.autoClear;
     try {
@@ -248,6 +248,10 @@ export function createIcedCoffee(renderer, world) {
       renderer.setRenderTarget(liquidBuffer);renderer.render(liquidScene,layerCamera);
       renderer.setRenderTarget(iceBuffer);renderer.render(iceScene,layerCamera);
       quad.material=mergeMaterial;renderer.setRenderTarget(composite);renderer.render(passScene,passCamera);
+      // Occlude linear scene color before sRGB output and glass highlights.
+      const color = processColor ? processColor(composite) : composite.texture;
+      presentMaterial.uniforms.uColor.value = color;
+      glassMaterial.uniforms.uColor.value = color;
       quad.material=presentMaterial;renderer.setRenderTarget(previous);renderer.render(passScene,passCamera);
       renderer.autoClear=false;renderer.render(glassScene,camera);
     } finally {

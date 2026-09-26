@@ -153,9 +153,9 @@ function basinMaterial(source, sharedTime) {
 
 export function createInsetWater(renderer, scene) {
   const fields = createWaterFields();
-  const refraction = new THREE.WebGLRenderTarget(1, 1);
+  const refraction = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
   refraction.depthTexture = new THREE.DepthTexture(1, 1, THREE.UnsignedIntType);
-  const reflection = new THREE.WebGLRenderTarget(1, 1);
+  const reflection = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
   refraction.texture.colorSpace = reflection.texture.colorSpace =
     THREE.LinearSRGBColorSpace;
   const resolution = new THREE.Vector2();
