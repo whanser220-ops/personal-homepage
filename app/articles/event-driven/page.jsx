@@ -2,8 +2,8 @@ import { EventDrivenArticle } from "../../../src/components/EventDrivenArticle.j
 import { IllustratedPageFrame } from "../../../src/components/IllustratedPageFrame.jsx";
 
 export const metadata = {
-  title: "事件驱动：剧情发生变化后，该由谁安排接下来的反应？ | Huang",
-  description: "从剧情 Agent 的‘发现纸条’场景出发，理解事件、订阅、分发、异步边界，以及它们如何映射回 Pi Agent。",
+  title: "事件驱动：点击保存之后，到底是谁调用了保存函数？ | Huang",
+  description: "沿一个文档编辑器的保存操作，拆开事件的产生、注册、分发与执行，理解谁决定下一步，以及事件驱动为什么不等于异步。",
 };
 
 export default function EventDrivenArticlePage() {

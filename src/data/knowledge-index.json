@@ -1,75 +1,419 @@
 {
   "schemaVersion": 2,
-  "revision": 2,
+  "revision": 3,
   "articles": [
     {
       "id": "computer-state",
       "title": "计算机中的状态：同一个输入，为什么会得到不同结果？",
       "slug": "computer-state",
       "status": "published",
-      "concepts": ["state", "session", "runtime-state", "business-state", "context-reconstruction"]
+      "concepts": [
+        "state",
+        "session",
+        "runtime-state",
+        "business-state",
+        "context-reconstruction"
+      ]
     },
     {
       "id": "message-system",
       "title": "消息系统：Pi Agent 怎样把“发生了什么”传给模型和界面",
       "slug": "message-system",
       "status": "published",
-      "concepts": ["agent-message", "llm-message", "message-event", "steering-queue", "context-conversion"]
+      "concepts": [
+        "agent-message",
+        "llm-message",
+        "message-event",
+        "steering-queue",
+        "context-conversion"
+      ]
     },
     {
       "id": "event-driven",
-      "title": "事件驱动：剧情发生变化后，该由谁安排接下来的反应？",
+      "title": "事件驱动：点击保存之后，到底是谁调用了保存函数？",
       "slug": "event-driven",
       "status": "published",
-      "concepts": ["event-driven", "event", "event-dispatch", "callback", "external-trigger", "async-control-flow"]
-    },
-    {
-      "id": "event-driven-agent",
-      "title": "事件驱动的 Agent：谁在什么时候把什么交给谁？",
-      "slug": "event-driven-agent",
-      "status": "published",
-      "concepts": ["event-driven", "event", "event-dispatch", "callback", "external-trigger", "async-control-flow"]
+      "concepts": [
+        "event-driven",
+        "event",
+        "event-dispatch",
+        "callback",
+        "external-trigger",
+        "async-control-flow",
+        "event-subscription"
+      ]
     },
     {
       "id": "tool-execution",
       "title": "工具系统：模型说“调用工具”后，代码究竟怎么执行",
       "slug": "tool-execution",
       "status": "published",
-      "concepts": ["tool-call", "tool-execution"]
+      "concepts": [
+        "tool-call",
+        "tool-execution"
+      ]
     }
   ],
   "concepts": [
-    { "id": "state", "name": "状态", "definition": "某个对象在某个时间点、会影响下一步行为的当前事实", "aliases": ["state"], "domain": "执行基础", "status": "confirmed", "articles": ["computer-state"] },
-    { "id": "session", "name": "会话", "definition": "把后续操作关联到同一条持续工作的标识与边界", "aliases": ["session"], "domain": "执行基础", "status": "confirmed", "articles": ["computer-state"] },
-    { "id": "runtime-state", "name": "运行时状态", "definition": "当前进程或 Agent 循环中的模型、队列、流式输出和待处理调用", "aliases": ["runtime state"], "domain": "执行基础", "status": "confirmed", "articles": ["computer-state"] },
-    { "id": "business-state", "name": "业务状态", "definition": "由业务规则和权威执行者确认的任务、角色或世界当前事实", "aliases": ["business state"], "domain": "执行基础", "status": "confirmed", "articles": ["computer-state"] },
-    { "id": "context-reconstruction", "name": "上下文重建", "definition": "从历史和动态信息中筛选、压缩、转换出本次模型请求", "aliases": ["context reconstruction"], "domain": "执行基础", "status": "confirmed", "articles": ["computer-state"] },
-    { "id": "agent-message", "name": "AgentMessage", "definition": "Agent 内部用于表达对话、工具结果和扩展记录的消息类型", "aliases": ["Agent Message"], "domain": "消息", "status": "confirmed", "articles": ["message-system"] },
-    { "id": "llm-message", "name": "模型消息", "definition": "按模型协议转换后用于请求或解释模型输出的消息表示", "aliases": ["LLM message"], "domain": "消息", "status": "confirmed", "articles": ["message-system"] },
-    { "id": "message-event", "name": "消息事件", "definition": "消息或运行过程发生变化时供外部观察者接收的通知", "aliases": ["message_update"], "domain": "事件", "status": "confirmed", "articles": ["message-system", "event-driven"] },
-    { "id": "steering-queue", "name": "引导队列", "definition": "在 Agent 运行过程中暂存并按规则注入下一步处理的消息队列", "aliases": ["steering queue"], "domain": "消息", "status": "confirmed", "articles": ["message-system"] },
-    { "id": "context-conversion", "name": "上下文转换", "definition": "把内部消息和运行记录转换成模型请求所需结构的过程", "aliases": ["context conversion"], "domain": "消息", "status": "confirmed", "articles": ["message-system"] },
-    { "id": "event-driven", "name": "事件驱动", "definition": "控制流由事实发生后的事件分发来选择和调用处理者，而不是由生产者直接调用固定消费者", "aliases": ["Event-driven", "EDA"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven", "event-driven-agent"] },
-    { "id": "event", "name": "事件", "definition": "对某个已经发生事实的结构化描述；它本身是数据，不是会执行的函数", "aliases": ["event"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven", "event-driven-agent"] },
-    { "id": "event-dispatch", "name": "事件分发", "definition": "事件产生后查找已注册监听器并调用回调的运行时过程", "aliases": ["dispatch", "emit"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven", "event-driven-agent"] },
-    { "id": "callback", "name": "回调", "definition": "先交给另一个对象保存、在约定条件满足时由该对象调用的函数", "aliases": ["callback", "listener"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven", "event-driven-agent"] },
-    { "id": "external-trigger", "name": "外部触发", "definition": "由 Webhook、定时器、按钮等应用边界外的输入启动一次业务处理", "aliases": ["external event"], "domain": "事件与架构", "status": "confirmed", "articles": ["event-driven", "event-driven-agent"] },
-    { "id": "async-control-flow", "name": "异步控制流", "definition": "调用者把等待或后续完成交给 Promise、队列或其他调度机制的控制方式", "aliases": ["async", "await"], "domain": "执行与调度", "status": "confirmed", "articles": ["event-driven", "event-driven-agent"] },
-    { "id": "tool-call", "name": "工具调用", "definition": "模型或 Agent 请求应用执行某个具有名称和参数的工具动作", "aliases": ["tool call"], "domain": "工具", "status": "confirmed", "articles": ["tool-execution"] },
-    { "id": "tool-execution", "name": "工具执行", "definition": "运行时校验工具请求、调用实现并把结果回填到 Agent 流程的过程", "aliases": ["tool execution"], "domain": "工具", "status": "confirmed", "articles": ["tool-execution"] }
+    {
+      "id": "state",
+      "name": "状态",
+      "definition": "某个对象在某个时间点、会影响下一步行为的当前事实",
+      "aliases": [
+        "state"
+      ],
+      "domain": "执行基础",
+      "status": "confirmed",
+      "articles": [
+        "computer-state"
+      ]
+    },
+    {
+      "id": "session",
+      "name": "会话",
+      "definition": "把后续操作关联到同一条持续工作的标识与边界",
+      "aliases": [
+        "session"
+      ],
+      "domain": "执行基础",
+      "status": "confirmed",
+      "articles": [
+        "computer-state"
+      ]
+    },
+    {
+      "id": "runtime-state",
+      "name": "运行时状态",
+      "definition": "当前进程或 Agent 循环中的模型、队列、流式输出和待处理调用",
+      "aliases": [
+        "runtime state"
+      ],
+      "domain": "执行基础",
+      "status": "confirmed",
+      "articles": [
+        "computer-state"
+      ]
+    },
+    {
+      "id": "business-state",
+      "name": "业务状态",
+      "definition": "由业务规则和权威执行者确认的任务、角色或世界当前事实",
+      "aliases": [
+        "business state"
+      ],
+      "domain": "执行基础",
+      "status": "confirmed",
+      "articles": [
+        "computer-state"
+      ]
+    },
+    {
+      "id": "context-reconstruction",
+      "name": "上下文重建",
+      "definition": "从历史和动态信息中筛选、压缩、转换出本次模型请求",
+      "aliases": [
+        "context reconstruction"
+      ],
+      "domain": "执行基础",
+      "status": "confirmed",
+      "articles": [
+        "computer-state"
+      ]
+    },
+    {
+      "id": "agent-message",
+      "name": "AgentMessage",
+      "definition": "Agent 内部用于表达对话、工具结果和扩展记录的消息类型",
+      "aliases": [
+        "Agent Message"
+      ],
+      "domain": "消息",
+      "status": "confirmed",
+      "articles": [
+        "message-system"
+      ]
+    },
+    {
+      "id": "llm-message",
+      "name": "模型消息",
+      "definition": "按模型协议转换后用于请求或解释模型输出的消息表示",
+      "aliases": [
+        "LLM message"
+      ],
+      "domain": "消息",
+      "status": "confirmed",
+      "articles": [
+        "message-system"
+      ]
+    },
+    {
+      "id": "message-event",
+      "name": "消息事件",
+      "definition": "消息或运行过程发生变化时供外部观察者接收的通知",
+      "aliases": [
+        "message_update"
+      ],
+      "domain": "事件",
+      "status": "confirmed",
+      "articles": [
+        "message-system"
+      ]
+    },
+    {
+      "id": "steering-queue",
+      "name": "引导队列",
+      "definition": "在 Agent 运行过程中暂存并按规则注入下一步处理的消息队列",
+      "aliases": [
+        "steering queue"
+      ],
+      "domain": "消息",
+      "status": "confirmed",
+      "articles": [
+        "message-system"
+      ]
+    },
+    {
+      "id": "context-conversion",
+      "name": "上下文转换",
+      "definition": "把内部消息和运行记录转换成模型请求所需结构的过程",
+      "aliases": [
+        "context conversion"
+      ],
+      "domain": "消息",
+      "status": "confirmed",
+      "articles": [
+        "message-system"
+      ]
+    },
+    {
+      "id": "event-driven",
+      "name": "事件驱动",
+      "definition": "通过事件及预先建立的响应关系组织后续处理的方式；具体调用与执行时机由所用机制决定。",
+      "aliases": [
+        "Event-driven",
+        "EDA"
+      ],
+      "domain": "事件与架构",
+      "status": "confirmed",
+      "articles": [
+        "event-driven"
+      ]
+    },
+    {
+      "id": "event",
+      "name": "事件",
+      "definition": "对已经发生的操作或变化的描述；保存请求发生与保存完成是不同事实，事件数据不会自行执行。",
+      "aliases": [
+        "event"
+      ],
+      "domain": "事件与架构",
+      "status": "confirmed",
+      "articles": [
+        "event-driven"
+      ]
+    },
+    {
+      "id": "event-dispatch",
+      "name": "事件分发",
+      "definition": "依据事件类型和登记关系找到接收者并传递事件的过程；本篇进程内示例通过调用处理函数完成。",
+      "aliases": [
+        "dispatch",
+        "emit"
+      ],
+      "domain": "事件与架构",
+      "status": "confirmed",
+      "articles": [
+        "event-driven"
+      ]
+    },
+    {
+      "id": "callback",
+      "name": "回调",
+      "definition": "先作为参数交给其他代码，在约定条件满足时由其他代码调用的函数。",
+      "aliases": [
+        "callback",
+        "listener"
+      ],
+      "domain": "事件与架构",
+      "status": "confirmed",
+      "articles": [
+        "event-driven"
+      ]
+    },
+    {
+      "id": "external-trigger",
+      "name": "外部触发",
+      "definition": "用户输入等来自当前业务处理之外的操作，经应用或框架识别后启动相应处理。",
+      "aliases": [
+        "external event"
+      ],
+      "domain": "事件与架构",
+      "status": "confirmed",
+      "articles": [
+        "event-driven"
+      ]
+    },
+    {
+      "id": "async-control-flow",
+      "name": "异步控制流",
+      "definition": "发起操作与处理其后续完成不必在同一次同步调用中连续完成的控制方式，具体衔接由相应调度机制安排。",
+      "aliases": [
+        "async",
+        "await"
+      ],
+      "domain": "执行与调度",
+      "status": "confirmed",
+      "articles": [
+        "event-driven"
+      ]
+    },
+    {
+      "id": "tool-call",
+      "name": "工具调用",
+      "definition": "模型或 Agent 请求应用执行某个具有名称和参数的工具动作",
+      "aliases": [
+        "tool call"
+      ],
+      "domain": "工具",
+      "status": "confirmed",
+      "articles": [
+        "tool-execution"
+      ]
+    },
+    {
+      "id": "tool-execution",
+      "name": "工具执行",
+      "definition": "运行时校验工具请求、调用实现并把结果回填到 Agent 流程的过程",
+      "aliases": [
+        "tool execution"
+      ],
+      "domain": "工具",
+      "status": "confirmed",
+      "articles": [
+        "tool-execution"
+      ]
+    },
+    {
+      "id": "event-subscription",
+      "name": "事件订阅",
+      "definition": "把某类事件与响应者建立对应关系；进程内示例登记函数引用，登记本身不执行处理函数。",
+      "aliases": [
+        "事件注册",
+        "subscribe",
+        "listener registration"
+      ],
+      "domain": "事件与架构",
+      "status": "confirmed",
+      "articles": [
+        "event-driven"
+      ]
+    }
   ],
   "groups": [
-    { "id": "state-and-execution", "question": "系统如何从当前事实走到下一步？", "description": "连接状态、消息、上下文、事件和工具的执行边界", "concepts": ["state", "agent-message", "event-driven", "tool-execution"], "articles": ["computer-state", "message-system", "event-driven", "tool-execution"] }
+    {
+      "id": "state-and-execution",
+      "question": "系统如何从当前事实走到下一步？",
+      "description": "连接状态、消息、上下文、事件和工具的执行边界",
+      "concepts": [
+        "state",
+        "agent-message",
+        "event-driven",
+        "tool-execution"
+      ],
+      "articles": [
+        "computer-state",
+        "message-system",
+        "event-driven",
+        "tool-execution"
+      ]
+    }
   ],
   "relations": [
-    { "id": "r-event-driven-dispatch", "from": "event-driven", "to": "event-dispatch", "type": "composition", "reason": "事件驱动的运行时链路包含事件产生后由分发器选择并调用处理者的步骤。", "scope": "进程内事件通知和系统级事件通道都适用，但可靠投递需要额外机制。", "evidence": "event-driven#dispatch; event-driven-agent#dispatch" },
-    { "id": "r-dispatch-callback", "from": "event-dispatch", "to": "callback", "type": "causal", "reason": "分发器遍历注册关系并调用 listener，因而使回调函数在事件到达时执行。", "scope": "Pi 0.85.1 的事件处理路径以及同步事件源；异步 listener 是否被等待取决于具体实现。", "evidence": "event-driven#dispatch" },
-    { "id": "r-event-message-event", "from": "event", "to": "message-event", "type": "hierarchy", "reason": "消息事件是用来通知消息或运行过程变化的一类事件。", "scope": "Pi Agent 的 message_update 等生命周期通知。", "evidence": "event-driven#pi" },
-    { "id": "r-event-async", "from": "event-driven", "to": "async-control-flow", "type": "related", "reason": "事件驱动回答谁根据事实选择处理者，异步控制流回答调用者如何等待；两者可以同时出现，也可以分别出现。", "scope": "进程内回调和跨进程消息均适用。", "evidence": "event-driven#timing" },
-    { "id": "r-agent-message-event", "from": "agent-message", "to": "message-event", "type": "related", "reason": "AgentMessage 是可继续的内部记录，消息事件是这类记录变化时对外发出的运行时通知。", "scope": "Pi Agent 的消息系统与事件观察边界。", "evidence": "message-system#event-boundary" },
-    { "id": "r-external-trigger-event", "from": "external-trigger", "to": "event", "type": "causal", "reason": "外部输入先被应用层识别为发生的事实，随后才能作为事件或命令进入业务处理；它不自动等于 Agent 订阅。", "scope": "Webhook、定时器和按钮进入应用层的边界。", "evidence": "event-driven#pi" },
-    { "id": "r-tool-call-execution", "from": "tool-call", "to": "tool-execution", "type": "causal", "reason": "工具调用提供名称和参数，运行时据此查找、校验并执行工具。", "scope": "Pi Agent 工具运行时。", "evidence": "tool-execution" }
+    {
+      "id": "r-event-driven-dispatch",
+      "from": "event-driven",
+      "to": "event-dispatch",
+      "type": "composition",
+      "reason": "一次保存请求产生后，事件驱动链路包含按登记关系选出处理者并通知的分发步骤；数据本身不会调用保存函数。",
+      "scope": "本文按事件类型查表的机制；跨进程通知需使用相应通信实现。",
+      "evidence": "event-driven#dispatch"
+    },
+    {
+      "id": "r-dispatch-callback",
+      "from": "event-dispatch",
+      "to": "callback",
+      "type": "causal",
+      "reason": "分发器根据 save-requested 取出函数列表，执行 handler(event)，使已登记的保存回调开始执行；没有登记就不会由这次分发调用。",
+      "scope": "本文同步进程内示例。关系指分发导致回调执行，不表示分发产生函数定义。",
+      "evidence": "event-driven#dispatch; event-driven#registration"
+    },
+    {
+      "id": "r-event-message-event",
+      "from": "event",
+      "to": "message-event",
+      "type": "hierarchy",
+      "reason": "消息事件描述消息开始、更新或结束等已发生变化，因此是事件的一类；不应把每个增量通知当作独立历史消息。",
+      "scope": "现有消息系统文章的 AgentEvent 与 message_update 说明；本次不修改该文章内容。",
+      "evidence": "message-system#events"
+    },
+    {
+      "id": "r-event-async",
+      "from": "event-driven",
+      "to": "async-control-flow",
+      "type": "related",
+      "reason": "事件与登记关系决定响应者；是否等处理完成再返回由调用和调度实现决定。本篇 publish 循环同步等待保存处理返回，仍然按事件分发。",
+      "scope": "本文同步示例及 Node.js EventEmitter；不能由事件驱动名称推出异步或多线程。",
+      "evidence": "event-driven#timing; https://nodejs.org/api/events.html#asynchronous-vs-synchronous"
+    },
+    {
+      "id": "r-agent-message-event",
+      "from": "agent-message",
+      "to": "message-event",
+      "type": "related",
+      "reason": "AgentMessage 是可继续的内部记录，消息事件是这类记录变化时对外发出的运行时通知。",
+      "scope": "Pi Agent 的消息系统与事件观察边界。",
+      "evidence": "message-system#events"
+    },
+    {
+      "id": "r-external-trigger-event",
+      "from": "external-trigger",
+      "to": "event",
+      "type": "causal",
+      "reason": "用户激活保存按钮后，GUI 工具包识别动作并通知已登记入口；应用入口再把它转换为带文档标识的保存请求事件。",
+      "scope": "本文 Swing 按钮到应用保存请求的解释；不把外部动作与业务事件视为同一层对象。",
+      "evidence": "event-driven#input; https://docs.oracle.com/javase/tutorial/uiswing/events/actionlistener.html"
+    },
+    {
+      "id": "r-tool-call-execution",
+      "from": "tool-call",
+      "to": "tool-execution",
+      "type": "causal",
+      "reason": "工具调用提供名称和参数，运行时据此查找、校验并执行工具。",
+      "scope": "Pi Agent 工具运行时。",
+      "evidence": "tool-execution"
+    },
+    {
+      "id": "r-event-driven-subscription",
+      "from": "event-driven",
+      "to": "event-subscription",
+      "type": "composition",
+      "reason": "本篇事件驱动机制在输入到来前登记保存响应者，给后续分发提供可查询的对应关系。",
+      "scope": "使用显式订阅关系的事件机制；本文使用类型到函数列表的映射。",
+      "evidence": "event-driven#dispatch"
+    },
+    {
+      "id": "r-subscription-dispatch",
+      "from": "event-subscription",
+      "to": "event-dispatch",
+      "type": "related",
+      "reason": "订阅写入事件类型与处理函数的对应表，分发读取同一张表选择调用对象。删除保存函数的登记后，同样点击仍发布事件，却只会通知余下的日志处理者。",
+      "scope": "登记先于发布、使用同一个管理器且类型名称一致的教学示例。",
+      "evidence": "event-driven#registration"
+    }
   ],
   "redirects": {},
-  "navigation": { "mapPath": "/articles/knowledge-map", "articlePath": "/articles" }
+  "navigation": {
+    "mapPath": "/articles/knowledge-map",
+    "articlePath": "/articles"
+  }
 }

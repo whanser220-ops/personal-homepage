@@ -7,14 +7,6 @@ export const navItems = [
 export const articles = [
   {
     status: "已发布",
-    title: "事件驱动软件体系结构：从直接调用到发布订阅",
-    body: "跟随原视频的订单服务、GUI 保存按钮和校园铃声，理解观察者、发布订阅与消息中间件。",
-    date: "09-23",
-    href: "/articles/event-driven-architecture-video",
-    tags: ["软件体系结构", "视频图文", "事件驱动"],
-  },
-  {
-    status: "已发布",
     title: "调用—返回风格：从子程序到面向对象",
     body: "跟随原视频的调用栈、主程序—子程序和借书系统画面，理解两种调用—返回架构的职责与取舍。",
     date: "09-23",
@@ -47,19 +39,11 @@ export const articles = [
   },
   {
     status: "已发布",
-    title: "事件驱动：剧情发生变化后，该由谁安排接下来的反应？",
-    body: "从剧情 Agent 的‘发现纸条’场景出发，理解事件为什么存在，以及它与直接调用、异步和队列的边界。",
-    date: "09-21",
+    title: "事件驱动：点击保存之后，到底是谁调用了保存函数？",
+    body: "沿文档编辑器的保存操作，追踪事件产生、函数登记、分发和执行，理解事件驱动为什么不等于异步。",
+    date: "09-27",
     href: "/articles/event-driven",
-    tags: ["事件驱动", "Pi Agent", "架构"],
-  },
-  {
-    status: "已发布",
-    title: "事件驱动的 Agent：谁在什么时候把什么交给谁？",
-    body: "从部署日志告警出发，追踪事件对象、分发器、队列和 Agent 循环，分清 Agent 的运行通知与外部输入。",
-    date: "09-21",
-    href: "/articles/event-driven-agent",
-    tags: ["事件驱动", "Agent", "架构"],
+    tags: ["事件驱动", "软件架构", "观察者模式"],
   },
   {
     status: "计划中",
