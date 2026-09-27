@@ -30,8 +30,8 @@
     },
     {
       "id": "event-driven",
-      "title": "事件驱动：从一次变化，到整个系统的反应",
-      "slug": "event-driven",
+      "title": "事件驱动：敌人倒下之后，谁让任务进度发生变化？",
+      "slug": "event-driven-from-first-principles",
       "status": "published",
       "concepts": [
         "event-driven",

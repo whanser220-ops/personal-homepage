@@ -1,142 +1,184 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import index from "../data/knowledge-index.json";
+import { articles } from "../data/homepage.js";
 import styles from "./KnowledgeMap.module.css";
 
-const relationLabels = {
-  hierarchy: "上级 / 下级",
-  peer: "并列",
-  related: "相关",
-  composition: "组成",
-  causal: "因果",
-};
+const boards = [
+  {
+    id: "software-overview",
+    label: "软件体系总览",
+    title: "软件从开发到运行",
+    description: "软件构成、交付、进程内运行和系统边界的总览白板。拖动画布并缩放查看区域。",
+    svgUrl: "/articles/knowledge-map/software-concept-map.svg",
+    sourceUrl: "/articles/knowledge-map/software-concept-map.excalidraw",
+    sourceName: "software-concept-map.excalidraw",
+  },
+  {
+    id: "event-collaboration",
+    label: "事件协作局部图",
+    title: "事件驱动在软件体系中的位置",
+    description: "局部白板区分开发角色、进程内订阅与分发、跨服务通信，以及独立的运行调度视角。",
+    svgUrl: "/articles/knowledge-map/event-collaboration-candidate.svg",
+    sourceUrl: "/articles/knowledge-map/event-collaboration-candidate.excalidraw",
+    sourceName: "event-collaboration-candidate.excalidraw",
+  },
+  {
+    id: "sync-async",
+    label: "同步/异步局部图",
+    title: "同步与异步在软件体系中的位置",
+    description: "从这块局部白板查看调用约定、宿主调度、线程和系统网络能力的边界。拖动或缩放查看细节。",
+    svgUrl: "/articles/sync-async/assets/architecture-position.svg",
+    sourceUrl: "/articles/knowledge-map/software-concept-map.excalidraw",
+    sourceName: "software-concept-map.excalidraw",
+  },
+];
 
-const articleById = new Map(index.articles.map((article) => [article.id, article]));
+const eventAnchors = ["event-driven", "event", "event-dispatch", "callback", "external-trigger", "async-control-flow", "event-subscription", "command-message"];
+const syncAsyncAnchors = ["sync-async", "synchrony", "asynchrony", "blocking", "nonblocking", "concurrency", "parallelism"];
 
-function relationText(relation) {
-  const from = index.concepts.find((concept) => concept.id === relation.from)?.name || relation.from;
-  const to = index.concepts.find((concept) => concept.id === relation.to)?.name || relation.to;
-  return `${from} → ${to}`;
+function ExcalidrawBoard({ board }) {
+  const hostRef = useRef(null);
+  const dragRef = useRef(null);
+  const [svg, setSvg] = useState("");
+  const [viewBox, setViewBox] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setSvg("");
+    setViewBox(null);
+    setError("");
+    fetch(board.svgUrl, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`白板图像加载失败（HTTP ${response.status}）`);
+        return response.text();
+      })
+      .then((markup) => {
+        const dimensions = markup.match(/<svg\b[^>]*\bviewBox="([^"]+)"[^>]*>/i)?.[1]?.split(/[ ,]+/).map(Number);
+        if (!dimensions || dimensions.length !== 4 || dimensions.some((part) => !Number.isFinite(part))) throw new Error("白板 SVG 缺少有效的 viewBox");
+        setViewBox({ x: dimensions[0], y: dimensions[1], width: dimensions[2], height: dimensions[3] });
+        setSvg(markup);
+      })
+      .catch((cause) => {
+        if (cause.name !== "AbortError") setError(cause.message);
+      });
+    return () => controller.abort();
+  }, [board.svgUrl]);
+
+  useEffect(() => {
+    const svgElement = hostRef.current?.querySelector("svg");
+    if (!svgElement || !viewBox) return;
+    svgElement.setAttribute("viewBox", `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`);
+    svgElement.setAttribute("width", "100%");
+    svgElement.setAttribute("height", "100%");
+    svgElement.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    svgElement.setAttribute("role", "img");
+    svgElement.setAttribute("aria-label", board.title);
+  }, [board.title, svg, viewBox]);
+
+  const zoom = useCallback((factor) => {
+    setViewBox((current) => {
+      if (!current) return current;
+      const width = current.width * factor;
+      const height = current.height * factor;
+      return { x: current.x + (current.width - width) / 2, y: current.y + (current.height - height) / 2, width, height };
+    });
+  }, []);
+
+  const reset = useCallback(() => {
+    const svgElement = hostRef.current?.querySelector("svg");
+    const dimensions = svgElement?.getAttribute("viewBox")?.split(/[ ,]+/).map(Number);
+    if (dimensions?.length === 4) setViewBox({ x: dimensions[0], y: dimensions[1], width: dimensions[2], height: dimensions[3] });
+    else setViewBox(null);
+    if (svg) {
+      const match = svg.match(/<svg\b[^>]*\bviewBox="([^"]+)"[^>]*>/i)?.[1]?.split(/[ ,]+/).map(Number);
+      if (match?.length === 4) setViewBox({ x: match[0], y: match[1], width: match[2], height: match[3] });
+    }
+  }, [svg]);
+
+  const beginPan = (event) => {
+    if (event.button !== 0 || event.target.closest("button, a")) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    dragRef.current = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, rect, viewBox };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const pan = (event) => {
+    const drag = dragRef.current;
+    if (!drag || !viewBox) return;
+    const dx = (event.clientX - drag.clientX) / drag.rect.width * drag.viewBox.width;
+    const dy = (event.clientY - drag.clientY) / drag.rect.height * drag.viewBox.height;
+    setViewBox({ ...drag.viewBox, x: drag.viewBox.x - dx, y: drag.viewBox.y - dy });
+  };
+
+  return <section className={styles.boardPanel} aria-label={board.title}>
+    <div className={styles.boardHeading} data-board-heading>
+      <div><h2>{board.title}</h2><p>{board.description}</p></div>
+      <a className={styles.sourceLink} href={board.sourceUrl} download={board.sourceName}>下载 Excalidraw 源文件</a>
+    </div>
+    <div className={styles.toolbar} aria-label="白板缩放控制">
+      <button type="button" aria-label="放大白板" onClick={() => zoom(0.8)}>＋</button>
+      <button type="button" aria-label="缩小白板" onClick={() => zoom(1.25)}>−</button>
+      <button type="button" onClick={reset}>回到总览</button>
+      <span>拖动画布 · 滚动缩放按钮</span>
+    </div>
+    <div
+      className={styles.boardViewport}
+      data-board-viewport
+      onPointerDown={beginPan}
+      onPointerMove={pan}
+      onPointerUp={() => { dragRef.current = null; }}
+      onPointerCancel={() => { dragRef.current = null; }}
+      onWheel={(event) => { event.preventDefault(); zoom(event.deltaY < 0 ? 0.92 : 1.09); }}
+      role="region"
+      aria-label={`${board.title}，可拖动和缩放的白板`}
+    >
+      {error ? <p className={styles.error}>{error}</p> : null}
+      {!svg && !error ? <p className={styles.loading}>正在加载白板…</p> : null}
+      <div ref={hostRef} className={styles.svgHost} dangerouslySetInnerHTML={{ __html: svg }} />
+    </div>
+  </section>;
 }
 
 export function KnowledgeMap() {
-  const [query, setQuery] = useState("");
-  const [relationType, setRelationType] = useState("all");
-  const [selectedId, setSelectedId] = useState("event-driven");
-  const [focusOnly, setFocusOnly] = useState(false);
+  const [activeBoard, setActiveBoard] = useState("software-overview");
+  const board = boards.find((item) => item.id === activeBoard) || boards[0];
 
-  const selected = index.concepts.find((concept) => concept.id === selectedId) || index.concepts[0];
-  const selectedRelations = index.relations.filter((relation) => relation.from === selected.id || relation.to === selected.id);
-  const neighborIds = new Set(selectedRelations.flatMap((relation) => [relation.from, relation.to]));
+  useEffect(() => {
+    const hash = decodeURIComponent(window.location.hash.slice(1));
+    if (eventAnchors.includes(hash)) setActiveBoard("event-collaboration");
+    if (syncAsyncAnchors.includes(hash)) setActiveBoard("sync-async");
+  }, []);
 
-  const concepts = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return index.concepts.filter((concept) => {
-      const searchable = [concept.name, concept.id, ...(concept.aliases || []), concept.definition].join(" ").toLowerCase();
-      const matchesQuery = !needle || searchable.includes(needle);
-      const matchesType = relationType === "all" || index.relations.some((relation) =>
-        relation.type === relationType && (relation.from === concept.id || relation.to === concept.id),
-      );
-      const matchesFocus = !focusOnly || neighborIds.has(concept.id);
-      return matchesQuery && matchesType && matchesFocus;
-    });
-  }, [focusOnly, neighborIds, query, relationType]);
-
-  const visibleRelations = index.relations.filter((relation) => {
-    const matchesType = relationType === "all" || relation.type === relationType;
-    const matchesFocus = !focusOnly || relation.from === selected.id || relation.to === selected.id;
-    return matchesType && matchesFocus;
-  });
-
-  return (
-    <section className={styles.mapShell} aria-label="概念知识地图">
-      <header className={styles.mapHeader}>
-        <div>
-          <p className={styles.kicker}>CONCEPT MAP / REVISION {index.revision}</p>
-          <h1>知识地图</h1>
-          <p>每个节点是一个概念，文章只是它的解释资料。选中“事件驱动”，可以看到它和消息、回调、异步控制流之间的具体关系。</p>
-        </div>
-        <Link className={styles.backLink} href="/articles">← 返回文章</Link>
-      </header>
-
-      <div className={styles.controls}>
-        <label>
-          <span>搜索概念</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="例如：回调、异步、消息" />
-        </label>
-        <label>
-          <span>关系类型</span>
-          <select value={relationType} onChange={(event) => setRelationType(event.target.value)}>
-            <option value="all">全部关系</option>
-            {Object.entries(relationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-        </label>
-        <button className={styles.focusButton} aria-pressed={focusOnly} onClick={() => setFocusOnly((value) => !value)} type="button">
-          {focusOnly ? "显示全图" : "只看当前相邻"}
-        </button>
+  return <section className={styles.mapShell} aria-label="可编辑源文件支持的交互式软件体系白板">
+    {eventAnchors.map((id) => <span className={styles.anchorAlias} id={id} key={id} />)}
+    <header className={styles.mapHeader}>
+      <div>
+        <p className={styles.kicker}>ARTICLES / KNOWLEDGE MAP</p>
+        <h1>软件体系白板</h1>
+        <p>先看软件从开发到运行的整体位置，再切换到事件驱动的局部关系。两张白板均由可编辑的 Excalidraw 源文件导出；可缩放、平移，也可下载继续编辑。</p>
       </div>
+      <Link className={styles.backLink} href="/articles">← 返回文章</Link>
+    </header>
 
-      <div className={styles.legend} aria-label="关系方向说明">
-        <span><i className={styles.dotCausal} />因果：前者通过机制改变后者</span>
-        <span><i className={styles.dotComposition} />组成：整体由部分构成</span>
-        <span><i className={styles.dotHierarchy} />层级：下级属于上级</span>
-        <span><i className={styles.dotRelated} />相关：帮助解释但不表示组成</span>
-      </div>
+    <nav className={styles.boardTabs} aria-label="选择白板">
+      {boards.map((item) => <button
+        aria-current={activeBoard === item.id ? "page" : undefined}
+        aria-pressed={activeBoard === item.id}
+        className={activeBoard === item.id ? styles.activeTab : styles.tab}
+        key={item.id}
+        onClick={() => setActiveBoard(item.id)}
+        type="button"
+      >{item.label}</button>)}
+    </nav>
+    <ExcalidrawBoard board={board} key={board.id} />
 
-      <div className={styles.mapLayout}>
-        <div className={styles.conceptGrid} aria-label="概念节点">
-          {concepts.map((concept) => (
-            <button
-              aria-pressed={selected.id === concept.id}
-              className={selected.id === concept.id ? styles.conceptCardActive : styles.conceptCard}
-              key={concept.id}
-              onClick={() => setSelectedId(concept.id)}
-              type="button"
-            >
-              <span className={styles.domain}>{concept.domain}</span>
-              <strong>{concept.name}</strong>
-              <small>{concept.definition}</small>
-            </button>
-          ))}
-          {!concepts.length ? <p className={styles.empty}>没有找到匹配的概念。</p> : null}
-        </div>
-
-        <aside className={styles.detailPanel} aria-live="polite">
-          <p className={styles.detailLabel}>SELECTED CONCEPT</p>
-          <h2>{selected.name}</h2>
-          <p>{selected.definition}</p>
-          <div className={styles.aliases}>别名：{(selected.aliases || []).join("、") || "无"}</div>
-
-          <h3>相关文章</h3>
-          <ul className={styles.articleLinks}>
-            {(selected.articles || []).map((articleId) => {
-              const article = articleById.get(articleId);
-              return article ? <li key={article.id}><Link href={`/articles/${article.slug}`}>{article.title}</Link></li> : null;
-            })}
-          </ul>
-
-          <h3>关系</h3>
-          <div className={styles.relationList}>
-            {selectedRelations.length ? selectedRelations.map((relation) => (
-              <details key={relation.id} open={relation.type === "causal" || relation.type === "composition"}>
-                <summary><span>{relationLabels[relation.type]}</span>{relationText(relation)}</summary>
-                <p>{relation.reason}</p>
-                <small>适用范围：{relation.scope}</small>
-              </details>
-            )) : <p>当前概念暂无已核实关系。</p>}
-          </div>
-        </aside>
-      </div>
-
-      <details className={styles.allRelations}>
-        <summary>查看当前筛选下的全部关系（{visibleRelations.length}）</summary>
-        <ul>
-          {visibleRelations.map((relation) => <li key={relation.id}><b>{relationLabels[relation.type]}</b>{relationText(relation)}：{relation.reason}</li>)}
-        </ul>
-      </details>
+    <section className={styles.articleNavigation} aria-labelledby="map-articles-heading">
+      <div><p className={styles.kicker}>READING PATHS</p><h2 id="map-articles-heading">从文章进入具体问题</h2></div>
+      <ul>{articles.filter((article) => article.href).map((article) => <li key={article.href}><Link href={article.href}>{article.title}<span aria-hidden="true">↗</span></Link></li>)}</ul>
     </section>
-  );
+  </section>;
 }

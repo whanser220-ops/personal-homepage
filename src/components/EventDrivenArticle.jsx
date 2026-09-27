@@ -7,7 +7,7 @@ import javascript from "highlight.js/lib/languages/javascript";
 import java from "highlight.js/lib/languages/java";
 import json from "highlight.js/lib/languages/json";
 
-import article from "../data/eventDrivenClickArticle.json";
+import defaultArticle from "../data/eventDrivenClickArticle.json";
 import styles from "./ArticleReading.module.css";
 
 hljs.registerLanguage("javascript", javascript);
@@ -67,8 +67,11 @@ function MarkdownBlocks({ content, subsections = [] }) {
       const captionMatch = lines[index]?.trim().match(/^\*(.+)\*$/);
       const caption = captionMatch?.[1];
       if (captionMatch) index += 1;
-      blocks.push(<figure className={styles.diagram} key={blocks.length}>
+      blocks.push(<figure className={styles.diagram} data-article-figure key={blocks.length}>
         <img alt={image[1]} src={image[2]} />
+        <a className={styles.figureOpen} href={image[2]} rel="noreferrer" target="_blank">打开原尺寸图示查看细节 ↗</a>
+        {image[2].includes("event-collaboration-candidate.svg") ? <a className={styles.mapLink} download="event-collaboration-candidate.excalidraw" href="/articles/knowledge-map/event-collaboration-candidate.excalidraw">下载这张体系白板的 Excalidraw 源文件</a> : null}
+        {image[2].includes("architecture-position.png") ? <a className={styles.mapLink} download="software-concept-map.excalidraw" href="/articles/knowledge-map/software-concept-map.excalidraw">下载可编辑的体系白板</a> : null}
         {caption ? <figcaption><InlineMarkdown text={caption} /></figcaption> : null}
       </figure>);
       continue;
@@ -104,7 +107,7 @@ function MarkdownBlocks({ content, subsections = [] }) {
   return blocks;
 }
 
-function ChapterLinks({ activeId }) {
+function ChapterLinks({ article, activeId }) {
   return <ul className={styles.tocList}>{article.toc.map((entry, index) => (
     <li key={entry.id}><a aria-current={activeId === entry.id ? "location" : undefined} className={`${activeId === entry.id ? styles.tocActive : ""} ${entry.level === 3 ? styles.tocSub : ""}`} href={`#${entry.id}`}>
       <span>{entry.level === 2 ? String(article.toc.slice(0, index + 1).filter((item) => item.level === 2).length).padStart(2, "0") : "↳"}</span>{entry.title}
@@ -112,44 +115,50 @@ function ChapterLinks({ activeId }) {
   ))}</ul>;
 }
 
-function ArticleToc({ activeId }) {
+function ArticleToc({ article, activeId }) {
   return <>
-    <aside className={styles.toc} aria-label="文章目录"><p className={styles.tocLabel}>ON THIS PAGE</p><ChapterLinks activeId={activeId} /></aside>
-    <details className={styles.mobileToc}><summary>本页目录</summary><nav aria-label="本页目录"><ChapterLinks activeId={activeId} /></nav></details>
+    <aside className={styles.toc} aria-label="文章目录" data-article-toc><p className={styles.tocLabel}>ON THIS PAGE</p><ChapterLinks article={article} activeId={activeId} /></aside>
+    <details className={styles.mobileToc} data-mobile-toc><summary>本页目录</summary><nav aria-label="本页目录"><ChapterLinks article={article} activeId={activeId} /></nav></details>
   </>;
 }
 
-export function EventDrivenArticle() {
+export function EventDrivenArticle({ article = defaultArticle, sourceLabel = "依据原视频与官方资料", category = "事件驱动", mapHref = "/articles/knowledge-map" }) {
   const [activeId, setActiveId] = useState(article.toc[0].id);
 
   useEffect(() => {
     const headings = article.toc.map(({ id }) => document.getElementById(id)).filter(Boolean);
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      if (visible[0]) setActiveId(visible[0].target.id);
-    }, { rootMargin: "-112px 0px -62% 0px", threshold: [0, 1] });
-    headings.forEach((heading) => observer.observe(heading));
-    return () => observer.disconnect();
-  }, []);
+    const updateActiveHeading = () => {
+      const current = headings.filter((heading) => heading.getBoundingClientRect().top <= 180).at(-1) || headings[0];
+      if (current) setActiveId(current.id);
+    };
+    window.addEventListener("scroll", updateActiveHeading, { passive: true });
+    window.addEventListener("resize", updateActiveHeading);
+    updateActiveHeading();
+    return () => {
+      window.removeEventListener("scroll", updateActiveHeading);
+      window.removeEventListener("resize", updateActiveHeading);
+    };
+  }, [article]);
 
-  return <article className={styles.articleShell}>
+  return <article className={styles.articleShell} data-article-shell>
     <Link className={styles.backLink} href="/articles">← 返回文章列表</Link>
+    <Link className={styles.mapLink} href={mapHref}>查看这篇文章在知识地图中的位置 →</Link>
     <header className={styles.articleHeader}>
-      <p className={styles.kicker}>学习文章 · 事件驱动</p>
+      <p className={styles.kicker}>学习文章 · {category}</p>
       <h1>{article.title}</h1>
       <p className={styles.lead}>{article.lead}</p>
-      <div className={styles.meta}><time dateTime={article.date}>{article.date}</time><span>依据原视频与官方资料</span></div>
+      <div className={styles.meta}><time dateTime={article.date}>{article.date}</time><span>{sourceLabel}</span></div>
     </header>
-    <div className={styles.mobileTocWrap}><ArticleToc activeId={activeId} /></div>
-    <div className={styles.articleLayout}>
-      <div className={styles.articleBody}>
+    <div className={styles.mobileTocWrap}><ArticleToc article={article} activeId={activeId} /></div>
+    <div className={styles.articleLayout} data-article-layout>
+      <div className={styles.articleBody} data-article-body>
         <MarkdownBlocks content={article.intro} />
         {article.chapters.map((chapter) => <section key={chapter.id} aria-labelledby={chapter.id}>
           <h2 id={chapter.id}>{chapter.title}</h2>
           <MarkdownBlocks content={chapter.content} subsections={chapter.subsections} />
         </section>)}
       </div>
-      <ArticleToc activeId={activeId} />
+      <ArticleToc article={article} activeId={activeId} />
     </div>
   </article>;
 }

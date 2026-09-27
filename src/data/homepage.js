@@ -7,6 +7,14 @@ export const navItems = [
 export const articles = [
   {
     status: "已发布",
+    title: "事件驱动：敌人倒下之后，谁让任务进度发生变化？",
+    body: "从一条击败事件和一张订阅表，理解事件怎样变成函数调用，再辨清队列、事件循环与跨服务消息的边界。",
+    date: "09-27",
+    href: "/articles/event-driven-from-first-principles",
+    tags: ["事件驱动", "事件订阅", "软件体系"],
+  },
+  {
+    status: "已发布",
     title: "调用—返回风格：从子程序到面向对象",
     body: "跟随原视频的调用栈、主程序—子程序和借书系统画面，理解两种调用—返回架构的职责与取舍。",
     date: "09-23",
@@ -36,14 +44,6 @@ export const articles = [
     date: "09-21",
     href: "/articles/computer-state",
     tags: ["状态", "Pi Agent", "架构"],
-  },
-  {
-    status: "已发布",
-    title: "事件驱动架构：从构建结果看懂组件怎样协作",
-    body: "用一个 CI 构建系统贯穿讲解事件协作的位置、订阅分发、执行边界与业务结果。",
-    date: "09-27",
-    href: "/articles/event-driven",
-    tags: ["事件驱动", "软件架构", "观察者模式"],
   },
   {
     status: "计划中",

@@ -289,7 +289,7 @@ ToolResultMessage { toolCallId: "call_42" }`} />
           <p>判断一个工具系统是否设计清楚，可以只问：谁把名字映射到函数？参数在哪里校验？谁掌握权限、取消和副作用？结果怎样通过 <code>toolCallId</code> 回到下一轮上下文？</p>
 
           <p>
-            文中核验来源：<SourceLink href="https://github.com/earendil-works/pi/blob/main/packages/agent/README.md">Pi Agent Core README</SourceLink>、<SourceLink href="https://github.com/earendil-works/pi/blob/main/packages/agent/src/agent-loop.ts">Agent Loop 实现</SourceLink>、<SourceLink href="https://github.com/earendil-works/pi/blob/main/packages/agent/src/types.ts">类型定义</SourceLink>，以及上一篇<a href="/articles/message-system">消息系统</a>和<a href="/articles/event-driven">事件驱动</a>。
+            文中核验来源：<SourceLink href="https://github.com/earendil-works/pi/blob/main/packages/agent/README.md">Pi Agent Core README</SourceLink>、<SourceLink href="https://github.com/earendil-works/pi/blob/main/packages/agent/src/agent-loop.ts">Agent Loop 实现</SourceLink>、<SourceLink href="https://github.com/earendil-works/pi/blob/main/packages/agent/src/types.ts">类型定义</SourceLink>，以及上一篇<a href="/articles/message-system">消息系统</a>和<a href="/articles/event-driven-from-first-principles">事件驱动</a>。
           </p>
         </div>
         <ArticleToc activeId={activeId} />

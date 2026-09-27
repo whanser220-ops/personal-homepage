@@ -39,6 +39,8 @@
 .bulletList { margin: 0 0 24px; padding-left: 1.5em; color: #605b54; }
 .diagram { margin: 34px 0 38px; }
 .diagram img { display: block; width: 100%; height: auto; border: 1px solid #d9d3c8; border-radius: 10px 7px 12px 8px; background: #fff; }
+.figureOpen { display: inline-flex; margin-top: 9px; color: #80614f; font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif; font-size: .8rem; font-weight: 700; }
+.diagram .mapLink { display: inline-flex; margin: 9px 0 0 14px; }
 .diagram figcaption { margin-top: 11px; color: #81786d; font-size: .86rem; line-height: 1.65; }
 .takeaway, .closing { padding: 19px 22px; border-left: 4px solid #cc7958; border-radius: 4px; background: #f6e3d8; color: #3e3832 !important; }
 .formula { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin: 28px 0 32px; padding: 20px 16px; border: 1px solid #d9d3c8; border-radius: 8px; background: #f7f5ef; color: #262621; }
