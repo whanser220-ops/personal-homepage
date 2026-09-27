@@ -7,6 +7,14 @@ export const navItems = [
 export const articles = [
   {
     status: "已发布",
+    title: "同步与异步：等待数据时，程序究竟停在哪里",
+    body: "沿着一次加载个人资料的请求，理解同步与异步、阻塞与非阻塞，以及 await 挂起函数后谁在继续工作。",
+    date: "09-27",
+    href: "/articles/sync-async",
+    tags: ["同步与异步", "JavaScript", "程序执行", "事件循环"],
+  },
+  {
+    status: "已发布",
     title: "事件驱动：敌人倒下之后，谁让任务进度发生变化？",
     body: "从一条击败事件和一张订阅表，理解事件怎样变成函数调用，再辨清队列、事件循环与跨服务消息的边界。",
     date: "09-27",

@@ -159,7 +159,7 @@ export function KnowledgeMap() {
       <div>
         <p className={styles.kicker}>ARTICLES / KNOWLEDGE MAP</p>
         <h1>软件体系白板</h1>
-        <p>先看软件从开发到运行的整体位置，再切换到事件驱动的局部关系。两张白板均由可编辑的 Excalidraw 源文件导出；可缩放、平移，也可下载继续编辑。</p>
+      <p>先看软件从开发到运行的整体位置，再切换到按主题整理的局部白板。所有白板均由可编辑的 Excalidraw 源文件导出；可缩放、平移，也可下载继续编辑。</p>
       </div>
       <Link className={styles.backLink} href="/articles">← 返回文章</Link>
     </header>

@@ -77,6 +77,23 @@
 .mobileTocWrap { display: none; }
 .mobileToc { display: none; }
 
+:global(.dark) .articleShell { color: #e7e1d8; background: #211d1a; }
+:global(.dark) .backLink, :global(.dark) .articleBody p, :global(.dark) .articleBody ol, :global(.dark) .bulletList, :global(.dark) .articleBody table { color: #c8beb2; }
+:global(.dark) .mapLink, :global(.dark) .articleBody a, :global(.dark) .figureOpen, :global(.dark) .sourceNotes a { color: #e5a17d; }
+:global(.dark) .articleHeader { border-color: #49413a; }
+:global(.dark) .articleHeader h1, :global(.dark) .articleBody h2, :global(.dark) .articleBody h3, :global(.dark) .articleBody strong, :global(.dark) .articleBody th { color: #f0e9df; }
+:global(.dark) .lead, :global(.dark) .meta, :global(.dark) .diagram figcaption, :global(.dark) .sourceNotes, :global(.dark) .sourceNotes span { color: #b9afa4; }
+:global(.dark) .articleBody code { border-color: #51463d; background: #342d27; color: #f0b894; }
+:global(.dark) .articleBody th, :global(.dark) .articleBody td { border-color: #49413a; }
+:global(.dark) .articleBody th { background: #342d27; }
+:global(.dark) .diagram img { border-color: #49413a; background: #f9f8f4; }
+:global(.dark) .mobileTocWrap .mobileToc { border-color: #49413a; background: #2a2521; }
+:global(.dark) .mobileToc summary, :global(.dark) .tocList a.tocActive { color: #f0e9df; }
+:global(.dark) .tocList a { color: #b9afa4; }
+:global(.dark) .tocList a.tocActive { background: #393129; }
+:global(.dark) .tocList a span, :global(.dark) .kicker, :global(.dark) .tocLabel { color: #e5a17d; }
+:global(.dark) .codeBlock { border-color: #51463d; background: #171412; }
+
 @media (max-width: 1000px) {
   .articleLayout { grid-template-columns: minmax(0, 1fr); }
   .articleLayout > .toc { display: none; }
