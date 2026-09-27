@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 3,
+  "revision": 4,
   "articles": [
     {
       "id": "computer-state",
@@ -30,17 +30,19 @@
     },
     {
       "id": "event-driven",
-      "title": "事件驱动：点击保存之后，到底是谁调用了保存函数？",
+      "title": "事件驱动：从一次变化，到整个系统的反应",
       "slug": "event-driven",
       "status": "published",
       "concepts": [
         "event-driven",
         "event",
+        "state",
         "event-dispatch",
         "callback",
         "external-trigger",
         "async-control-flow",
-        "event-subscription"
+        "event-subscription",
+        "command-message"
       ]
     },
     {
@@ -65,7 +67,8 @@
       "domain": "执行基础",
       "status": "confirmed",
       "articles": [
-        "computer-state"
+        "computer-state",
+        "event-driven"
       ]
     },
     {
@@ -188,7 +191,7 @@
     {
       "id": "event-driven",
       "name": "事件驱动",
-      "definition": "通过事件及预先建立的响应关系组织后续处理的方式；具体调用与执行时机由所用机制决定。",
+      "definition": "围绕已发生的事情及响应关系组织系统协作；产生者报告事实，处理者按约定接收并执行各自规则，结果还可形成新的事件。",
       "aliases": [
         "Event-driven",
         "EDA"
@@ -202,7 +205,7 @@
     {
       "id": "event",
       "name": "事件",
-      "definition": "对已经发生的操作或变化的描述；保存请求发生与保存完成是不同事实，事件数据不会自行执行。",
+      "definition": "对已经发生的操作、变化及其上下文的描述；温度越限与风机启动成功是不同事实，事件数据不会自行执行。",
       "aliases": [
         "event"
       ],
@@ -215,7 +218,7 @@
     {
       "id": "event-dispatch",
       "name": "事件分发",
-      "definition": "依据事件类型和登记关系找到接收者并传递事件的过程；本篇进程内示例通过调用处理函数完成。",
+      "definition": "根据订阅或路由关系找到接收者并传递事件的过程；进程内可调用函数，跨进程需使用相应通信设施。",
       "aliases": [
         "dispatch",
         "emit"
@@ -243,7 +246,7 @@
     {
       "id": "external-trigger",
       "name": "外部触发",
-      "definition": "用户输入等来自当前业务处理之外的操作，经应用或框架识别后启动相应处理。",
+      "definition": "传感器输入、用户动作等来自当前业务处理之外的信息，经检测或识别进入相应处理。",
       "aliases": [
         "external event"
       ],
@@ -296,11 +299,25 @@
     {
       "id": "event-subscription",
       "name": "事件订阅",
-      "definition": "把某类事件与响应者建立对应关系；进程内示例登记函数引用，登记本身不执行处理函数。",
+      "definition": "建立事件类型或条件与响应者之间的对应关系；登记不等于业务动作已经执行。",
       "aliases": [
         "事件注册",
         "subscribe",
         "listener registration"
+      ],
+      "domain": "事件与架构",
+      "status": "confirmed",
+      "articles": [
+        "event-driven"
+      ]
+    },
+    {
+      "id": "command-message",
+      "name": "命令与请求",
+      "definition": "要求执行者完成某项动作的意图；发出启动请求不能证明设备已经启动。",
+      "aliases": [
+        "command",
+        "行动请求"
       ],
       "domain": "事件与架构",
       "status": "confirmed",
@@ -334,18 +351,18 @@
       "from": "event-driven",
       "to": "event-dispatch",
       "type": "composition",
-      "reason": "一次保存请求产生后，事件驱动链路包含按登记关系选出处理者并通知的分发步骤；数据本身不会调用保存函数。",
-      "scope": "本文按事件类型查表的机制；跨进程通知需使用相应通信实现。",
-      "evidence": "event-driven#dispatch"
+      "reason": "温度变化经规则识别后形成越限事件，分发机制按响应关系通知散热控制和报警显示，连接事实产生与各方行动。",
+      "scope": "本文整体机制；传递可由本地调用或通信设施实现，不由事件名称决定。",
+      "evidence": "event-driven#whole-system; event-driven#dispatch"
     },
     {
       "id": "r-dispatch-callback",
       "from": "event-dispatch",
       "to": "callback",
       "type": "causal",
-      "reason": "分发器根据 save-requested 取出函数列表，执行 handler(event)，使已登记的保存回调开始执行；没有登记就不会由这次分发调用。",
-      "scope": "本文同步进程内示例。关系指分发导致回调执行，不表示分发产生函数定义。",
-      "evidence": "event-driven#dispatch; event-driven#registration"
+      "reason": "本地分发代码遍历登记的处理函数并实际调用，使散热或告警回调开始执行；移除散热登记后，这次越限不会通过该关系调用它。",
+      "scope": "进程内函数通知。指调用导致执行，不表示分发创造函数或保证设备动作成功。",
+      "evidence": "event-driven#dispatch"
     },
     {
       "id": "r-event-message-event",
@@ -361,8 +378,8 @@
       "from": "event-driven",
       "to": "async-control-flow",
       "type": "related",
-      "reason": "事件与登记关系决定响应者；是否等处理完成再返回由调用和调度实现决定。本篇 publish 循环同步等待保存处理返回，仍然按事件分发。",
-      "scope": "本文同步示例及 Node.js EventEmitter；不能由事件驱动名称推出异步或多线程。",
+      "reason": "事件驱动安排谁响应事实，执行机制安排何时运行。同步逐个调用时，散热处理两秒未返回会推迟告警；队列只在额外调度实现存在时改变这条时间关系。",
+      "scope": "本文本地同步反例与有队列的异步安排；并行、可靠投递不由事件驱动自动保证。",
       "evidence": "event-driven#timing; https://nodejs.org/api/events.html#asynchronous-vs-synchronous"
     },
     {
@@ -379,9 +396,9 @@
       "from": "external-trigger",
       "to": "event",
       "type": "causal",
-      "reason": "用户激活保存按钮后，GUI 工具包识别动作并通知已登记入口；应用入口再把它转换为带文档标识的保存请求事件。",
-      "scope": "本文 Swing 按钮到应用保存请求的解释；不把外部动作与业务事件视为同一层对象。",
-      "evidence": "event-driven#input; https://docs.oracle.com/javase/tutorial/uiswing/events/actionlistener.html"
+      "reason": "传感器的新读数到达后，检测代码读取先前超限状态并比较阈值；从未超限变为超限时才发布越限事件，因此外界数值不会自行变成业务通知。",
+      "scope": "本文采用阈值跨越规则；其他规则可能选择每次满足条件都报告。",
+      "evidence": "event-driven#state-event-command"
     },
     {
       "id": "r-tool-call-execution",
@@ -397,18 +414,36 @@
       "from": "event-driven",
       "to": "event-subscription",
       "type": "composition",
-      "reason": "本篇事件驱动机制在输入到来前登记保存响应者，给后续分发提供可查询的对应关系。",
-      "scope": "使用显式订阅关系的事件机制；本文使用类型到函数列表的映射。",
-      "evidence": "event-driven#dispatch"
+      "reason": "本篇机制在越限发生前建立事件与散热控制、报警显示的对应关系，使产生者可以报告事实而不维护所有具体反应。",
+      "scope": "采用显式订阅关系的本文机制；装配或配置仍需建立关系。",
+      "evidence": "event-driven#whole-system; event-driven#dispatch"
     },
     {
       "id": "r-subscription-dispatch",
       "from": "event-subscription",
       "to": "event-dispatch",
       "type": "related",
-      "reason": "订阅写入事件类型与处理函数的对应表，分发读取同一张表选择调用对象。删除保存函数的登记后，同样点击仍发布事件，却只会通知余下的日志处理者。",
-      "scope": "登记先于发布、使用同一个管理器且类型名称一致的教学示例。",
-      "evidence": "event-driven#registration"
+      "reason": "订阅建立可查询的响应关系，分发使用关系选择处理者。去掉散热订阅，温度事件仍产生且告警仍可响应，但散热代码不会因此被调用。",
+      "scope": "同一事件机制、相同类型约定、登记先于本次分发；不保证业务执行成功。",
+      "evidence": "event-driven#dispatch; event-driven#coupling"
+    },
+    {
+      "id": "r-state-event",
+      "from": "state",
+      "to": "event",
+      "type": "related",
+      "reason": "当前温度及是否超限是状态，刚刚越限是一次变化记录。检测代码比较新旧状态形成事件；事件传递后，面板等处理者还可以据确实发生的结果更新自己的状态。",
+      "scope": "本文阈值跨越与风机结果模型；并非所有状态变化都会被发布，也非每个事件都必须携带完整状态。",
+      "evidence": "event-driven#state-event-command; event-driven#result-chain"
+    },
+    {
+      "id": "r-event-command",
+      "from": "event",
+      "to": "command-message",
+      "type": "related",
+      "reason": "越限事件报告事实，散热控制据此提出启动命令。命令表达意图，只有设备结果才能支撑风机已启动事件；不能从通知到达直接推出动作成功。",
+      "scope": "本文设备控制模型；一个模块可消费事件、发出请求并在获知结果后产生新事件。",
+      "evidence": "event-driven#state-event-command; event-driven#result-chain"
     }
   ],
   "redirects": {},
