@@ -70,8 +70,8 @@ function MarkdownBlocks({ content, subsections = [] }) {
       blocks.push(<figure className={styles.diagram} data-article-figure key={blocks.length}>
         <img alt={image[1]} src={image[2]} />
         <a className={styles.figureOpen} href={image[2]} rel="noreferrer" target="_blank">打开原尺寸图示查看细节 ↗</a>
-        {image[2].includes("event-collaboration-candidate.svg") ? <a className={styles.mapLink} download="event-collaboration-candidate.excalidraw" href="/articles/knowledge-map/event-collaboration-candidate.excalidraw">下载这张体系白板的 Excalidraw 源文件</a> : null}
-        {image[2].includes("architecture-position.png") ? <a className={styles.mapLink} download="software-concept-map.excalidraw" href="/articles/knowledge-map/software-concept-map.excalidraw">下载可编辑的体系白板</a> : null}
+        {image[2].includes("event-collaboration-candidate.svg") ? <a className={styles.mapLink} href="/articles/knowledge-map#event-driven">查看统一软件知识地图的事件区域</a> : null}
+        {image[2].includes("architecture-position.png") ? <a className={styles.mapLink} download="software-atlas.excalidraw" href="/articles/knowledge-map/software-atlas.excalidraw">下载完整可编辑软件体系地图</a> : null}
         {caption ? <figcaption><InlineMarkdown text={caption} /></figcaption> : null}
       </figure>);
       continue;

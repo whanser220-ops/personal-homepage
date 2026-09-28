@@ -7,85 +7,22 @@ import "@excalidraw/excalidraw/index.css";
 import { articles } from "../data/homepage.js";
 import styles from "./KnowledgeMap.module.css";
 
-const boards = [
-  {
-    id: "software-overview",
-    label: "软件体系总图",
-    title: "软件体系总图",
-    description: "以一个软件系统为中心，展开开发接口、代码角色、依赖、构建、运行、操作系统与产品实例七个区域。",
-    source: "software-atlas.excalidraw",
-    preview: "software-atlas.png",
-  },
-  {
-    id: "event-collaboration",
-    label: "事件协作",
-    title: "事件驱动与事件协作",
-    description: "查看事件生产、订阅与分发在进程内和跨服务时的责任边界，并回到总图对应区域。",
-    source: "event-collaboration.excalidraw",
-    preview: "event-collaboration.png",
-  },
-  {
-    id: "sync-async",
-    label: "同步与异步",
-    title: "同步与异步",
-    description: "从调用约定、宿主调度、线程与系统能力，定位同步和异步各自发生的边界。",
-    source: "sync-async.excalidraw",
-    preview: "sync-async.png",
-  },
-  {
-    id: "process-thread",
-    label: "进程与线程",
-    title: "进程与线程",
-    description: "查看单机进程资源、线程执行上下文、进程间通信、内核调度与 CPU 的关系。",
-    source: "process-thread.excalidraw",
-    preview: "process-thread.png",
-  },
-];
-
 const mapBase = "/articles/knowledge-map/";
-const hashBoard = new Map([
-  ["software-overview", "software-overview"],
-  ["event-driven", "event-collaboration"],
-  ["event", "event-collaboration"],
-  ["event-dispatch", "event-collaboration"],
-  ["callback", "event-collaboration"],
-  ["external-trigger", "event-collaboration"],
-  ["async-control-flow", "event-collaboration"],
-  ["event-subscription", "event-collaboration"],
-  ["command-message", "event-collaboration"],
-  ["sync-async", "sync-async"],
-  ["synchrony", "sync-async"],
-  ["asynchrony", "sync-async"],
-  ["blocking", "sync-async"],
-  ["nonblocking", "sync-async"],
-  ["process-thread", "process-thread"],
-  ["process", "process-thread"],
-  ["thread", "process-thread"],
-  ["concurrency", "process-thread"],
-  ["parallelism", "process-thread"],
-]);
-
-const regionPrefix = {
-  "software-overview": {
-    "event-driven": "s4_",
-    "event": "s4_",
-    "event-dispatch": "s4_",
-    "callback": "s4_",
-    "external-trigger": "s4_",
-    "async-control-flow": "s4_",
-    "event-subscription": "s4_",
-    "command-message": "s4_",
-    "sync-async": "s5_",
-    "synchrony": "s5_",
-    "asynchrony": "s5_",
-    "blocking": "s5_",
-    "nonblocking": "s5_",
-    "process-thread": "s6_",
-    "process": "s6_",
-    "thread": "s6_",
-    "concurrency": "s6_",
-    "parallelism": "s6_",
-  },
+const minimumCanvasZoom = 0.1;
+const legacyRegionAliases = {
+  "software-overview": "all",
+  "software-atlas": "all",
+  "event-collaboration": "event-collaboration",
+  event: "event-collaboration",
+  "event-driven": "event-collaboration",
+  "sync-async": "sync-async",
+  synchrony: "sync-async",
+  asynchrony: "sync-async",
+  "process-thread": "process-thread",
+  process: "process-thread",
+  thread: "process-thread",
+  concurrency: "process-thread",
+  parallelism: "process-thread",
 };
 
 if (typeof window !== "undefined") {
@@ -97,15 +34,24 @@ const Excalidraw = dynamic(
   { ssr: false, loading: () => <div className={styles.loading}>正在载入可交互白板…</div> },
 );
 
-function boardForLocation() {
-  const queryBoard = new URLSearchParams(window.location.search).get("board");
-  const hash = hashBoard.get(decodeURIComponent(window.location.hash.slice(1)));
-  if (hash) return hash;
-  if (boards.some((board) => board.id === queryBoard)) return queryBoard;
-  return "software-overview";
+function resolveRegionId(regions, value) {
+  if (!value) return null;
+  const normalized = legacyRegionAliases[value] || value;
+  return regions.some((region) => region.id === normalized) ? normalized : null;
 }
 
-function scaleOverviewForNarrowScreen(elements, scale) {
+function regionForLocation(regions) {
+  const regionList = Array.isArray(regions) ? regions : regions?.regions || [];
+  const hash = decodeURIComponent(window.location.hash.slice(1));
+  const hashRegion = regionList.find((region) => region.anchorIds?.includes(hash));
+  if (hashRegion) return hashRegion.id;
+  const hashId = resolveRegionId(regionList, hash);
+  if (hashId) return hashId;
+  const params = new URLSearchParams(window.location.search);
+  return resolveRegionId(regionList, params.get("region") || params.get("board")) || "all";
+}
+
+function scaleAtlasElements(elements, scale) {
   if (scale === 1) return elements;
   const scaleBinding = (binding) => binding
     ? { ...binding, ...(typeof binding.gap === "number" ? { gap: binding.gap * scale } : {}) }
@@ -125,8 +71,30 @@ function scaleOverviewForNarrowScreen(elements, scale) {
   }));
 }
 
+function scaleRegions(regions, scale) {
+  if (scale === 1) return regions;
+  return {
+    ...regions,
+    canvas: regions.canvas.map((value) => value * scale),
+    regions: regions.regions.map((region) => ({
+      ...region,
+      bounds: region.bounds.map((value) => value * scale),
+    })),
+  };
+}
+
+function contentBounds(elements) {
+  const visible = elements.filter((element) => !element.isDeleted);
+  const left = Math.min(...visible.map((element) => element.x));
+  const top = Math.min(...visible.map((element) => element.y));
+  const right = Math.max(...visible.map((element) => element.x + element.width));
+  const bottom = Math.max(...visible.map((element) => element.y + element.height));
+  return [left, top, right - left, bottom - top];
+}
+
 export function KnowledgeMap() {
-  const [activeId, setActiveId] = useState("software-overview");
+  const [regionData, setRegionData] = useState(null);
+  const [activeId, setActiveId] = useState("all");
   const [scene, setScene] = useState(null);
   const [error, setError] = useState("");
   const [editor, setEditor] = useState(null);
@@ -134,72 +102,94 @@ export function KnowledgeMap() {
   const frameRef = useRef(null);
   const editorRef = useRef(null);
   const panRef = useRef(null);
-  const activeBoard = boards.find((board) => board.id === activeId) || boards[0];
+  const activeRegion = regionData?.regions.find((region) => region.id === activeId) || regionData?.regions[0];
 
   useEffect(() => {
-    const syncLocation = () => setActiveId(boardForLocation());
-    syncLocation();
+    let active = true;
+    Promise.all([
+      fetch(`${mapBase}software-atlas.excalidraw`, { cache: "no-store" }),
+      fetch(`${mapBase}regions.json`, { cache: "no-store" }),
+    ])
+      .then(async ([mapResponse, regionsResponse]) => {
+        if (!mapResponse.ok) throw new Error(`白板数据加载失败（${mapResponse.status}）`);
+        if (!regionsResponse.ok) throw new Error(`区域索引加载失败（${regionsResponse.status}）`);
+        return Promise.all([mapResponse.json(), regionsResponse.json()]);
+      })
+      .then(([data, regions]) => {
+        if (!active) return;
+        const mobile = window.matchMedia("(max-width: 560px)").matches;
+        const frameBounds = frameRef.current?.getBoundingClientRect();
+        const canvasWidth = frameBounds?.width || window.innerWidth;
+        const canvasHeight = frameBounds?.height || window.innerHeight;
+        const widthScale = (canvasWidth - 24) / (regions.canvas[2] * minimumCanvasZoom);
+        const heightScale = (canvasHeight - 24) / (regions.canvas[3] * minimumCanvasZoom);
+        const scale = mobile ? Math.max(0.05, Math.min(1, widthScale, heightScale)) : 1;
+        setRegionData(scaleRegions(regions, scale));
+        setScene({
+          elements: scaleAtlasElements(data.elements, scale),
+          appState: data.appState,
+          files: data.files || {},
+          scrollToContent: false,
+        });
+        setActiveId(regionForLocation(regions));
+      })
+      .catch((cause) => { if (active) setError(cause.message || "白板数据加载失败"); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!regionData) return undefined;
+    const syncLocation = () => setActiveId(regionForLocation(regionData));
     window.addEventListener("hashchange", syncLocation);
     window.addEventListener("popstate", syncLocation);
     return () => {
       window.removeEventListener("hashchange", syncLocation);
       window.removeEventListener("popstate", syncLocation);
     };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    setScene(null);
-    setError("");
-    fetch(`${mapBase}${activeBoard.source}`, { cache: "no-store" })
-      .then((response) => {
-        if (!response.ok) throw new Error(`白板数据加载失败（${response.status}）`);
-        return response.json();
-      })
-      .then((data) => {
-        if (active) {
-          const narrowOverview = activeBoard.id === "software-overview"
-            && window.matchMedia("(max-width: 560px)").matches;
-          setScene({
-            elements: scaleOverviewForNarrowScreen(data.elements, narrowOverview ? 0.6 : 1),
-            appState: data.appState,
-            files: data.files || {},
-            scrollToContent: true,
-          });
-        }
-      })
-      .catch((cause) => { if (active) setError(cause.message || "白板数据加载失败"); });
-    return () => { active = false; };
-  }, [activeBoard]);
+  }, [regionData]);
 
   useEffect(() => {
     editorRef.current = editor;
   }, [editor]);
 
+  const focusRegion = useCallback((regionId) => {
+    const api = editorRef.current;
+    const frame = frameRef.current;
+    const region = regionData?.regions.find((item) => item.id === regionId);
+    if (!api || !frame || !region) return;
+    const bounds = frame.getBoundingClientRect();
+    const regionBounds = region.id === "all"
+      ? contentBounds(api.getSceneElements())
+      : region.bounds;
+    const [x, y, width, height] = regionBounds;
+    const availableWidth = Math.max(1, bounds.width - 48);
+    const availableHeight = Math.max(1, bounds.height - 48);
+    const fitZoom = Math.min(availableWidth / width, availableHeight / height) * 0.88;
+    const zoom = Math.max(minimumCanvasZoom, Math.min(4, fitZoom));
+    const appState = api.getAppState();
+    api.updateScene({ appState: {
+      zoom: { ...appState.zoom, value: zoom },
+      scrollX: bounds.width / (2 * zoom) - (x + width / 2),
+      scrollY: bounds.height / (2 * zoom) - (y + height / 2),
+    } });
+  }, [regionData]);
+
   useEffect(() => {
-    if (!editor || !scene) return undefined;
+    if (!editor || !scene || !activeRegion) return undefined;
     let attempts = 0;
     let timer;
-    const fitBoard = () => {
+    const fitRegion = () => {
       const elements = editor.getSceneElements();
       if (elements.length >= scene.elements.length) {
-        const hash = decodeURIComponent(window.location.hash.slice(1));
-        const prefix = regionPrefix[activeId]?.[hash];
-        const region = prefix ? elements.filter((element) => element.id.startsWith(prefix)) : [];
-        editor.scrollToContent(region.length ? region : elements, {
-          fitToViewport: true,
-          viewportZoomFactor: 1,
-          canvasOffsets: { top: 104 },
-          animate: false,
-        });
+        focusRegion(activeRegion.id);
         return;
       }
       attempts += 1;
-      if (attempts < 30) timer = window.setTimeout(fitBoard, 100);
+      if (attempts < 40) timer = window.setTimeout(fitRegion, 100);
     };
-    fitBoard();
+    fitRegion();
     return () => window.clearTimeout(timer);
-  }, [activeId, editor, scene]);
+  }, [activeRegion, editor, focusRegion, scene]);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -254,7 +244,7 @@ export function KnowledgeMap() {
       const appState = api.getAppState();
       const oldZoom = appState.zoom?.value || 1;
       const multiplier = Math.exp(-Math.max(-120, Math.min(120, event.deltaY)) * 0.0018);
-      const nextZoom = Math.max(0.05, Math.min(4, oldZoom * multiplier));
+      const nextZoom = Math.max(0.1, Math.min(4, oldZoom * multiplier));
       const bounds = frame.getBoundingClientRect();
       const pointerX = event.clientX - bounds.left;
       const pointerY = event.clientY - bounds.top;
@@ -284,23 +274,17 @@ export function KnowledgeMap() {
     };
   }, []);
 
-  const selectBoard = useCallback((id, hash = id === "software-overview" ? "software-overview" : id) => {
-    setActiveId(id);
-    const suffix = hash ? `#${encodeURIComponent(hash)}` : "";
-    const query = id === "software-overview" ? "" : `?board=${encodeURIComponent(id)}`;
-    window.history.pushState(null, "", `/articles/knowledge-map${query}${suffix}`);
-  }, []);
+  const selectRegion = useCallback((regionId) => {
+    const region = regionData?.regions.find((item) => item.id === regionId);
+    if (!region) return;
+    setActiveId(regionId);
+    const search = regionId === "all" ? "" : `?region=${encodeURIComponent(regionId)}`;
+    const hash = region.anchorIds?.[0] || regionId;
+    window.history.pushState(null, "", `/articles/knowledge-map${search}#${encodeURIComponent(hash)}`);
+    focusRegion(regionId);
+  }, [focusRegion, regionData]);
 
-  const fitAll = useCallback(() => {
-    const api = editorRef.current;
-    if (!api) return;
-    api.scrollToContent(api.getSceneElements(), {
-      fitToViewport: true,
-      viewportZoomFactor: 1,
-      canvasOffsets: { top: 104 },
-      animate: true,
-    });
-  }, []);
+  const fitAll = useCallback(() => selectRegion("all"), [selectRegion]);
 
   const zoomBy = useCallback((factor) => {
     const api = editorRef.current;
@@ -327,21 +311,21 @@ export function KnowledgeMap() {
         <div>
           <p className={styles.kicker}>SOFTWARE SYSTEM / EXCALIDRAW</p>
           <h1>软件知识白板</h1>
-          <p>{activeBoard.description}滚轮以指针位置缩放；在白板上按住鼠标左键可平移，松开即停止。手机可用触控浏览和白板缩放控件。</p>
+          <p>所有软件主题都在同一张可编辑总图中。选择区域定位到对应内容；滚轮以指针位置缩放，按住鼠标左键可平移，松开即停止。手机可用触控浏览和缩放控件。</p>
         </div>
         <Link className={styles.backLink} href="/articles">← 返回文章</Link>
       </header>
 
-      <nav className={styles.boardNav} aria-label="选择知识地图">
-        <span>关联白板</span>
-        {boards.map((board) => (
+      <nav className={styles.regionNav} aria-label="定位软件体系区域">
+        <span>地图区域</span>
+        {regionData?.regions.map((region) => (
           <button
             type="button"
-            key={board.id}
-            aria-pressed={activeId === board.id}
-            onClick={() => selectBoard(board.id)}
+            key={region.id}
+            aria-pressed={activeId === region.id}
+            onClick={() => selectRegion(region.id)}
           >
-            {board.label}
+            {region.label}
           </button>
         ))}
       </nav>
@@ -357,28 +341,27 @@ export function KnowledgeMap() {
           <button className={styles.focusButton} type="button" aria-label="缩小白板" onClick={() => zoomBy(0.8)}>缩小</button>
           <button className={styles.focusButton} type="button" aria-label="放大白板" onClick={() => zoomBy(1.25)}>放大</button>
         </div>
-        <a href={`${mapBase}${activeBoard.source}`} download={activeBoard.source}>下载当前白板源文件</a>
-        <a href={`${mapBase}${activeBoard.preview}`} target="_blank" rel="noreferrer">打开当前静态预览</a>
+        <a href={`${mapBase}software-atlas.excalidraw`} download="software-atlas.excalidraw">下载完整白板源文件</a>
+        <a href={`${mapBase}software-atlas.png`} target="_blank" rel="noreferrer">打开静态总览预览</a>
       </div>
 
       <div ref={frameRef} className={styles.canvasFrame} data-panning={isPanning ? "true" : "false"}>
-        {error ? <div className={styles.loading} role="alert">{error}<br /><a href={`${mapBase}${activeBoard.preview}`}>查看静态预览</a></div> : null}
+        {error ? <div className={styles.loading} role="alert">{error}<br /><a href={`${mapBase}software-atlas.png`}>查看静态预览</a></div> : null}
         {!error && !scene ? <div className={styles.loading} role="status">正在载入白板…</div> : null}
         {scene ? <Excalidraw
-          key={activeId}
           initialData={scene}
           langCode="zh-CN"
           theme="light"
           viewModeEnabled
-          name={activeBoard.title}
+          name="软件体系总图"
           excalidrawAPI={setEditor}
         /> : null}
       </div>
 
-      <p className={styles.mapNote}>白板用于浏览知识结构；页面中的操作只改变当前视图。需要编辑时请下载对应源文件，使用 Excalidraw 修改后再按维护流程更新。</p>
+      <p className={styles.mapNote}>白板操作只改变当前视图。需要编辑时请下载完整源文件，使用 Excalidraw 修改后再按维护流程更新。</p>
       <figure className={styles.preview}>
-        <figcaption>{activeBoard.title}静态预览</figcaption>
-        <a href={`${mapBase}${activeBoard.preview}`} target="_blank" rel="noreferrer"><img src={`${mapBase}${activeBoard.preview}`} alt={`${activeBoard.title}静态预览`} /></a>
+        <figcaption>软件体系总图静态预览</figcaption>
+        <a href={`${mapBase}software-atlas.png`} target="_blank" rel="noreferrer"><img src={`${mapBase}software-atlas.png`} alt="软件体系总图静态预览" /></a>
       </figure>
     </section>
   );

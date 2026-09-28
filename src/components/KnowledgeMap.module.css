@@ -292,7 +292,7 @@
 .articleNav span { color: #262621; font-weight: 800; }
 .articleNav a, .mapActions a { color: #344f67; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
 
-.boardNav {
+.regionNav {
   display: flex;
   flex-wrap: wrap;
   gap: 9px;
@@ -303,8 +303,8 @@
   font-size: .88rem;
 }
 
-.boardNav > span { margin-right: 5px; font-weight: 800; }
-.boardNav button {
+.regionNav > span { margin-right: 5px; font-weight: 800; }
+.regionNav button {
   min-height: 40px;
   padding: 7px 13px;
   border: 1px solid #c9c3b7;
@@ -315,9 +315,9 @@
   font-weight: 800;
   cursor: pointer;
 }
-.boardNav button:hover,
-.boardNav button:focus-visible,
-.boardNav button[aria-pressed="true"] {
+.regionNav button:hover,
+.regionNav button:focus-visible,
+.regionNav button[aria-pressed="true"] {
   border-color: #68784f;
   background: #dfe2c5;
   outline-color: #587085;

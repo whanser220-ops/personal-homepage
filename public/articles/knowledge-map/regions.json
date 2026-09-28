@@ -1,0 +1,18 @@
+{
+ "canvas":[0,0,7400,5050],
+ "regions":[
+ {"id":"all","label":"全图","bounds":[0,0,7400,5050],"anchorIds":["software-overview","software-atlas"],"elementIds":[]},
+ {"id":"center","label":"一个软件系统","bounds":[1550,1580,1380,1020],"anchorIds":["software-system"],"elementIds":["hub","hub_title","hub_sub","hub_note"]},
+ {"id":"tools","label":"开发接口与工具","bounds":[100,245,1350,1030],"anchorIds":["sdk","api","package"],"elementIds":["tools_heading","sdk_set","api_title","package_title"]},
+ {"id":"roles","label":"库／框架／引擎","bounds":[1700,240,1530,1040],"anchorIds":["library","framework","engine"],"elementIds":["roles_heading","library_title","framework_title","engine_title"]},
+ {"id":"build","label":"构建与装载","bounds":[4150,235,1610,1280],"anchorIds":["build","compile","static-library","dynamic-library"],"elementIds":["build_heading","native_source","static_library","native_artifact","script_artifacts","build_note","build_to_process"]},
+ {"id":"origins","label":"来源与依赖","bounds":[100,1560,1320,960],"anchorIds":["dependency","module","source"],"elementIds":["origins_heading","own_code","third_code","module_assembly","import_bg","origins_note"]},
+ {"id":"examples","label":"产品实例","bounds":[5850,230,1390,1160],"anchorIds":["react","nextjs","pi","unity","unreal"],"elementIds":["examples_heading","example_react","example_next","example_pi","unity_example","unity_detail"]},
+ {"id":"runtime","label":"进程运行总览","bounds":[3020,1490,4280,1800],"anchorIds":["runtime","process"],"elementIds":["runtime_heading","process_p","remote_process"]},
+ {"id":"event-collaboration","label":"事件与订阅","bounds":[3130,2000,2430,1250],"anchorIds":["event-driven","event","event-dispatch","callback","external-trigger","event-subscription","command-message"],"elementIds":["event_area_title","local-business","local-subscriptions","local-handler","local-record-bg","subscription_table","queue_slot1","queue_slot3","thread_a","runtime_dispatch"]},
+ {"id":"process-thread","label":"进程与线程","bounds":[3060,1610,4240,3300],"anchorIds":["process-thread","concurrency","parallelism","thread","process-thread-concurrency"],"elementIds":["process_p","remote_process","thread_a","thread_b","s6_thread_q","s6_ipc_label","kernel","cpu","cpu_detail"]},
+ {"id":"sync-async","label":"同步与异步","bounds":[90,2950,2630,1880],"anchorIds":["sync-async","synchrony","asynchrony","blocking","nonblocking","async-control-flow"],"elementIds":["s5_heading","s5_context","s5_app_title","s5_host","s5_os_text"]},
+ {"id":"communication","label":"跨进程通信","bounds":[5350,1600,1970,1900],"anchorIds":["ipc","network","distributed","event-bus"],"elementIds":["event_port_p","distributed-broker","remote_process","broker_caveat","s6_ipc_label"]},
+ {"id":"system","label":"操作系统与硬件","bounds":[3070,3330,4270,1670],"anchorIds":["system","os","kernel","cpu","syscall"],"elementIds":["syscall","kernel","cpu","cpu_detail","devices","device_gpu"]}
+ ]
+}
