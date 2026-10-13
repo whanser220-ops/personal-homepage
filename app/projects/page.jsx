@@ -10,7 +10,7 @@ export default function ProjectsPage() {
   return (
     <IllustratedPageFrame
       active="projects"
-      description="从构建链路到实时监控，把复杂工程整理成可见、可验证的系统。"
+      description="日常使用的学习助手与工程工具，从这里直接打开。"
       eyebrow="PROJECTS / 持续构建"
       title="项目"
     >

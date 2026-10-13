@@ -144,6 +144,18 @@ export const focusItems = [
 
 export const projects = [
   {
+    title: "Study Agent",
+    year: "2026",
+    status: "登录使用",
+    subtitle: "Learning companion",
+    summary: "从一个问题开始，生成讲解、梳理知识关联，支持持续追问、学习记录和白板绘图。",
+    image: "/assets/study-agent-project.svg",
+    imageAlt: "Study Agent 的问题、讲解与知识关联示意图",
+    tags: ["Pi Agent", "ChatGPT", "学习白板"],
+    fullPage: true,
+    links: [{ href: "https://warmhanser.com/study/", label: "进入 Study Agent" }],
+  },
+  {
     title: "Unity6 构建监控",
     year: "2026",
     status: "已上线",
@@ -151,7 +163,8 @@ export const projects = [
     summary: "展示 Unity 云构建内部业务打点，关注阶段耗时、Bundle 构建和资源类型占用。",
     icon: "CI",
     image: "/assets/unity-build-pipeline-sketch.webp",
+    imageAlt: "Unity6 自动构建流水线的手绘拓扑",
     tags: ["Unity", "Jenkins", "PostgreSQL", "SSE"],
-    links: [{ href: "/build-monitor", label: "Monitor" }],
+    links: [{ href: "/build-monitor", label: "打开构建监控" }],
   },
 ];

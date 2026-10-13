@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="520" viewBox="0 0 800 520" fill="none">
+  <rect width="800" height="520" rx="28" fill="#F4F0E5"/>
+  <circle cx="690" cy="95" r="54" fill="#EBD08B"/>
+  <path d="M68 425c92-54 168 66 260 18s181-43 271 5 127-7 154-27" stroke="#D9DCCB" stroke-width="2"/>
+  <g transform="rotate(-3 310 264)">
+    <rect x="114" y="75" width="391" height="373" rx="18" fill="#DDDCCF"/>
+    <rect x="102" y="63" width="391" height="373" rx="18" fill="#FFFCF5" stroke="#C8CEBD" stroke-width="2"/>
+    <path d="M120 63h355a18 18 0 0 1 18 18v54H102V81a18 18 0 0 1 18-18Z" fill="#214E43"/>
+    <circle cx="130" cy="99" r="5" fill="#E7CE86"/>
+    <circle cx="148" cy="99" r="5" fill="#AFCAAD"/>
+    <text x="179" y="106" font-family="Georgia,serif" font-size="24" fill="#FCF7E9">Study Agent</text>
+    <rect x="131" y="163" width="269" height="59" rx="14" fill="#F1E8CB"/>
+    <text x="155" y="202" font-family="Georgia,serif" font-size="31" fill="#80673B">?</text>
+    <path d="M189 187h176M189 203h116" stroke="#B19C69" stroke-width="5" stroke-linecap="round"/>
+    <path d="M139 268h272M139 290h245M139 312h269" stroke="#CED5C4" stroke-width="6" stroke-linecap="round"/>
+    <path d="M139 267h84" stroke="#467761" stroke-width="6" stroke-linecap="round"/>
+    <rect x="131" y="345" width="303" height="58" rx="16" fill="#F8F6ED" stroke="#D9DECE"/>
+    <path d="M149 374h112" stroke="#B8C3AE" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="408" cy="374" r="17" fill="#214E43"/>
+    <path d="m402 374 6-6 6 6m-6-6v13" stroke="#F9F5E8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <path d="M476 263h53m40-48-40 48 57 63" stroke="#70937E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 7"/>
+  <rect x="547" y="175" width="156" height="64" rx="18" fill="#D7E5D6" stroke="#6F997C" stroke-width="2"/>
+  <path d="M573 198h93" stroke="#63886D" stroke-width="5" stroke-linecap="round"/>
+  <path d="M573 216h64" stroke="#63886D" stroke-width="5" stroke-linecap="round"/>
+  <rect x="574" y="296" width="140" height="80" rx="18" fill="#EADDAF" stroke="#BAA269" stroke-width="2"/>
+  <path d="M600 322h89m-89 20h64" stroke="#A68D53" stroke-width="5" stroke-linecap="round"/>
+  <path d="M534 405c24-9 43-4 61 7v39c-20-11-38-13-61-7v-39Zm61 7c18-11 37-16 61-7v39c-23-6-41-4-61 7v-39Z" fill="#FFFCF5" stroke="#446E59" stroke-width="3" stroke-linejoin="round"/>
+</svg>
