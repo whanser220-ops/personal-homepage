@@ -39,6 +39,23 @@ def database_query(sql):
     return result.stdout.strip()
 
 
+def wait_for_fresh_sample():
+    """Allow the first collector batch to initialize storage before release."""
+    for attempt in range(12):
+        try:
+            age = database_query("SELECT extract(epoch from now()-collected_at)::int FROM monitor_samples WHERE host_id='cloud-primary' ORDER BY collected_at DESC LIMIT 1")
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            # On a first installation the collector creates the schema with
+            # its first ingest, after the bounded Docker/HTTP probe batch.
+            # Treat an absent table or a reconnecting database as not ready.
+            age = ''
+        if age and -5 <= int(age) <= 45:
+            return
+        if attempt == 11:
+            raise RuntimeError('No fresh host sample after deployment')
+        time.sleep(5)
+
+
 def main():
     for base in ['http://127.0.0.1:3000', 'https://warmhanser.com']:
         for path in ['/api/monitor/current', '/api/monitor/history?range=1h']:
@@ -50,13 +67,7 @@ def main():
     status, body = get('https://warmhanser.com/api/monitor/auth/session')
     assert status == 200 and json.loads(body)['configured'], 'Google login configuration is missing'
     assert get('https://warmhanser.com/server-monitor')[0] == 200, 'Monitor page is unavailable'
-    for attempt in range(12):
-        age = database_query("SELECT extract(epoch from now()-collected_at)::int FROM monitor_samples WHERE host_id='cloud-primary' ORDER BY collected_at DESC LIMIT 1")
-        if age and -5 <= int(age) <= 45:
-            break
-        if attempt == 11:
-            raise RuntimeError('No fresh host sample after deployment')
-        time.sleep(5)
+    wait_for_fresh_sample()
     print('Monitor release checks passed: private reads, closed ingestion and fresh host sampling')
 
 
