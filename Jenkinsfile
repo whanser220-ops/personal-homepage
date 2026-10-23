@@ -83,7 +83,7 @@ printf 'SOURCE_COMMIT_SHA=%s\n' "$(git rev-parse --short HEAD)" > .ci/source.env
                 // Deployment runs on a fresh ephemeral agent, so carry the
                 // runtime manifest explicitly instead of relying on stale
                 // server-side copies.
-                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf'
+                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf,deploy/nginx-learning-whiteboard.conf,deploy/install-whiteboard-nginx.py'
             }
         }
 
@@ -145,6 +145,15 @@ docker build "${build_args[@]}" \
 docker push "$image_ref"
 docker push "$latest_image_ref"
 
+# The whiteboard is independently runnable and owns persistent data outside
+# either application image. Validate its store and MCP protocol before release.
+whiteboard_repository="${REGISTRY_HOST}/${REGISTRY_PROJECT}/learning-whiteboard"
+docker build -f services/learning-whiteboard/Dockerfile \
+    -t "${whiteboard_repository}:${commit_sha}" \
+    -t "${whiteboard_repository}:latest" .
+docker push "${whiteboard_repository}:${commit_sha}"
+docker push "${whiteboard_repository}:latest"
+
 # Harbor is the release store; the build engine only needs the latest tag for
 # layer reuse. Remove old commit tags for this application so repeated deploys
 # cannot slowly fill the local WSL Docker disk.
@@ -153,6 +162,11 @@ while IFS= read -r local_image_ref; do
         docker image rm "$local_image_ref" >/dev/null 2>&1 || true
     fi
 done < <(docker image ls "$image_repository" --format '{{.Repository}}:{{.Tag}}')
+while IFS= read -r local_image_ref; do
+    if [ -n "$local_image_ref" ] && [ "$local_image_ref" != "${whiteboard_repository}:latest" ]; then
+        docker image rm "$local_image_ref" >/dev/null 2>&1 || true
+    fi
+done < <(docker image ls "$whiteboard_repository" --format '{{.Repository}}:{{.Tag}}')
 docker image prune --force --filter 'until=168h' >/dev/null 2>&1 || true
 '''
                     stash name: 'build-metadata', includes: '.ci/image.env'
@@ -191,6 +205,8 @@ deploy_files=(
     compose.yml
     deploy/deploy-from-image.sh
     deploy/nginx-personal-homepage.conf
+    deploy/nginx-learning-whiteboard.conf
+    deploy/install-whiteboard-nginx.py
 )
 for deploy_file in "${deploy_files[@]}"; do
     if [ ! -f "$deploy_file" ]; then
@@ -263,6 +279,11 @@ for route in about articles projects build-monitor; do
     curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
         "http://1.117.232.198/$route" -o /dev/null
 done
+curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+    https://warmhanser.com/whiteboard/health | grep -q '"ok":true'
+curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+    https://warmhanser.com/whiteboard/api/boards/software-atlas -o whiteboard.json
+grep -q 'software-atlas' whiteboard.json
 '''
                 }
             }

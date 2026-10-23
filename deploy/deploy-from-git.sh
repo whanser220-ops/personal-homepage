@@ -6,6 +6,7 @@ APP_NAME="${APP_NAME:-personal-homepage}"
 CONTAINER_NAME="${CONTAINER_NAME:-personal-homepage}"
 HOST_PORT="${HOST_PORT:-3000}"
 ENV_FILE="${ENV_FILE:-/etc/personal-homepage/app.env}"
+WHITEBOARD_ENV_FILE="${WHITEBOARD_ENV_FILE:-/etc/learning-whiteboard/service.env}"
 COMPOSE_FILE="${COMPOSE_FILE:-compose.yml}"
 COMPOSE_SERVICE="${COMPOSE_SERVICE:-personal-homepage}"
 DOCKER_NETWORK="${DOCKER_NETWORK:-personal-homepage-net}"
@@ -51,6 +52,8 @@ compose_cli() {
             HOST_PORT="$HOST_PORT" \
             ENV_FILE="$ENV_FILE" \
             DOCKER_NETWORK="$DOCKER_NETWORK" \
+            WHITEBOARD_IMAGE="$WHITEBOARD_IMAGE" \
+            WHITEBOARD_ENV_FILE="$WHITEBOARD_ENV_FILE" \
             docker compose "$@"
     else
         env \
@@ -59,6 +62,8 @@ compose_cli() {
             HOST_PORT="$HOST_PORT" \
             ENV_FILE="$ENV_FILE" \
             DOCKER_NETWORK="$DOCKER_NETWORK" \
+            WHITEBOARD_IMAGE="$WHITEBOARD_IMAGE" \
+            WHITEBOARD_ENV_FILE="$WHITEBOARD_ENV_FILE" \
             docker compose "$@"
     fi
 }
@@ -109,12 +114,22 @@ image_ref="${APP_IMAGE:-${IMAGE_REPOSITORY}:${commit_sha}}"
 latest_image_ref="${LATEST_APP_IMAGE:-${IMAGE_REPOSITORY}:latest}"
 local_image_ref="${APP_NAME}:${commit_sha}"
 local_latest_image_ref="${APP_NAME}:latest"
+whiteboard_repository="${REGISTRY_HOST}/${REGISTRY_PROJECT}/learning-whiteboard"
+WHITEBOARD_IMAGE="${WHITEBOARD_IMAGE:-${whiteboard_repository}:${image_ref##*:}}"
+whiteboard_latest_image_ref="${whiteboard_repository}:latest"
 previous_image="$(docker_cli inspect --format '{{.Config.Image}}' "$CONTAINER_NAME" 2>/dev/null || true)"
+previous_whiteboard_image="$(docker_cli inspect --format '{{.Config.Image}}' learning-whiteboard 2>/dev/null || true)"
 
 if ! sudo test -f "$ENV_FILE"; then
     echo "Missing runtime env file: $ENV_FILE" >&2
     exit 2
 fi
+
+if ! sudo test -s "$WHITEBOARD_ENV_FILE"; then
+    echo "Missing whiteboard credentials: $WHITEBOARD_ENV_FILE" >&2
+    exit 2
+fi
+sudo install -d -o 1001 -g 1001 -m 0750 /var/lib/learning-whiteboard
 
 database_url="$(sudo awk -F= '$1 == "DATABASE_URL" { sub(/^DATABASE_URL=/, ""); print; exit }' "$ENV_FILE")"
 if [ -z "$database_url" ]; then
@@ -185,6 +200,12 @@ docker_cli build "${build_args[@]}" \
     -t "$local_latest_image_ref" \
     .
 
+docker_cli build "${build_args[@]}" \
+    -f services/learning-whiteboard/Dockerfile \
+    -t "$WHITEBOARD_IMAGE" \
+    -t "$whiteboard_latest_image_ref" \
+    .
+
 if ! is_false "$PUSH_IMAGE"; then
     if ! docker_cli push "$image_ref"; then
         echo "Registry push failed for $image_ref. Check REGISTRY_HOST, credentials, and registry reachability." >&2
@@ -195,9 +216,36 @@ if ! is_false "$PUSH_IMAGE"; then
         echo "Registry push failed for $latest_image_ref. Check REGISTRY_HOST, credentials, and registry reachability." >&2
         exit 1
     fi
+
+    for whiteboard_image_ref in "$WHITEBOARD_IMAGE" "$whiteboard_latest_image_ref"; do
+        if ! docker_cli push "$whiteboard_image_ref"; then
+            echo "Registry push failed for $whiteboard_image_ref. Check REGISTRY_HOST, credentials, and registry reachability." >&2
+            exit 1
+        fi
+    done
 fi
 
 compose_cli -f "$COMPOSE_FILE" config >/dev/null
+
+# Both images were built on this engine. Do not pull here: PUSH_IMAGE=0 keeps
+# the manual deployment entry point usable without a registry round trip.
+compose_cli -f "$COMPOSE_FILE" up -d --no-build learning-whiteboard
+for attempt in $(seq 1 30); do
+    if curl --fail --silent --show-error --connect-timeout 2 --max-time 5 \
+        http://127.0.0.1:4310/whiteboard/health >/dev/null; then
+        break
+    fi
+    if [ "$attempt" -eq 30 ]; then
+        echo "Whiteboard health check failed" >&2
+        docker_cli logs --tail 80 learning-whiteboard >&2 || true
+        if [ -n "$previous_whiteboard_image" ]; then
+            echo "Attempting whiteboard rollback to $previous_whiteboard_image" >&2
+            WHITEBOARD_IMAGE="$previous_whiteboard_image" compose_cli -f "$COMPOSE_FILE" up -d --no-build learning-whiteboard || true
+        fi
+        exit 1
+    fi
+    sleep 2
+done
 
 compose_project="$(docker_cli inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$CONTAINER_NAME" 2>/dev/null || true)"
 if [ "$compose_project" = "<no value>" ]; then
@@ -236,11 +284,36 @@ for attempt in $(seq 1 30); do
     sleep 2
 done
 
-sudo install -D -m 0644 "$NGINX_CONF_SOURCE" "$NGINX_CONF_TARGET"
-sudo nginx -t
+# Preserve independently maintained TLS routes, including the Study Agent.
+nginx_backup="$(mktemp -d)"
+sudo cp "$NGINX_CONF_TARGET" "$nginx_backup/http.conf"
+sudo cp /etc/nginx/conf.d/study-agent-https.conf "$nginx_backup/https.conf"
+had_whiteboard_snippet=0
+if sudo test -f /etc/nginx/snippets/learning-whiteboard.conf; then
+    had_whiteboard_snippet=1
+    sudo cp /etc/nginx/snippets/learning-whiteboard.conf "$nginx_backup/whiteboard.conf"
+fi
+restore_nginx() {
+    sudo cp "$nginx_backup/http.conf" "$NGINX_CONF_TARGET"
+    sudo cp "$nginx_backup/https.conf" /etc/nginx/conf.d/study-agent-https.conf
+    if [ "$had_whiteboard_snippet" -eq 1 ]; then
+        sudo cp "$nginx_backup/whiteboard.conf" /etc/nginx/snippets/learning-whiteboard.conf
+    else
+        sudo rm -f /etc/nginx/snippets/learning-whiteboard.conf
+    fi
+    sudo rm -rf "$nginx_backup"
+}
+if ! { sudo install -D -m 0644 "$NGINX_CONF_SOURCE" "$NGINX_CONF_TARGET" &&
+    sudo install -D -m 0644 deploy/nginx-learning-whiteboard.conf /etc/nginx/snippets/learning-whiteboard.conf &&
+    sudo python3 deploy/install-whiteboard-nginx.py && sudo nginx -t; }; then
+    restore_nginx
+    exit 1
+fi
 sudo systemctl reload nginx
+sudo rm -rf "$nginx_backup"
 
 curl --fail --silent --show-error "$HEALTH_URL" >/dev/null
 curl --fail --silent --show-error "$METRICS_URL" >/dev/null
+curl --fail --silent --show-error https://warmhanser.com/whiteboard/health >/dev/null
 
 echo "Deployed ${commit_sha} as ${image_ref} on 127.0.0.1:${HOST_PORT}"

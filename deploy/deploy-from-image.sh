@@ -12,6 +12,8 @@ REGISTRY_HOST="${REGISTRY_HOST:-127.0.0.1:18081}"
 REGISTRY_PROJECT="${REGISTRY_PROJECT:-personal-homepage}"
 IMAGE_REPOSITORY="${IMAGE_REPOSITORY:-${REGISTRY_HOST}/${REGISTRY_PROJECT}/${APP_NAME}}"
 APP_IMAGE="${APP_IMAGE:-${IMAGE_REPOSITORY}:latest}"
+WHITEBOARD_IMAGE="${WHITEBOARD_IMAGE:-${REGISTRY_HOST}/${REGISTRY_PROJECT}/learning-whiteboard:${APP_IMAGE##*:}}"
+WHITEBOARD_ENV_FILE="${WHITEBOARD_ENV_FILE:-/etc/learning-whiteboard/service.env}"
 APP_IMAGE_KEEP="${APP_IMAGE_KEEP:-3}"
 REGISTRY_AUTH_FILE="${REGISTRY_AUTH_FILE:-/etc/personal-homepage/registry.env}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-personal-homepage-postgres}"
@@ -50,6 +52,8 @@ compose_cli() {
             HOST_PORT="$HOST_PORT" \
             ENV_FILE="$ENV_FILE" \
             DOCKER_NETWORK="$DOCKER_NETWORK" \
+            WHITEBOARD_IMAGE="$WHITEBOARD_IMAGE" \
+            WHITEBOARD_ENV_FILE="$WHITEBOARD_ENV_FILE" \
             docker compose "$@"
     else
         env \
@@ -58,6 +62,8 @@ compose_cli() {
             HOST_PORT="$HOST_PORT" \
             ENV_FILE="$ENV_FILE" \
             DOCKER_NETWORK="$DOCKER_NETWORK" \
+            WHITEBOARD_IMAGE="$WHITEBOARD_IMAGE" \
+            WHITEBOARD_ENV_FILE="$WHITEBOARD_ENV_FILE" \
             docker compose "$@"
     fi
 }
@@ -138,11 +144,18 @@ prune_old_app_images() {
 }
 
 previous_image="$(docker_cli inspect --format '{{.Config.Image}}' "$CONTAINER_NAME" 2>/dev/null || true)"
+previous_whiteboard_image="$(docker_cli inspect --format '{{.Config.Image}}' learning-whiteboard 2>/dev/null || true)"
 
 if ! sudo test -f "$ENV_FILE"; then
     echo "Missing runtime env file: $ENV_FILE" >&2
     exit 2
 fi
+
+if ! sudo test -s "$WHITEBOARD_ENV_FILE"; then
+    echo "Missing whiteboard credentials: $WHITEBOARD_ENV_FILE" >&2
+    exit 2
+fi
+sudo install -d -o 1001 -g 1001 -m 0750 /var/lib/learning-whiteboard
 
 database_url="$(sudo awk -F= '$1 == "DATABASE_URL" { sub(/^DATABASE_URL=/, ""); print; exit }' "$ENV_FILE")"
 if [ -z "$database_url" ]; then
@@ -202,7 +215,26 @@ done
 load_registry_credentials
 reclaim_obsolete_build_cache
 docker_cli pull "$APP_IMAGE"
+docker_cli pull "$WHITEBOARD_IMAGE"
 compose_cli -f "$COMPOSE_FILE" config >/dev/null
+
+# Bring the persistent data service up first, before the website switches readers.
+compose_cli -f "$COMPOSE_FILE" up -d --no-build learning-whiteboard
+for attempt in $(seq 1 30); do
+    if curl --fail --silent http://127.0.0.1:4310/whiteboard/health >/dev/null; then
+        break
+    fi
+    if [ "$attempt" -eq 30 ]; then
+        echo "Whiteboard health check failed" >&2
+        docker_cli logs --tail 80 learning-whiteboard >&2 || true
+        if [ -n "$previous_whiteboard_image" ]; then
+            echo "Restoring previous whiteboard image" >&2
+            WHITEBOARD_IMAGE="$previous_whiteboard_image" compose_cli -f "$COMPOSE_FILE" up -d --no-build learning-whiteboard || true
+        fi
+        exit 1
+    fi
+    sleep 2
+done
 
 compose_project="$(docker_cli inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$CONTAINER_NAME" 2>/dev/null || true)"
 if [ "$compose_project" = "<no value>" ]; then
@@ -241,12 +273,39 @@ for attempt in $(seq 1 30); do
     sleep 2
 done
 
-sudo install -D -m 0644 "$NGINX_CONF_SOURCE" "$NGINX_CONF_TARGET"
-sudo nginx -t
+# Preserve independently maintained TLS routes and restore files on validation
+# failure so an unrelated later reload cannot activate a broken configuration.
+nginx_backup="$(mktemp -d)"
+sudo cp "$NGINX_CONF_TARGET" "$nginx_backup/http.conf"
+sudo cp /etc/nginx/conf.d/study-agent-https.conf "$nginx_backup/https.conf"
+had_whiteboard_snippet=0
+if sudo test -f /etc/nginx/snippets/learning-whiteboard.conf; then
+    had_whiteboard_snippet=1
+    sudo cp /etc/nginx/snippets/learning-whiteboard.conf "$nginx_backup/whiteboard.conf"
+fi
+restore_nginx() {
+    sudo cp "$nginx_backup/http.conf" "$NGINX_CONF_TARGET"
+    sudo cp "$nginx_backup/https.conf" /etc/nginx/conf.d/study-agent-https.conf
+    if [ "$had_whiteboard_snippet" -eq 1 ]; then
+        sudo cp "$nginx_backup/whiteboard.conf" /etc/nginx/snippets/learning-whiteboard.conf
+    else
+        sudo rm -f /etc/nginx/snippets/learning-whiteboard.conf
+    fi
+    sudo rm -rf "$nginx_backup"
+}
+if ! { sudo install -D -m 0644 "$NGINX_CONF_SOURCE" "$NGINX_CONF_TARGET" &&
+    sudo install -D -m 0644 deploy/nginx-learning-whiteboard.conf /etc/nginx/snippets/learning-whiteboard.conf &&
+    sudo python3 deploy/install-whiteboard-nginx.py && sudo nginx -t; }; then
+    restore_nginx
+    exit 1
+fi
 sudo systemctl reload nginx
+sudo rm -rf "$nginx_backup"
 
 curl --fail --silent --show-error "$HEALTH_URL" >/dev/null
 curl --fail --silent --show-error "$METRICS_URL" >/dev/null
+curl --fail --silent --show-error https://warmhanser.com/whiteboard/health >/dev/null
 prune_old_app_images
+IMAGE_REPOSITORY="${REGISTRY_HOST}/${REGISTRY_PROJECT}/learning-whiteboard" APP_IMAGE="$WHITEBOARD_IMAGE" prune_old_app_images
 
 echo "Deployed ${APP_IMAGE} on 127.0.0.1:${HOST_PORT}"

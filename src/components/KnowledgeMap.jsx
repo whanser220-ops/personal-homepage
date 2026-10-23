@@ -8,6 +8,8 @@ import { articles } from "../data/homepage.js";
 import styles from "./KnowledgeMap.module.css";
 
 const mapBase = "/articles/knowledge-map/";
+const boardsEndpoint = "/whiteboard/api/boards";
+const refreshInterval = 5000;
 const minimumCanvasZoom = 0.1;
 const legacyRegionAliases = {
   "software-overview": "all",
@@ -83,16 +85,32 @@ function scaleRegions(regions, scale) {
   };
 }
 
-function contentBounds(elements) {
-  const visible = elements.filter((element) => !element.isDeleted);
-  const left = Math.min(...visible.map((element) => element.x));
-  const top = Math.min(...visible.map((element) => element.y));
-  const right = Math.max(...visible.map((element) => element.x + element.width));
-  const bottom = Math.max(...visible.map((element) => element.y + element.height));
-  return [left, top, right - left, bottom - top];
+function contentBounds(elements, fallback = [0, 0, 1000, 700]) {
+  const visible = elements.filter((element) => !element.isDeleted
+    && [element.x, element.y, element.width, element.height].every(Number.isFinite));
+  if (!visible.length) return fallback;
+  const left = Math.min(...visible.map((element) => Math.min(element.x, element.x + element.width)));
+  const top = Math.min(...visible.map((element) => Math.min(element.y, element.y + element.height)));
+  const right = Math.max(...visible.map((element) => Math.max(element.x, element.x + element.width)));
+  const bottom = Math.max(...visible.map((element) => Math.max(element.y, element.y + element.height)));
+  return [left, top, Math.max(1, right - left), Math.max(1, bottom - top)];
+}
+
+function usableRegions(regions, elements) {
+  const validBounds = (bounds) => Array.isArray(bounds) && bounds.length === 4
+    && bounds.every(Number.isFinite) && bounds[2] > 0 && bounds[3] > 0;
+  const canvas = validBounds(regions?.canvas) ? regions.canvas : contentBounds(elements);
+  const regionList = (Array.isArray(regions?.regions) ? regions.regions : [])
+    .filter((region) => region?.id && validBounds(region.bounds));
+  if (!regionList.some((region) => region.id === "all")) {
+    regionList.unshift({ id: "all", label: "全图", bounds: canvas });
+  }
+  return { canvas, regions: regionList };
 }
 
 export function KnowledgeMap() {
+  const [boardId, setBoardId] = useState(null);
+  const [boardTitle, setBoardTitle] = useState("学习白板");
   const [regionData, setRegionData] = useState(null);
   const [activeId, setActiveId] = useState("all");
   const [scene, setScene] = useState(null);
@@ -102,40 +120,83 @@ export function KnowledgeMap() {
   const frameRef = useRef(null);
   const editorRef = useRef(null);
   const panRef = useRef(null);
-  const activeRegion = regionData?.regions.find((region) => region.id === activeId) || regionData?.regions[0];
+  const revisionRef = useRef(null);
+  const scaleRef = useRef(null);
+  const fittedRegionRef = useRef(null);
+  const boardEndpoint = boardId ? `${boardsEndpoint}/${encodeURIComponent(boardId)}` : null;
+  const isSoftwareAtlas = boardId === "software-atlas";
 
   useEffect(() => {
+    const syncBoard = () => setBoardId(new URLSearchParams(window.location.search).get("whiteboard") || "software-atlas");
+    syncBoard();
+    window.addEventListener("popstate", syncBoard);
+    return () => window.removeEventListener("popstate", syncBoard);
+  }, []);
+
+  useEffect(() => {
+    if (!boardEndpoint) return undefined;
+    revisionRef.current = null;
+    scaleRef.current = null;
+    fittedRegionRef.current = null;
+    setScene(null);
+    setRegionData(null);
+    setEditor(null);
+    setError("");
+    setBoardTitle(boardId === "software-atlas" ? "软件知识白板" : "学习白板");
+    setActiveId("all");
     let active = true;
-    Promise.all([
-      fetch(`${mapBase}software-atlas.excalidraw`, { cache: "no-store" }),
-      fetch(`${mapBase}regions.json`, { cache: "no-store" }),
-    ])
-      .then(async ([mapResponse, regionsResponse]) => {
-        if (!mapResponse.ok) throw new Error(`白板数据加载失败（${mapResponse.status}）`);
-        if (!regionsResponse.ok) throw new Error(`区域索引加载失败（${regionsResponse.status}）`);
-        return Promise.all([mapResponse.json(), regionsResponse.json()]);
-      })
-      .then(([data, regions]) => {
+    let timer;
+    const controller = new AbortController();
+    const refreshBoard = async () => {
+      try {
+        const response = await fetch(boardEndpoint, { cache: "no-store", signal: controller.signal });
+        if (!response.ok) throw new Error(`白板数据加载失败（${response.status}）`);
+        const board = await response.json();
         if (!active) return;
-        const mobile = window.matchMedia("(max-width: 560px)").matches;
-        const frameBounds = frameRef.current?.getBoundingClientRect();
-        const canvasWidth = frameBounds?.width || window.innerWidth;
-        const canvasHeight = frameBounds?.height || window.innerHeight;
-        const widthScale = (canvasWidth - 24) / (regions.canvas[2] * minimumCanvasZoom);
-        const heightScale = (canvasHeight - 24) / (regions.canvas[3] * minimumCanvasZoom);
-        const scale = mobile ? Math.max(0.05, Math.min(1, widthScale, heightScale)) : 1;
+        if (!Array.isArray(board.scene?.elements) || board.revision == null) {
+          throw new Error("白板服务返回的数据格式不完整");
+        }
+        setError("");
+        if (board.revision === revisionRef.current) return;
+        const { restoreElements } = await import("@excalidraw/excalidraw");
+        if (!active) return;
+        const elements = restoreElements(board.scene.elements, null);
+        setBoardTitle(board.title || "学习白板");
+        const regions = usableRegions(board.regions, elements);
+        const firstLoad = revisionRef.current === null;
+        if (scaleRef.current === null) {
+          const mobile = window.matchMedia("(max-width: 560px)").matches;
+          const frameBounds = frameRef.current?.getBoundingClientRect();
+          const canvasWidth = frameBounds?.width || window.innerWidth;
+          const canvasHeight = frameBounds?.height || window.innerHeight;
+          const widthScale = (canvasWidth - 24) / (regions.canvas[2] * minimumCanvasZoom);
+          const heightScale = (canvasHeight - 24) / (regions.canvas[3] * minimumCanvasZoom);
+          scaleRef.current = mobile ? Math.max(0.05, Math.min(1, widthScale, heightScale)) : 1;
+        }
+        const scale = scaleRef.current;
         setRegionData(scaleRegions(regions, scale));
         setScene({
-          elements: scaleAtlasElements(data.elements, scale),
-          appState: data.appState,
-          files: data.files || {},
+          elements: scaleAtlasElements(elements, scale),
+          appState: board.scene.appState,
+          files: board.scene.files || {},
           scrollToContent: false,
         });
-        setActiveId(regionForLocation(regions));
-      })
-      .catch((cause) => { if (active) setError(cause.message || "白板数据加载失败"); });
-    return () => { active = false; };
-  }, []);
+        setActiveId((current) => firstLoad || !regions.regions.some((region) => region.id === current)
+          ? regionForLocation(regions) : current);
+        revisionRef.current = board.revision;
+      } catch (cause) {
+        if (active) setError(cause.message || "白板数据加载失败");
+      } finally {
+        if (active) timer = window.setTimeout(refreshBoard, refreshInterval);
+      }
+    };
+    refreshBoard();
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [boardEndpoint, boardId]);
 
   useEffect(() => {
     if (!regionData) return undefined;
@@ -152,6 +213,15 @@ export function KnowledgeMap() {
     editorRef.current = editor;
   }, [editor]);
 
+  useEffect(() => {
+    if (!editor || !scene) return;
+    editor.addFiles(Object.values(scene.files));
+    editor.updateScene({
+      elements: scene.elements,
+      appState: { viewBackgroundColor: scene.appState?.viewBackgroundColor || "#ffffff" },
+    });
+  }, [editor, scene]);
+
   const focusRegion = useCallback((regionId) => {
     const api = editorRef.current;
     const frame = frameRef.current;
@@ -159,7 +229,7 @@ export function KnowledgeMap() {
     if (!api || !frame || !region) return;
     const bounds = frame.getBoundingClientRect();
     const regionBounds = region.id === "all"
-      ? contentBounds(api.getSceneElements())
+      ? contentBounds(api.getSceneElements(), region.bounds)
       : region.bounds;
     const [x, y, width, height] = regionBounds;
     const availableWidth = Math.max(1, bounds.width - 48);
@@ -175,13 +245,16 @@ export function KnowledgeMap() {
   }, [regionData]);
 
   useEffect(() => {
-    if (!editor || !scene || !activeRegion) return undefined;
+    if (!editor || !scene || !regionData) return undefined;
+    if (fittedRegionRef.current?.editor === editor && fittedRegionRef.current.id === activeId) return undefined;
     let attempts = 0;
     let timer;
+    const visibleElementCount = scene.elements.filter((element) => !element.isDeleted).length;
     const fitRegion = () => {
       const elements = editor.getSceneElements();
-      if (elements.length >= scene.elements.length) {
-        focusRegion(activeRegion.id);
+      if (elements.length >= visibleElementCount) {
+        focusRegion(activeId);
+        fittedRegionRef.current = { editor, id: activeId };
         return;
       }
       attempts += 1;
@@ -189,7 +262,7 @@ export function KnowledgeMap() {
     };
     fitRegion();
     return () => window.clearTimeout(timer);
-  }, [activeRegion, editor, focusRegion, scene]);
+  }, [activeId, editor, focusRegion, regionData, scene]);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -278,7 +351,11 @@ export function KnowledgeMap() {
     const region = regionData?.regions.find((item) => item.id === regionId);
     if (!region) return;
     setActiveId(regionId);
-    const search = regionId === "all" ? "" : `?region=${encodeURIComponent(regionId)}`;
+    const params = new URLSearchParams(window.location.search);
+    params.delete("board");
+    if (regionId === "all") params.delete("region");
+    else params.set("region", regionId);
+    const search = params.size ? `?${params.toString()}` : "";
     const hash = region.anchorIds?.[0] || regionId;
     window.history.pushState(null, "", `/articles/knowledge-map${search}#${encodeURIComponent(hash)}`);
     focusRegion(regionId);
@@ -306,17 +383,17 @@ export function KnowledgeMap() {
   }, []);
 
   return (
-    <section className={styles.mapShell} aria-label="可交互软件体系知识白板">
+    <section className={styles.mapShell} aria-label={`可交互${boardTitle}`}>
       <header className={styles.mapHeader}>
         <div>
-          <p className={styles.kicker}>SOFTWARE SYSTEM / EXCALIDRAW</p>
-          <h1>软件知识白板</h1>
-          <p>所有软件主题都在同一张可编辑总图中。选择区域定位到对应内容；滚轮以指针位置缩放，按住鼠标左键可平移，松开即停止。手机可用触控浏览和缩放控件。</p>
+          <p className={styles.kicker}>LEARNING WHITEBOARD / EXCALIDRAW</p>
+          <h1>{boardTitle}</h1>
+          <p>选择区域定位到对应内容；滚轮以指针位置缩放，按住鼠标左键可平移，松开即停止。手机可用触控浏览和缩放控件。</p>
         </div>
         <Link className={styles.backLink} href="/articles">← 返回文章</Link>
       </header>
 
-      <nav className={styles.regionNav} aria-label="定位软件体系区域">
+      <nav className={styles.regionNav} aria-label="定位白板区域">
         <span>地图区域</span>
         {regionData?.regions.map((region) => (
           <button
@@ -330,10 +407,10 @@ export function KnowledgeMap() {
         ))}
       </nav>
 
-      <nav className={styles.articleNav} aria-label="白板相关学习文章">
+      {isSoftwareAtlas ? <nav className={styles.articleNav} aria-label="白板相关学习文章">
         <span>相关文章</span>
         {articles.filter((article) => article.href).map((article) => <Link href={article.href} key={article.href}>{article.title}</Link>)}
-      </nav>
+      </nav> : null}
 
       <div className={styles.mapActions}>
         <button className={styles.focusButton} type="button" onClick={fitAll}>回到全图</button>
@@ -341,28 +418,29 @@ export function KnowledgeMap() {
           <button className={styles.focusButton} type="button" aria-label="缩小白板" onClick={() => zoomBy(0.8)}>缩小</button>
           <button className={styles.focusButton} type="button" aria-label="放大白板" onClick={() => zoomBy(1.25)}>放大</button>
         </div>
-        <a href={`${mapBase}software-atlas.excalidraw`} download="software-atlas.excalidraw">下载完整白板源文件</a>
-        <a href={`${mapBase}software-atlas.png`} target="_blank" rel="noreferrer">打开静态总览预览</a>
+        {boardEndpoint ? <a href={`${boardEndpoint}/export`} download={`${boardId}.excalidraw`}>下载最新白板源文件</a> : null}
+        {isSoftwareAtlas ? <a href={`${mapBase}software-atlas.png`} target="_blank" rel="noreferrer">查看初始快照</a> : null}
       </div>
 
       <div ref={frameRef} className={styles.canvasFrame} data-panning={isPanning ? "true" : "false"}>
-        {error ? <div className={styles.loading} role="alert">{error}<br /><a href={`${mapBase}software-atlas.png`}>查看静态预览</a></div> : null}
+        {error && !scene ? <div className={styles.loading} role="alert">{error}{isSoftwareAtlas ? <><br /><a href={`${mapBase}software-atlas.png`}>查看初始快照</a></> : null}</div> : null}
         {!error && !scene ? <div className={styles.loading} role="status">正在载入白板…</div> : null}
         {scene ? <Excalidraw
           initialData={scene}
           langCode="zh-CN"
           theme="light"
           viewModeEnabled
-          name="软件体系总图"
+          name={boardTitle}
           excalidrawAPI={setEditor}
         /> : null}
       </div>
 
-      <p className={styles.mapNote}>白板操作只改变当前视图。需要编辑时请下载完整源文件，使用 Excalidraw 修改后再按维护流程更新。</p>
-      <figure className={styles.preview}>
-        <figcaption>软件体系总图静态预览</figcaption>
-        <a href={`${mapBase}software-atlas.png`} target="_blank" rel="noreferrer"><img src={`${mapBase}software-atlas.png`} alt="软件体系总图静态预览" /></a>
-      </figure>
+      <p className={styles.mapNote}>白板内容由学习白板服务维护，每 5 秒自动同步。浏览操作只改变当前视图，更新后会保留当前缩放和位置。</p>
+      {error && scene ? <p className={styles.mapNote} role="status">暂时无法同步最新内容，正在显示上次加载的白板。服务恢复后会自动重试。</p> : null}
+      {isSoftwareAtlas ? <figure className={styles.preview}>
+        <figcaption>软件体系总图初始快照（不随白板更新）</figcaption>
+        <a href={`${mapBase}software-atlas.png`} target="_blank" rel="noreferrer"><img src={`${mapBase}software-atlas.png`} alt="软件体系总图初始快照，不代表最新白板内容" /></a>
+      </figure> : null}
     </section>
   );
 }

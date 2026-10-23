@@ -3,6 +3,8 @@
 .gitattributes
 .next
 node_modules
+**/node_modules
+services/learning-whiteboard/data
 out
 *.log
 Dockerfile

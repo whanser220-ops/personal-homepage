@@ -1,0 +1,18 @@
+{
+  "name": "learning-whiteboard-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/http.js",
+    "stdio": "node src/stdio.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "express": "5.3.0",
+    "proper-lockfile": "4.1.2",
+    "zod": "4.6.7"
+  }
+}
