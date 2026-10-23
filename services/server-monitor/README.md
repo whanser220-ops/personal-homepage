@@ -33,7 +33,7 @@ sudo journalctl -u personal-homepage-monitor.service --since '10 min ago'
 - 网络吞吐量、磁盘吞吐量和 CPU 百分比首帧、采集器重启后的首帧均为 `null`；计数回退或出口切换后保留 `null`，不会把回退显示成负数或零。
 - Docker 只查询四个固定容器的名称、镜像、状态、健康状态、重启次数和资源统计，不读取环境变量或 health-check 日志。不存在或读取失败的字段为 `null` / `unknown`。
 - HTTP 不跟随重定向、不读取响应 body。2xx 表示 HTTP 检查通过；3xx、401、403 仅表示 HTTP 端点可达。Study Agent 的 303 登录跳转不会被误报为故障。
-- systemd `is-active` 单独显示 Study Agent、远程运行、Nginx 和 Docker 的进程状态；只证明进程在运行。PostgreSQL 使用容器内 `pg_isready -q`，不提供数据库密码。
+- systemd `is-active` 单独显示 Study Agent、远程运行、Nginx 和 Docker 的进程状态；只证明进程在运行。PostgreSQL 使用容器内 `pg_isready -q`，通过固定脚本引用容器内 `POSTGRES_USER` 和 `POSTGRES_DB`（默认 PostgreSQL 镜像的 postgres 身份），不提供数据库密码，避免把容器 root 用户当数据库角色持续写入 FATAL 日志。
 - 远程运行的 4321 和 Perforce 的 1666 仅做 TCP 探测，成功为 `reachable`，不声称业务健康。网站、白板和 Jenkins 使用固定的本机 HTTP URL。
 
 采样与探测都有超时；一次采样完成后才开始下一次，长采样跳过错过的 tick，不并发追赶。文件锁同时阻止手工运行与服务重叠。探测批次并行以控制总耗时，Docker stats 最多等待 5 秒，其他命令/HTTP/TCP 最多等待 3 秒。

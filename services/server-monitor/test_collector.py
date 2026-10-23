@@ -128,6 +128,19 @@ class ProbeTests(unittest.TestCase):
         self.assertEqual(result["kind"], "process")
         self.assertEqual(result["status"], "healthy")
 
+    def test_postgres_uses_container_identity_and_does_not_forward_output(self):
+        for code, expected in ((0, "healthy"), (1, "unhealthy"), (2, "unhealthy"), (None, "unknown")):
+            with self.subTest(code=code), mock.patch.object(collector, "command", return_value=(code, "private database output")) as execute:
+                result = collector.postgres_probe()
+            self.assertEqual(result["status"], expected)
+            self.assertEqual(result["kind"], "process")
+            argv = execute.call_args.args[0]
+            self.assertEqual(argv[:5], ["docker", "exec", "personal-homepage-postgres", "sh", "-c"])
+            self.assertIn('-U "${POSTGRES_USER:-postgres}"', argv[5])
+            self.assertIn('-d "${POSTGRES_DB:-${POSTGRES_USER:-postgres}}"', argv[5])
+            self.assertNotIn("POSTGRES_PASSWORD", argv[5])
+            self.assertNotIn("private database output", json.dumps(result))
+
     def test_docker_only_reads_whitelisted_fields_and_sizes(self):
         meta = json.dumps({"name": "/personal-homepage", "image": "site:abc123", "state": "running", "health": "healthy", "restartCount": 2})
         stats = json.dumps({"Name": "personal-homepage", "CPUPerc": "12.5%", "MemUsage": "100MiB / 2GiB", "MemPerc": "4.88%"})

@@ -133,7 +133,12 @@ def systemd_probe(identifier, name, unit):
 
 
 def postgres_probe():
-    code, _ = command(["docker", "exec", "personal-homepage-postgres", "pg_isready", "-q"])
+    # docker exec otherwise inherits the container's root OS identity, causing
+    # PostgreSQL to log FATAL role "root" on every probe despite readiness.
+    # Expand only the two non-secret identity variables inside the container;
+    # never inspect or export its complete environment or password.
+    probe = 'exec pg_isready -q -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-${POSTGRES_USER:-postgres}}"'
+    code, _ = command(["docker", "exec", "personal-homepage-postgres", "sh", "-c", probe])
     if code == 0:
         return service_result("postgres", "PostgreSQL", "process", "healthy", detail="容器内 pg_isready 接受连接")
     if code in (1, 2):
