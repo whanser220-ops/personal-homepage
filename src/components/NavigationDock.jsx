@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Smile, Star } from "lucide-react";
+import { Activity, BookOpen, Smile, Star } from "lucide-react";
 import { cn } from "../lib/utils.js";
 import styles from "./NavigationDock.module.css";
 import { ThemeToggle } from "./ThemeToggle.jsx";
@@ -12,6 +12,7 @@ const dockItems = [
   { href: "/articles", label: "文章", icon: BookOpen },
   { href: "/about", label: "关于我", icon: Smile },
   { href: "/projects", label: "项目", icon: Star },
+  { href: "/server-monitor", label: "服务监控", icon: Activity },
 ];
 
 function getActiveIndex(pathname) {

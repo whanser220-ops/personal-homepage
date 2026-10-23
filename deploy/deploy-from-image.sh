@@ -145,6 +145,35 @@ prune_old_app_images() {
 
 previous_image="$(docker_cli inspect --format '{{.Config.Image}}' "$CONTAINER_NAME" 2>/dev/null || true)"
 previous_whiteboard_image="$(docker_cli inspect --format '{{.Config.Image}}' learning-whiteboard 2>/dev/null || true)"
+monitor_prepared=0
+runtime_switched=0
+nginx_backup=""
+nginx_changed=0
+deployment_exit() {
+    local status="$1"
+    trap - EXIT
+    if [ "$status" -ne 0 ] && [ "$monitor_prepared" -eq 1 ]; then
+        set +e
+        echo "Restoring monitor installation and previous runtime after failed deployment" >&2
+        if [ "$nginx_changed" -eq 1 ] && [ -n "$nginx_backup" ] && [ -d "$nginx_backup" ]; then
+            if restore_nginx; then
+                sudo nginx -t && sudo systemctl reload nginx
+            else
+                echo "Nginx rollback could not finish; preserving backup at $nginx_backup" >&2
+            fi
+        fi
+        sudo python3 deploy/install-server-monitor.py rollback
+        if [ "$runtime_switched" -eq 1 ] && [ -n "$previous_image" ]; then
+            APP_IMAGE="$previous_image" WHITEBOARD_IMAGE="${previous_whiteboard_image:-$WHITEBOARD_IMAGE}" \
+                compose_cli -f "$COMPOSE_FILE" up -d --no-build --force-recreate "$COMPOSE_SERVICE" learning-whiteboard
+        fi
+    fi
+    if [ "$nginx_changed" -eq 0 ] && [ -n "$nginx_backup" ] && [ -d "$nginx_backup" ]; then
+        sudo rm -rf "$nginx_backup"
+    fi
+    exit "$status"
+}
+trap 'deployment_exit "$?"' EXIT
 
 if ! sudo test -f "$ENV_FILE"; then
     echo "Missing runtime env file: $ENV_FILE" >&2
@@ -216,9 +245,12 @@ load_registry_credentials
 reclaim_obsolete_build_cache
 docker_cli pull "$APP_IMAGE"
 docker_cli pull "$WHITEBOARD_IMAGE"
+sudo python3 deploy/install-server-monitor.py prepare
+monitor_prepared=1
 compose_cli -f "$COMPOSE_FILE" config >/dev/null
 
 # Bring the persistent data service up first, before the website switches readers.
+runtime_switched=1
 compose_cli -f "$COMPOSE_FILE" up -d --no-build learning-whiteboard
 for attempt in $(seq 1 30); do
     if curl --fail --silent http://127.0.0.1:4310/whiteboard/health >/dev/null; then
@@ -250,7 +282,7 @@ if [ -z "$compose_project" ] && docker_cli inspect "$CONTAINER_NAME" >/dev/null 
     docker_cli rm -f "$CONTAINER_NAME" >/dev/null
 fi
 
-compose_cli -f "$COMPOSE_FILE" up -d --no-build --force-recreate --remove-orphans "$COMPOSE_SERVICE"
+compose_cli -f "$COMPOSE_FILE" up -d --no-build --force-recreate "$COMPOSE_SERVICE"
 
 for attempt in $(seq 1 30); do
     if curl --fail --silent --show-error "$HEALTH_URL" >/dev/null; then
@@ -279,33 +311,52 @@ nginx_backup="$(mktemp -d)"
 sudo cp "$NGINX_CONF_TARGET" "$nginx_backup/http.conf"
 sudo cp /etc/nginx/conf.d/study-agent-https.conf "$nginx_backup/https.conf"
 had_whiteboard_snippet=0
+had_monitor_snippet=0
+if sudo test -f /etc/nginx/snippets/server-monitor.conf; then
+    had_monitor_snippet=1
+    sudo cp /etc/nginx/snippets/server-monitor.conf "$nginx_backup/monitor.conf"
+fi
 if sudo test -f /etc/nginx/snippets/learning-whiteboard.conf; then
     had_whiteboard_snippet=1
     sudo cp /etc/nginx/snippets/learning-whiteboard.conf "$nginx_backup/whiteboard.conf"
 fi
 restore_nginx() {
-    sudo cp "$nginx_backup/http.conf" "$NGINX_CONF_TARGET"
-    sudo cp "$nginx_backup/https.conf" /etc/nginx/conf.d/study-agent-https.conf
+    sudo cp "$nginx_backup/http.conf" "$NGINX_CONF_TARGET" || return 1
+    sudo cp "$nginx_backup/https.conf" /etc/nginx/conf.d/study-agent-https.conf || return 1
     if [ "$had_whiteboard_snippet" -eq 1 ]; then
-        sudo cp "$nginx_backup/whiteboard.conf" /etc/nginx/snippets/learning-whiteboard.conf
+        sudo cp "$nginx_backup/whiteboard.conf" /etc/nginx/snippets/learning-whiteboard.conf || return 1
     else
-        sudo rm -f /etc/nginx/snippets/learning-whiteboard.conf
+        sudo rm -f /etc/nginx/snippets/learning-whiteboard.conf || return 1
     fi
+    if [ "$had_monitor_snippet" -eq 1 ]; then
+        sudo cp "$nginx_backup/monitor.conf" /etc/nginx/snippets/server-monitor.conf || return 1
+    else
+        sudo rm -f /etc/nginx/snippets/server-monitor.conf || return 1
+    fi
+    nginx_changed=0
     sudo rm -rf "$nginx_backup"
 }
+nginx_changed=1
 if ! { sudo install -D -m 0644 "$NGINX_CONF_SOURCE" "$NGINX_CONF_TARGET" &&
     sudo install -D -m 0644 deploy/nginx-learning-whiteboard.conf /etc/nginx/snippets/learning-whiteboard.conf &&
-    sudo python3 deploy/install-whiteboard-nginx.py && sudo nginx -t; }; then
+    sudo install -D -m 0644 deploy/nginx-server-monitor.conf /etc/nginx/snippets/server-monitor.conf &&
+    sudo python3 deploy/install-whiteboard-nginx.py &&
+    sudo python3 deploy/install-monitor-nginx.py && sudo nginx -t; }; then
     restore_nginx
     exit 1
 fi
 sudo systemctl reload nginx
-sudo rm -rf "$nginx_backup"
+sudo python3 deploy/install-server-monitor.py activate
 
 curl --fail --silent --show-error "$HEALTH_URL" >/dev/null
 curl --fail --silent --show-error "$METRICS_URL" >/dev/null
 curl --fail --silent --show-error https://warmhanser.com/whiteboard/health >/dev/null
-prune_old_app_images
-IMAGE_REPOSITORY="${REGISTRY_HOST}/${REGISTRY_PROJECT}/learning-whiteboard" APP_IMAGE="$WHITEBOARD_IMAGE" prune_old_app_images
+sudo python3 deploy/verify-server-monitor.py
+sudo python3 deploy/install-server-monitor.py commit
+monitor_prepared=0
+sudo rm -rf "$nginx_backup"
+prune_old_app_images || echo "Warning: application image cleanup did not complete." >&2
+IMAGE_REPOSITORY="${REGISTRY_HOST}/${REGISTRY_PROJECT}/learning-whiteboard" APP_IMAGE="$WHITEBOARD_IMAGE" prune_old_app_images || \
+    echo "Warning: whiteboard image cleanup did not complete." >&2
 
 echo "Deployed ${APP_IMAGE} on 127.0.0.1:${HOST_PORT}"

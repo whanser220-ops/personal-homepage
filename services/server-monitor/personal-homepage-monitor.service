@@ -1,0 +1,39 @@
+[Unit]
+Description=Personal homepage host metrics collector
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=server-monitor
+Group=server-monitor
+SupplementaryGroups=docker
+EnvironmentFile=/etc/personal-homepage-monitor.env
+Environment=MONITOR_STATE_DIR=/var/lib/personal-homepage-monitor
+WorkingDirectory=/opt/personal-homepage-monitor
+ExecStart=/usr/bin/python3 /opt/personal-homepage-monitor/collector.py
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=15
+StateDirectory=personal-homepage-monitor
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+CapabilityBoundingSet=
+MemoryMax=128M
+CPUQuota=20%
+TasksMax=48
+
+[Install]
+WantedBy=multi-user.target

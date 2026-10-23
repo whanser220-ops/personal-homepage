@@ -7,6 +7,7 @@ services:
     restart: unless-stopped
     env_file:
       - ${ENV_FILE:-/etc/personal-homepage/app.env}
+      - ${MONITOR_ENV_FILE:-/etc/personal-homepage-monitor/web.env}
     ports:
       - "127.0.0.1:${HOST_PORT:-3000}:3000"
     networks:

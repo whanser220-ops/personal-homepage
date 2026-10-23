@@ -83,7 +83,7 @@ printf 'SOURCE_COMMIT_SHA=%s\n' "$(git rev-parse --short HEAD)" > .ci/source.env
                 // Deployment runs on a fresh ephemeral agent, so carry the
                 // runtime manifest explicitly instead of relying on stale
                 // server-side copies.
-                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf,deploy/nginx-learning-whiteboard.conf,deploy/install-whiteboard-nginx.py'
+                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf,deploy/nginx-learning-whiteboard.conf,deploy/install-whiteboard-nginx.py,deploy/nginx-server-monitor.conf,deploy/install-monitor-nginx.py,deploy/install-server-monitor.py,deploy/verify-server-monitor.py,services/server-monitor/**'
             }
         }
 
@@ -207,6 +207,12 @@ deploy_files=(
     deploy/nginx-personal-homepage.conf
     deploy/nginx-learning-whiteboard.conf
     deploy/install-whiteboard-nginx.py
+    deploy/nginx-server-monitor.conf
+    deploy/install-monitor-nginx.py
+    deploy/install-server-monitor.py
+    deploy/verify-server-monitor.py
+    services/server-monitor/collector.py
+    services/server-monitor/personal-homepage-monitor.service
 )
 for deploy_file in "${deploy_files[@]}"; do
     if [ ! -f "$deploy_file" ]; then
@@ -284,6 +290,10 @@ curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
 curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
     https://warmhanser.com/whiteboard/api/boards/software-atlas -o whiteboard.json
 grep -q 'software-atlas' whiteboard.json
+curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+    https://warmhanser.com/server-monitor -o /dev/null
+test "$(curl --silent --output /dev/null --write-out '%{http_code}' https://warmhanser.com/api/monitor/current)" = 401
+test "$(curl --silent --output /dev/null --write-out '%{http_code}' https://warmhanser.com/api/monitor/ingest)" = 404
 '''
                 }
             }

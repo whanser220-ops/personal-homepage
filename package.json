@@ -24,11 +24,13 @@
     "lucide-react": "^1.25.0",
     "marked": "16.4.2",
     "next": "^16.2.10",
+    "openid-client": "^6.8.8",
     "pg": "^8.22.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "tailwind-merge": "^3.6.0",
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "undici": "^8.12.3"
   },
   "overrides": {
     "postcss": "^8.5.19"

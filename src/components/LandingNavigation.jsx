@@ -9,6 +9,7 @@ import styles from "./SceneLanding.module.css";
 const destinations = [
   { href: "/articles", title: "文字", description: "学习、思考与随手记" },
   { href: "/projects", title: "作品", description: "把想法慢慢做出来" },
+  { href: "/server-monitor", title: "服务监控", description: "云服务器的私有观察窗口" },
   { href: "/about", title: "关于", description: "很高兴在这里遇见你" },
 ];
 
