@@ -2,6 +2,8 @@
 
 Ubuntu 24.04 宿主机上的 Python 3 标准库服务，每 15 秒产生一个 `cloud-primary` 样本，通过 `http://127.0.0.1:3000/api/monitor/ingest` 发送 `{ "samples": [...] }`（每批最多 20 条）。网站只接收采样，不挂载 Docker socket。所有探测均为服务器本机视角。
 
+完整部署、Google 登录配置、文件权限、事务回退及发布验收见[服务监控运维说明](../../docs/server-monitor-operations.md)。
+
 ## 安装约定
 
 部署脚本负责创建系统账号 `server-monitor`、目录和服务，安装路径如下：
