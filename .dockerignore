@@ -1,6 +1,9 @@
 .agents
 .git
 .gitattributes
+.ci
+homepage.html
+whiteboard.json
 .next
 node_modules
 **/node_modules
