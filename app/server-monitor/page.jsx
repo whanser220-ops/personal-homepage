@@ -1,4 +1,3 @@
-import { PageFrame } from "../../src/components/PageFrame.jsx";
 import { ServerMonitorDashboard } from "../../src/components/ServerMonitorDashboard.jsx";
 
 export const metadata = {
@@ -8,9 +7,5 @@ export const metadata = {
 };
 
 export default function ServerMonitorPage() {
-  return (
-    <PageFrame>
-      <ServerMonitorDashboard />
-    </PageFrame>
-  );
+  return <ServerMonitorDashboard />;
 }
