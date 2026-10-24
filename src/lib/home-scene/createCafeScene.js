@@ -4,7 +4,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { createInsetWater } from "./createInsetWater.js";
 import { createIcedCoffee } from "./createIcedCoffee.js";
 import { createCafeAO } from "./createCafeAO.js";
-import { createFrameClock, createGpuTimer, createResolutionBudget, maximumPixelRatio } from "./renderBudget.js";
+import { createFrameClock, scenePixelRatio } from "./renderBudget.js";
 
 // A restrained illustrated palette: world-space light creates the same diagonal
 // afternoon sun across every surface, with real shadow maps for local occlusion.
@@ -145,9 +145,7 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   const tank = createInsetWater(renderer, scene);
   const coffee = createIcedCoffee(renderer, scene);
   const clock = createFrameClock();
-  const resolution = createResolutionBudget(maximumPixelRatio(host.clientWidth, host.clientHeight, window.devicePixelRatio || 1));
-  let gpuTimer = createGpuTimer(renderer.getContext());
-  let lastDraw, pendingPixelRatio, lastCapture = -Infinity, animationSeconds = 0;
+  let lastDraw, lastCapture = -Infinity, animationSeconds = 0;
   let frames = 0, captures = 0, lastDiagnostics = -Infinity;
   let root;
   const dustGeometry = new THREE.BufferGeometry();
@@ -179,11 +177,6 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   function draw(time = 0) {
     frame = 0;
     if (disposed || contextLost || !loaded || !visible || document.hidden) return;
-    if (pendingPixelRatio !== undefined) {
-      const next = pendingPixelRatio;
-      pendingPixelRatio = undefined;
-      setResolution(next);
-    }
     if (!clock.due(time)) { schedule(); return; }
     const frameMs = lastDraw === undefined ? 0 : time - lastDraw;
     lastDraw = time;
@@ -191,28 +184,16 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     dust.position.y = reduced.matches ? 0 : Math.sin(animationSeconds * 0.08) * 0.22;
     tank.update(reduced.matches ? 0 : animationSeconds);
     coffee.update(animationSeconds, !reduced.matches);
-    const gpuMs = gpuTimer.poll();
-    const started = performance.now();
-    gpuTimer.begin();
-    try {
-      // Camera and room are fixed. Reuse both water captures between updates;
-      // the surface shader and coffee motion still animate at the scene rate.
-      const captureInterval = 1000 / (host.clientWidth < 700 ? 6 : 8);
-      if (time - lastCapture >= captureInterval) {
-        tank.capture(camera);
-        lastCapture = time;
-        captures++;
-      }
-      coffee.render(camera, ao.apply);
-    } finally {
-      gpuTimer.end();
+    // Camera and room are fixed. Reuse both water captures between updates;
+    // the surface shader and coffee motion still animate at the scene rate.
+    const captureInterval = 1000 / (host.clientWidth < 700 ? 6 : 8);
+    if (time - lastCapture >= captureInterval) {
+      tank.capture(camera);
+      lastCapture = time;
+      captures++;
     }
+    coffee.render(camera, ao.apply);
     frames++;
-    const renderMs = performance.now() - started;
-    const pixelRatio = resolution.sample({ time, frameMs, renderMs, gpuMs });
-    // Resize immediately before the next draw so clearing the canvas cannot
-    // leave a blank frame on screen between two animation ticks.
-    if (pixelRatio !== null) pendingPixelRatio = pixelRatio;
     // Local diagnostic counters make the render budget observable without
     // adding UI, timers, network telemetry, or per-frame React updates.
     if (time - lastDiagnostics >= 1000) {
@@ -223,15 +204,13 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
       lastDiagnostics = time;
     }
     if (host.dataset.ready !== "true") { host.dataset.ready = "true"; onReady?.(); }
-    if (!reduced.matches || pixelRatio !== null) schedule();
+    if (!reduced.matches) schedule();
   }
   function schedule() {
     if (!frame && loaded && !disposed && !contextLost && visible && !document.hidden) frame = requestAnimationFrame(draw);
   }
   function refresh() {
     clock.reset();
-    resolution.reset();
-    gpuTimer.clear();
     lastDraw = undefined;
     lastCapture = -Infinity;
     ao.invalidate();
@@ -263,8 +242,7 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     // Match the accessible controls to the Blender radio's front face.
     const player = new THREE.Vector3(3.85, 5.10, 3.325).project(camera);
     onPlayerPosition?.({ x: (player.x + 1) * w / 2, y: (1 - player.y) * h / 2, width: 1.9 * h / height });
-    pendingPixelRatio = undefined;
-    setResolution(resolution.setMaximum(maximumPixelRatio(w, h, window.devicePixelRatio || 1)));
+    setResolution(scenePixelRatio(w, window.devicePixelRatio || 1));
   }
   function onMotion() {
     refresh();
@@ -284,8 +262,6 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   }
   function onContextRestored() {
     contextLost = false;
-    // Extensions and query handles from the lost context are no longer valid.
-    gpuTimer = createGpuTimer(renderer.getContext());
     renderer.shadowMap.needsUpdate = true;
     refresh();
   }
@@ -351,7 +327,6 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     reduced.removeEventListener("change", onMotion);
     renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
     renderer.domElement.removeEventListener("webglcontextrestored", onContextRestored);
-    gpuTimer.clear();
     delete host.dataset.sceneFrames;
     delete host.dataset.sceneCaptures;
     delete host.dataset.sceneAOUpdates;
