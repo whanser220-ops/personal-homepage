@@ -69,7 +69,9 @@ git config --global protocol.version 0
                         userRemoteConfigs: [[
                             credentialsId: 'personal-homepage-github-deploy-key',
                             refspec: '+refs/heads/main:refs/remotes/origin/main',
-                            url: 'ssh://git@ssh.github.com:443/whanser220-ops/personal-homepage.git'
+                            // Keep github.com identity for GitHub webhook matching;
+                            // the controller routes its SSH transport separately.
+                            url: 'git@github.com:whanser220-ops/personal-homepage.git'
                         ]]
                     ])
                 }

@@ -30,6 +30,10 @@ GitHub main push / 浏览器 / Jenkins API
 
 `Jenkinsfile` 的 `personal-homepage-deploy` 流程和现有凭据 ID 保持兼容。源码由控制器检出，工作文件通过 stash 传给临时 Agent；构建、推送、部署仍由对应阶段执行。
 
+Git 插件记录的仓库 URL 使用 `git@github.com:whanser220-ops/personal-homepage.git`，保持与 GitHub Webhook 的仓库身份一致。控制器的 Git 配置仅将这个仓库的 SSH 传输改写到 `ssh://git@ssh.github.com/whanser220-ops/personal-homepage.git`；容器 SSH 配置再将 `ssh.github.com` 连接到 WSL 网桥 `172.17.0.1:14443`，经云服务器到达真正的 `ssh.github.com:443`。SSH 使用 `HostKeyAlias [ssh.github.com]:443` 和已有 GitHub 主机密钥严格校验。
+
+不要将 `ssh.github.com` 传输地址写成 Jenkins SCM URL，否则 GitHub 事件无法按 `github.com` 匹配推送。Git 传输改写 URL 也不要显式携带 `:443`，避免 Git 生成的 `ssh -p 443` 覆盖容器 SSH 配置里的本机隧道端口。
+
 ## 运行状态与数据边界
 
 迁移保留 Jenkins `2.555.3` 和原控制器镜像，避免迁移同时升级 Jenkins 或插件。运行定义位于 WSL Linux 文件系统：
@@ -55,6 +59,7 @@ Home 宿主目录包含任务配置、构建记录、插件、用户及凭据解
 | 通道 | WSL 服务/云端入口 | 用途 |
 | --- | --- | --- |
 | 控制器 UI/API/Webhook | `jenkins-tunnel-local-controller.service`，云端 `127.0.0.1:18082` | 转发到 WSL `127.0.0.1:18080` |
+| GitHub SSH | `jenkins-tunnel-git.service`，本机网桥 `172.17.0.1:14443` | 经云服务器访问 `ssh.github.com:443`，控制器检出和轮询使用 |
 | Harbor | `jenkins-tunnel-registry.service`，云端 `127.0.0.1:18081` | 云端 Docker 拉取镜像 |
 | 部署 SSH | `jenkins-tunnel-deploy.service`，本机网桥 `172.17.0.1:10022` | Agent SSH 到云服务器 |
 | Harbor 容器桥 | 云端 `jenkins-harbor-bridge.service` | 云端容器经 `172.17.0.1:18081` 访问 Harbor |
