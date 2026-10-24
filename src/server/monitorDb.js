@@ -1,5 +1,5 @@
 import pg from "pg";
-import { buildMonitorHistoryPoints, MONITOR_HISTORY_RANGES, MONITOR_HOST_ID } from "./monitorValidation.js";
+import { buildMonitorHistoryPoints, MONITOR_HISTORY_RANGES, MONITOR_HOST_ID, MONITOR_RETENTION_MS } from "./monitorValidation.js";
 
 const { Pool } = pg;
 const GLOBAL_KEY = "__personalHomepageMonitorDb";
@@ -34,6 +34,9 @@ export async function ensureMonitorSchema() {
         primary key (host_id, collected_at)
       );
       create index if not exists monitor_samples_collected_at_idx on monitor_samples (collected_at);
+      create index if not exists monitor_samples_checks_idx on monitor_samples
+        (host_id, (coalesce(sample->>'checksCollectedAt', sample->>'collectedAt')) desc, collected_at desc)
+        where sample ? 'containers' and sample ? 'services';
       create table if not exists monitor_sessions (
         token_hash text primary key, subject text not null, email text not null,
         created_at timestamptz not null default now(), expires_at timestamptz not null
@@ -89,10 +92,24 @@ export async function writeMonitorSamples(samples) {
 
 export async function readCurrentMonitorSample(now = Date.now()) {
   await ensureMonitorSchema();
-  const result = await monitorPool().query(`select sample from monitor_samples where host_id = $1
-    and collected_at >= now() - interval '7 days' order by collected_at desc limit 1`, [MONITOR_HOST_ID]);
-  const sample = result.rows[0]?.sample || null;
-  return { sample, stale: !sample || now - Date.parse(sample.collectedAt) > 45_000, serverTime: new Date(now).toISOString() };
+  const retainedFrom = new Date(now - MONITOR_RETENTION_MS);
+  // Keep sparse samples in storage. The partial index skips host-only rows;
+  // canonical UTC ISO strings sort by capture time, including legacy rows.
+  // One statement gives host and checks a consistent database snapshot.
+  const result = await monitorPool().query(`select latest.sample, checks.sample as checks
+    from (select sample from monitor_samples where host_id = $1 and collected_at >= $2
+      order by collected_at desc limit 1) latest
+    left join lateral (select sample from monitor_samples where host_id = $1 and collected_at >= $2
+      and sample ? 'containers' and sample ? 'services'
+      and coalesce(sample->>'checksCollectedAt', sample->>'collectedAt') >= $3
+      order by coalesce(sample->>'checksCollectedAt', sample->>'collectedAt') desc, collected_at desc limit 1
+    ) checks on true`, [MONITOR_HOST_ID, retainedFrom, retainedFrom.toISOString()]);
+  const latest = result.rows[0]?.sample || null, checks = result.rows[0]?.checks || null;
+  const checksCollectedAt = checks ? (checks.checksCollectedAt || checks.collectedAt) : null;
+  const sample = latest ? { ...latest, containers: checks?.containers || [], services: checks?.services || [], checksCollectedAt } : null;
+  return { sample, stale: !sample || now - Date.parse(sample.collectedAt) > 45_000,
+    checksStale: !checksCollectedAt || now - Date.parse(checksCollectedAt) > 45_000,
+    serverTime: new Date(now).toISOString() };
 }
 
 export async function readMonitorHistory(range, now = Date.now()) {

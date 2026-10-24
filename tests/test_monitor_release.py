@@ -20,10 +20,10 @@ class FreshSampleReadinessTests(unittest.TestCase):
         ]
         for failure in failures:
             with self.subTest(failure=type(failure).__name__), \
-                    patch.object(monitor_release, 'database_query', side_effect=[failure, '', '12']) as query, \
+                    patch.object(monitor_release, 'database_query', side_effect=[failure, '', '', '12', '18']) as query, \
                     patch.object(monitor_release.time, 'sleep') as sleep:
                 monitor_release.wait_for_fresh_sample()
-                self.assertEqual(query.call_count, 3)
+                self.assertEqual(query.call_count, 5)
                 self.assertEqual(sleep.call_args_list, [call(5), call(5)])
 
     def test_missing_or_stale_samples_exhaust_bounded_retries(self):
@@ -31,9 +31,9 @@ class FreshSampleReadinessTests(unittest.TestCase):
             with self.subTest(age=age), \
                     patch.object(monitor_release, 'database_query', return_value=age) as query, \
                     patch.object(monitor_release.time, 'sleep') as sleep:
-                with self.assertRaisesRegex(RuntimeError, 'No fresh host sample after deployment'):
+                with self.assertRaisesRegex(RuntimeError, 'No fresh host and checks snapshots after deployment'):
                     monitor_release.wait_for_fresh_sample()
-                self.assertEqual(query.call_count, 12)
+                self.assertEqual(query.call_count, 24)
                 self.assertEqual(sleep.call_args_list, [call(5)] * 11)
 
     def test_freshness_boundaries_succeed_without_retrying(self):
@@ -42,8 +42,15 @@ class FreshSampleReadinessTests(unittest.TestCase):
                     patch.object(monitor_release, 'database_query', return_value=age) as query, \
                     patch.object(monitor_release.time, 'sleep') as sleep:
                 monitor_release.wait_for_fresh_sample()
-                query.assert_called_once()
+                self.assertEqual(query.call_count, 2)
                 sleep.assert_not_called()
+
+    def test_fresh_host_waits_for_independently_fresh_checks(self):
+        with patch.object(monitor_release, 'database_query', side_effect=['1', '60', '2', '4']) as query, \
+                patch.object(monitor_release.time, 'sleep') as sleep:
+            monitor_release.wait_for_fresh_sample()
+            self.assertEqual(query.call_count, 4)
+            sleep.assert_called_once_with(5)
 
 
 if __name__ == '__main__':

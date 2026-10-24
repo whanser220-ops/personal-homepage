@@ -1,6 +1,6 @@
 # 宿主机服务监控采集器
 
-Ubuntu 24.04 宿主机上的 Python 3 标准库服务，每 15 秒产生一个 `cloud-primary` 样本，通过 `http://127.0.0.1:3000/api/monitor/ingest` 发送 `{ "samples": [...] }`（每批最多 20 条）。网站只接收采样，不挂载 Docker socket。所有探测均为服务器本机视角。
+Ubuntu 24.04 宿主机上的 Python 3 标准库服务，每 3 秒产生一个 `cloud-primary` 主机样本，每 15 秒启动一次 Docker / 服务检查，通过 `http://127.0.0.1:3000/api/monitor/ingest` 发送 `{ "samples": [...] }`（每批最多 20 条）。网站只接收采样，不挂载 Docker socket。所有探测均为服务器本机视角。
 
 完整部署、Google 登录配置、文件权限、事务回退及发布验收见[服务监控运维说明](../../docs/server-monitor-operations.md)。
 
@@ -38,9 +38,9 @@ sudo journalctl -u personal-homepage-monitor.service --since '10 min ago'
 - systemd 每轮通过一次 `show` 查询固定的四个服务，仅读取 `Id`、`LoadState`、`ActiveState`，分别显示 Study Agent、远程运行、Nginx 和 Docker 的进程状态；只证明进程在运行。单个服务缺失不影响其他服务的结果，查询超时或结果缺失显示未知。PostgreSQL 使用容器内 `pg_isready -q`，通过固定脚本引用容器内 `POSTGRES_USER` 和 `POSTGRES_DB`（默认 PostgreSQL 镜像的 postgres 身份），不提供数据库密码，避免把容器 root 用户当数据库角色持续写入 FATAL 日志。
 - 远程运行的 4321 和 Perforce 的 1666 仅做 TCP 探测，成功为 `reachable`，不声称业务健康。网站、白板和 Jenkins 使用固定的本机 HTTP URL。
 
-采样与探测都有超时；一次采样完成后才开始下一次，长采样跳过错过的 tick，不并发追赶。文件锁同时阻止手工运行与服务重叠。探测批次并行以控制总耗时，Docker stats 最多等待 5 秒，其他命令/HTTP/TCP 最多等待 3 秒。
+主线程只采集轻量宿主机指标、维护 SQLite 并调度任务；长采样跳过错过的 tick，不并发追赶。文件锁同时阻止手工运行与服务重叠。慢检查批次并行执行，Docker stats 最多等待 5 秒，其他命令/HTTP/TCP 最多等待 3 秒；同一时刻最多一批慢检查，超时不会触发重叠批次。
 
-采集器启动时创建一个最多四个 worker 的线程池，在采样轮次间复用。主线程提交独立探测并等待结果，worker 不向同一线程池提交子任务再等待；SQLite 和投递仍由主线程执行，退出时等待探测结束并关闭线程池。
+采集器复用三个有界线程池：一个慢批调度 worker、四个探测 worker、一个投递 worker。慢批调度不会占用探测池等待自身子任务。投递只拿不可变批次，不访问 SQLite；成功 ACK 回主线程处理，最多一个请求在途。慢快照完成后仅附在下一条主机样本上一次，`checksCollectedAt` 记录慢批开始时间；主机更新不会把旧检查标成新检查。退出时持久化已完成结果，等待有界任务结束并关闭线程池。
 
 本机 HTTP 请求使用手工构造的 HTTP-only opener，每个线程独立缓存并复用。它不创建默认 HTTPS handler 或 TLS/CA 上下文，不读取环境代理，不支持 HTTPS、FTP、file 协议，也不跟随重定向。复用的是 opener 和 handler，不代表建立了 TCP 连接池；网站 Google OAuth 的 HTTPS 出网不受此采集器调整影响。
 
@@ -48,7 +48,7 @@ sudo journalctl -u personal-homepage-monitor.service --since '10 min ago'
 
 每个样本先持久化到 SQLite，再发往网站。只有收到 2xx 才删除已经确认的一批；超时、网络错误、拒绝、重定向、网站或数据库不可用均保留原始样本，下一轮重新发送。`hostId + collectedAt` 是幂等键，后端必须以这两个字段去重；同一批请求已经写库却丢失响应时，补传不会产生重复记录。
 
-缓存最多保留 1 小时。SQLite 自动回收空页，最大数据库页数限制为 20 MiB，负载量限制为 8 MiB 为索引和删除日志预留空间。超过时间或容量会清理最老样本并记录清理数量，不会记录 payload 或凭据。正常每 15 秒仅约 240 条样本。每轮补传最多 20 条，恢复后通常约 3 分钟清空满 1 小时积压，同时继续采样；保留期之外的旧样本按约定过期。
+缓存最多保留 1 小时。SQLite 自动回收空页，最大数据库页数限制为 20 MiB，负载量限制为 8 MiB，为索引和删除日志预留空间。超过时间或容量会清理最老样本并记录清理数量，不会记录 payload 或凭据。3 秒节拍下一小时约 1,200 条，大部分只带主机指标，慢检查约 240 份，不会每 3 秒复制一份 Docker / 服务快照。每批补传最多 20 条，恢复耗时取决于接口延迟与缓存量；保留期之外的旧样本按约定过期。
 
 停止服务即可回退采集器，保留状态目录用于诊断或恢复，不要删除网站历史数据：
 
@@ -56,7 +56,9 @@ sudo journalctl -u personal-homepage-monitor.service --since '10 min ago'
 sudo systemctl disable --now personal-homepage-monitor.service
 ```
 
-升级替换程序和单元后重新启动；SQLite 在同一状态目录持续使用。不要在运行中的服务旁使用其他用户执行 `--once`；如确需单次诊断，先停止服务，并以相同用户和环境运行，避免改变状态目录权限。
+新版队列是同一状态目录中的 `queue-v2.sqlite3`。启动时只读导入旧 `queue.sqlite3` 中仍在一小时窗口内的数据，原文件不修改；重复导入由队列键与服务端幂等约束去重。回退旧程序时它继续使用原队列；新格式积压留在 v2 文件，后续升级可继续投递。不要删除任一队列来解除失败或清理工作区。
+
+不要在运行中的服务旁使用其他用户执行 `--once`；如确需单次诊断，先停止服务，并以相同用户和环境运行，避免改变状态目录权限。
 
 ## 离线验证
 

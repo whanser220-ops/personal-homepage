@@ -44,15 +44,16 @@ def wait_for_fresh_sample():
     for attempt in range(12):
         try:
             age = database_query("SELECT extract(epoch from now()-collected_at)::int FROM monitor_samples WHERE host_id='cloud-primary' ORDER BY collected_at DESC LIMIT 1")
+            checks_age = database_query("SELECT extract(epoch from now()-coalesce(sample->>'checksCollectedAt',sample->>'collectedAt')::timestamptz)::int FROM monitor_samples WHERE host_id='cloud-primary' AND sample ? 'containers' AND sample ? 'services' ORDER BY coalesce(sample->>'checksCollectedAt',sample->>'collectedAt') DESC LIMIT 1")
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             # On a first installation the collector creates the schema with
             # its first ingest, after the bounded Docker/HTTP probe batch.
             # Treat an absent table or a reconnecting database as not ready.
-            age = ''
-        if age and -5 <= int(age) <= 45:
+            age = checks_age = ''
+        if age and checks_age and -5 <= int(age) <= 45 and -5 <= int(checks_age) <= 45:
             return
         if attempt == 11:
-            raise RuntimeError('No fresh host sample after deployment')
+            raise RuntimeError('No fresh host and checks snapshots after deployment')
         time.sleep(5)
 
 

@@ -1,6 +1,7 @@
 """Offline regression tests: python -m unittest discover -s services/server-monitor."""
 import importlib.util
 import concurrent.futures
+from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -302,83 +303,253 @@ class SystemdBatchTests(unittest.TestCase):
 
 
 class SchedulingTests(unittest.TestCase):
-    def test_one_bounded_pool_is_reused_and_ticks_do_not_overlap_or_catch_up(self):
-        main_thread = threading.get_ident()
-        clock = {"now": 100.0, "round": 0, "active": 0, "peak": 0}
-        starts, waits, workers, deliveries, created = [], [], [set(), set()], [], []
-        worker_threads = set()
-        lock = threading.Lock()
+    def simulate(self, directory, *, stop_at=39, slow_durations=(8, 20, 1),
+                 slow_failures=(), delivery_failures=(0,), delivery_errors=()):
+        owner = threading.get_ident()
+        base = time.time()
+        clock = types.SimpleNamespace(now=0.0)
+        history, starts, blocking, acknowledgements = [], [], [], []
+        self_test = self
+
+        class Queue(collector.SampleQueue):
+            def enqueue(self, value, **kwargs):
+                self_test.assertEqual(threading.get_ident(), owner)
+                history.append(json.loads(json.dumps(value)))
+                return super().enqueue(value, **kwargs)
+
+            def acknowledge(self, keys):
+                self_test.assertEqual(threading.get_ident(), owner)
+                acknowledgements.append(tuple(keys))
+                return super().acknowledge(keys)
+
+        class Future:
+            def __init__(self, due, value, error=None):
+                self.due, self.value, self.error = due, value, error
+
+            def done(self):
+                return clock.now >= self.due
+
+            def result(self):
+                if not self.done():
+                    blocking.append((clock.now, self.due))
+                    clock.now = self.due
+                if self.error:
+                    raise self.error
+                return self.value
+
+        class Executor:
+            def __init__(self, kind):
+                self.kind, self.futures, self.submitted = kind, [], []
+
+            def submit(self, function, *args):
+                self_test.assertFalse(any(not future.done() for future in self.futures),
+                                      'only one task may be in flight per independent pool')
+                index = len(self.submitted)
+                self.submitted.append((clock.now, function, args))
+                error = None
+                if self.kind == 'slow':
+                    self_test.assertIs(function, collector.collect_checks)
+                    duration = slow_durations[min(index, len(slow_durations)-1)]
+                    value = {'containers': [{'name': 'snapshot-'+str(index)}],
+                             'services': [{'id': 'service-'+str(index)}],
+                             'checksCollectedAt': args[1]()}
+                    if index in slow_failures:
+                        error = RuntimeError('private slow exception')
+                else:
+                    self_test.assertIs(function, collector.send_delivery_batch)
+                    batch = args[0]
+                    self_test.assertIsInstance(batch, tuple)
+                    self_test.assertIsInstance(batch[0], tuple)
+                    self_test.assertIsInstance(batch[1], bytes)
+                    self_test.assertLessEqual(len(json.loads(batch[1])['samples']), 20)
+                    self_test.assertNotIn(queue, args)
+                    duration = 4
+                    value = () if index in delivery_failures else batch[0]
+                    if index in delivery_errors:
+                        error = RuntimeError('private delivery exception')
+                future = Future(clock.now+duration, value, error)
+                self.futures.append(future)
+                return future
 
         class Stopping:
             def is_set(self):
-                return len(waits) >= 2
-
-            def set(self):
-                pass
+                return clock.now >= stop_at
 
             def wait(self, seconds):
-                self_test.assertEqual(clock["active"], 0)
-                waits.append(seconds)
-                clock["now"] += seconds
+                self_test.assertGreater(seconds, 0, 'no busy loop on an overdue slow batch')
+                clock.now += seconds
 
-        def host_sample():
-            self.assertEqual(clock["active"], 0)
-            starts.append(clock["now"])
-            clock["round"] = len(starts) - 1
-            clock["now"] += 5 if len(starts) == 1 else 20
-            return {"hostname": "scheduler-test"}
+        def host():
+            starts.append(clock.now)
+            return {'hostname': 'fast-test'}
 
-        def job(result):
-            with lock:
-                clock["active"] += 1
-                clock["peak"] = max(clock["peak"], clock["active"])
-                workers[clock["round"]].add(threading.get_ident())
-                worker_threads.add(threading.current_thread())
+        queue = Queue(Path(directory)/'queue-v2.sqlite3')
+        slow, delivery = Executor('slow'), Executor('delivery')
+        try:
+            collector.run_sampling(queue, types.SimpleNamespace(sample=host), Stopping(),
+                slow, object(), delivery, 'http://127.0.0.1:3000/api/monitor/ingest', 'x'*40,
+                clock=lambda: clock.now, timestamp=lambda: collector.utc_iso(base+clock.now))
+        finally:
+            queue.close()
+        return types.SimpleNamespace(base=base, clock=clock, history=history, starts=starts,
+                                     blocking=blocking, slow=slow, delivery=delivery, acks=acknowledgements)
+
+    def test_fast_ticks_continue_during_slow_checks_and_four_second_ingest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.simulate(directory)
+            self.assertEqual(result.starts, list(range(0, 40, 3)))
+            self.assertEqual([task[0] for task in result.slow.submitted], [0, 15, 36])
+            self.assertTrue(all(start >= 39 for start, _ in result.blocking),
+                            'waiting for unfinished I/O is allowed only after stopping')
+            snapshots = [value for value in result.history if 'checksCollectedAt' in value]
+            self.assertEqual(len(snapshots), 3)
+            self.assertEqual([value['checksCollectedAt'] for value in snapshots],
+                             [collector.utc_iso(result.base+time) for time in (0,15,36)])
+            for value in result.history:
+                self.assertTrue(all(key in value for key in ('containers','services','checksCollectedAt'))
+                                or all(key not in value for key in ('containers','services','checksCollectedAt')))
+                if 'checksCollectedAt' in value:
+                    self.assertLessEqual(value['checksCollectedAt'], value['collectedAt'])
+            # The final completed snapshot was not in an older immutable POST.
+            # It remains durable after queue close/reopen for the next startup.
+            with closing(collector.sqlite3.connect(Path(directory)/'queue-v2.sqlite3')) as db:
+                rows = [json.loads(row[0]) for row in db.execute('select payload from queue')]
+            self.assertTrue(any(value.get('checksCollectedAt') == collector.utc_iso(result.base+36) for value in rows))
+            self.assertLessEqual(len(result.delivery.submitted), len(result.starts))
+
+    def test_slow_and_delivery_exceptions_keep_fast_ticks_and_do_not_reuse_old_checks(self):
+        with tempfile.TemporaryDirectory() as directory, self.assertLogs(collector.LOGGER, level='WARNING') as logs:
+            result = self.simulate(directory, stop_at=21, slow_durations=(4,2),
+                                   slow_failures=(0,), delivery_errors=(0,))
+        self.assertEqual(result.starts, list(range(0,21,3)))
+        snapshots = [value for value in result.history if 'checksCollectedAt' in value]
+        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(snapshots[0]['checksCollectedAt'], collector.utc_iso(result.base+15))
+        self.assertNotIn('private', ' '.join(logs.output))
+        self.assertTrue(all(start >= 21 for start, _ in result.blocking))
+
+    def test_shutdown_persists_an_outstanding_slow_snapshot_before_queue_close(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.simulate(directory, stop_at=6, slow_durations=(20,))
+            self.assertEqual(result.starts, [0,3,20])
+            self.assertEqual(result.blocking[0], (6,20))
+            with closing(collector.sqlite3.connect(Path(directory)/'queue-v2.sqlite3')) as db:
+                values = [json.loads(row[0]) for row in db.execute('select payload from queue')]
+            snapshots = [value for value in values if 'checksCollectedAt' in value]
+            self.assertEqual(len(snapshots),1)
+            self.assertEqual(snapshots[0]['checksCollectedAt'],collector.utc_iso(result.base))
+            self.assertEqual(snapshots[0]['collectedAt'],collector.utc_iso(result.base+20))
+
+    def test_immediate_shutdown_cannot_deduplicate_away_a_same_millisecond_snapshot(self):
+        stamp = collector.utc_iso()
+        class Stopping:
+            stopped = False
+            def is_set(self):
+                return self.stopped
+            def wait(self, seconds):
+                self.stopped = True
+        class Executor:
+            def submit(self, function, *args):
+                future = concurrent.futures.Future()
+                future.set_result({'containers': [], 'services': [], 'checksCollectedAt': stamp}
+                    if function is collector.collect_checks else ())
+                return future
+        with tempfile.TemporaryDirectory() as directory:
+            queue = collector.SampleQueue(Path(directory)/'queue-v2.sqlite3')
             try:
-                time.sleep(0.005)
-                return result
+                collector.run_sampling(queue, types.SimpleNamespace(sample=lambda: {'hostname':'test'}),
+                    Stopping(), Executor(), object(), Executor(), 'http://127.0.0.1:3000/api/monitor/ingest', 'x'*40,
+                    clock=lambda: 0, timestamp=lambda: stamp)
+                values = [value for _, value in queue.batch()]
+                self.assertEqual(len(values), 2)
+                self.assertNotIn('checksCollectedAt', values[0])
+                self.assertEqual(values[1]['checksCollectedAt'], stamp)
+                self.assertGreater(values[1]['collectedAt'], stamp)
             finally:
-                with lock:
-                    clock["active"] -= 1
+                queue.close()
 
-        real_executor = concurrent.futures.ThreadPoolExecutor
-        def pool(*args, **kwargs):
-            created.append(kwargs.get("max_workers", args[0] if args else None))
-            return real_executor(*args, **kwargs)
-
-        def deliver(queue, endpoint, token, max_batches):
-            self.assertEqual(threading.get_ident(), main_thread, "SQLite stays on the coordinator thread")
-            self.assertEqual(clock["active"], 0)
-            self.assertEqual(max_batches, 1)
-            batch = queue.batch()
-            deliveries.append(len(batch))
-            queue.acknowledge([key for key, _ in batch])
-            return True
-
-        self_test = self
+    def test_run_creates_distinct_bounded_pools_and_only_v2_queue(self):
+        created=[]
+        real_executor=concurrent.futures.ThreadPoolExecutor
+        def pool(*args,**kwargs):
+            created.append(kwargs['max_workers'])
+            return real_executor(*args,**kwargs)
+        def sampling(queue,sampler,stopping,slow,probe,delivery,*args,**kwargs):
+            self.assertEqual(queue.path.name,'queue-v2.sqlite3')
+            self.assertEqual(len({id(slow),id(probe),id(delivery)}),3)
+            return 0
         with tempfile.TemporaryDirectory() as directory, \
-             mock.patch.dict(os.environ, {"MONITOR_INGEST_TOKEN": "x" * 48, "MONITOR_STATE_DIR": directory, "MONITOR_INGEST_URL": "http://127.0.0.1:3000/api/monitor/ingest", "MONITOR_HOST_ID": "cloud-primary"}), \
-             mock.patch.dict(sys.modules, {"fcntl": types.SimpleNamespace(flock=mock.Mock(), LOCK_EX=1, LOCK_NB=2)}), \
-             mock.patch.object(collector.signal, "signal"), \
-             mock.patch.object(collector, "threading", types.SimpleNamespace(Event=Stopping)), \
-             mock.patch.object(collector.time, "monotonic", side_effect=lambda: clock["now"]), \
-             mock.patch.object(collector, "HostSampler", return_value=types.SimpleNamespace(sample=host_sample)), \
-             mock.patch.object(collector.concurrent.futures, "ThreadPoolExecutor", side_effect=pool), \
-             mock.patch.object(collector, "collect_containers", side_effect=lambda: job([])), \
-             mock.patch.object(collector, "http_probe", side_effect=lambda identifier, name, url: job(collector.service_result(identifier, name, "http", "healthy"))), \
-             mock.patch.object(collector, "tcp_probe", side_effect=lambda identifier, name, port: job(collector.service_result(identifier, name, "tcp", "reachable"))), \
-             mock.patch.object(collector, "postgres_probe", side_effect=lambda: job(collector.service_result("postgres", "PostgreSQL", "process", "healthy"))), \
-             mock.patch.object(collector, "systemd_probes", side_effect=lambda: job([collector.service_result(identifier, name, "process", "healthy") for identifier, name, _ in collector.SYSTEMD_SERVICES])), \
-             mock.patch.object(collector, "deliver", side_effect=deliver):
-            self.assertEqual(collector.run(), 0)
-        self.assertEqual(created, [4])
-        self.assertLessEqual(clock["peak"], 4)
-        self.assertGreater(clock["peak"], 1)
-        self.assertTrue(workers[0] & workers[1], "workers survive across sampling rounds")
-        self.assertEqual(starts, [100, 115])
-        self.assertEqual(waits, [10, 15], "a 20-second sample skips missed ticks instead of overlapping catch-up")
-        self.assertEqual(deliveries, [1, 1])
-        self.assertTrue(all(not worker.is_alive() for worker in worker_threads))
+             mock.patch.dict(os.environ,{'MONITOR_INGEST_TOKEN':'x'*48,'MONITOR_STATE_DIR':directory}), \
+             mock.patch.dict(sys.modules,{'fcntl':types.SimpleNamespace(flock=mock.Mock(),LOCK_EX=1,LOCK_NB=2)}), \
+             mock.patch.object(collector.signal,'signal'), \
+             mock.patch.object(collector.concurrent.futures,'ThreadPoolExecutor',side_effect=pool), \
+             mock.patch.object(collector,'run_sampling',side_effect=sampling):
+            self.assertEqual(collector.run(),0)
+            self.assertFalse((Path(directory)/'queue.sqlite3').exists())
+        self.assertEqual(created,[1,4,1])
+
+    def test_collect_checks_captures_time_in_slow_worker_before_probes(self):
+        owner=threading.get_ident()
+        stamp_calls=[]
+        def stamp():
+            stamp_calls.append(threading.get_ident())
+            return '2026-10-24T00:00:00.000Z'
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as slow, \
+             concurrent.futures.ThreadPoolExecutor(max_workers=4) as probes, \
+             mock.patch.object(collector,'collect_containers',return_value=[]), \
+             mock.patch.object(collector,'collect_services',return_value=[]):
+            result=slow.submit(collector.collect_checks,probes,stamp).result(timeout=2)
+        self.assertEqual(result,{'containers':[],'services':[],'checksCollectedAt':'2026-10-24T00:00:00.000Z'})
+        self.assertEqual(len(stamp_calls),1)
+        self.assertNotEqual(stamp_calls[0],owner)
+
+
+class LegacyQueueTests(unittest.TestCase):
+    def test_read_only_import_is_idempotent_and_preserves_old_rows_schema_and_bytes(self):
+        import hashlib
+        now=time.time()
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'queue.sqlite3'
+            legacy=collector.SampleQueue(path)
+            retained=sample(now-30)
+            expired=sample(now-4000)
+            legacy.enqueue(retained,now=now)
+            payload=json.dumps(expired)
+            legacy.connection.execute('insert into queue values (?,?,?,?)',
+                (expired['hostId']+':'+expired['collectedAt'],now-4000,payload,len(payload)))
+            legacy.connection.commit()
+            old_rows=legacy.connection.execute('select * from queue order by collected_at').fetchall()
+            old_schema=legacy.connection.execute("select sql from sqlite_master where type='table' and name='queue'").fetchone()[0]
+            legacy.close()
+            original_hash=hashlib.sha256(path.read_bytes()).hexdigest()
+            v2=collector.SampleQueue(Path(directory)/'queue-v2.sqlite3')
+            try:
+                collector.import_legacy_queue(path,v2,now=now)
+                collector.import_legacy_queue(path,v2,now=now)
+                self.assertEqual(v2.count(),1)
+                self.assertEqual(v2.batch()[0][1],retained)
+                self.assertEqual(len(v2.connection.execute('pragma table_info(queue)').fetchall()),4)
+            finally:
+                v2.close()
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),original_hash)
+            with closing(collector.sqlite3.connect(path)) as check:
+                self.assertEqual(check.execute('select * from queue order by collected_at').fetchall(),old_rows)
+                self.assertEqual(check.execute("select sql from sqlite_master where type='table' and name='queue'").fetchone()[0],old_schema)
+
+    def test_missing_or_unreadable_legacy_queue_does_not_create_or_replace_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'queue.sqlite3'
+            v2=collector.SampleQueue(Path(directory)/'queue-v2.sqlite3')
+            try:
+                collector.import_legacy_queue(path,v2)
+                self.assertFalse(path.exists())
+                path.write_bytes(b'not a sqlite database')
+                with self.assertLogs(collector.LOGGER,level='WARNING'):
+                    collector.import_legacy_queue(path,v2)
+                self.assertEqual(path.read_bytes(),b'not a sqlite database')
+                self.assertEqual(v2.count(),0)
+            finally:
+                v2.close()
 
 
 class QueueTests(unittest.TestCase):
@@ -401,6 +572,34 @@ class QueueTests(unittest.TestCase):
         self.queue = collector.SampleQueue(self.path)
         self.assertEqual(self.queue.count(), 2)
         self.queue.acknowledge([self.queue.batch()[0][0]])
+        self.assertEqual(self.queue.batch()[0][1], second)
+
+    def test_network_worker_only_receives_frozen_bytes_and_ack_waits_for_coordinator(self):
+        owner = threading.get_ident()
+        threads = []
+        first = sample()
+        self.queue.enqueue(first)
+        frozen = collector.delivery_batch(self.queue)
+        self.assertIsInstance(frozen[0], tuple)
+        self.assertIsInstance(frozen[1], bytes)
+        first['host']['hostname'] = 'changed-after-freeze'
+        second = sample(time.time()+1)
+        self.queue.enqueue(second)
+        opener = mock.MagicMock()
+        opener.open.return_value.__enter__.return_value.status = 200
+        def worker_opener():
+            threads.append(threading.get_ident())
+            return opener
+        with mock.patch.object(collector, 'local_http_opener', side_effect=worker_opener), \
+             concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            acknowledged = executor.submit(collector.send_delivery_batch, frozen,
+                'http://127.0.0.1:3000/api/monitor/ingest', 'x'*40).result(timeout=2)
+        self.assertNotEqual(threads[0], owner)
+        self.assertEqual(self.queue.count(), 2, 'worker must not delete any SQLite rows')
+        posted = opener.open.call_args.args[0].data
+        self.assertNotEqual(json.loads(posted)['samples'][0]['host']['hostname'], 'changed-after-freeze')
+        self.queue.acknowledge(acknowledged)
+        self.assertEqual(self.queue.count(), 1)
         self.assertEqual(self.queue.batch()[0][1], second)
 
     def test_ttl_and_capacity_bound(self):

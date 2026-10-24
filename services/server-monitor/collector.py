@@ -26,7 +26,8 @@ import urllib.request
 
 
 LOGGER = logging.getLogger("server-monitor")
-INTERVAL_SECONDS = 15
+INTERVAL_SECONDS = 3
+CHECK_INTERVAL_SECONDS = 15
 RETENTION_SECONDS = 3600
 QUEUE_MAX_BYTES = 20 * 1024 * 1024
 BATCH_SIZE = 20
@@ -188,7 +189,7 @@ def collect_services(executor):
     jobs += [(systemd_probes, ())]
     jobs += [(tcp_probe, ("remote-run-port", "远程运行端口", 4321)),
              (tcp_probe, ("perforce", "Perforce", 1666)), (postgres_probe, ())]
-    # Called by the coordinating main thread, not by one of this pool's workers.
+    # Called by a coordinator outside this leaf pool, never one of its workers.
     # Every job has its own timeout and all finish before the next sample starts.
     futures = [executor.submit(function, *args) for function, args in jobs]
     results = []
@@ -211,6 +212,20 @@ def collect_services(executor):
                 kind = "http" if function is http_probe else "tcp"
                 results.append(service_result(args[0], args[1], kind, detail="探测未返回结果"))
     return results
+
+
+def collect_checks(executor, timestamp=None):
+    """One slow batch, coordinated outside its bounded leaf-probe pool."""
+    started_at = (timestamp or utc_iso)()
+    containers = executor.submit(collect_containers)
+    try:
+        services = collect_services(executor)
+    finally:
+        # Even an unexpected service-batch exception must not leave an old
+        # container job running when the next slow batch is allowed to start.
+        container_values = containers.result()
+    return {"containers": container_values, "services": services,
+            "checksCollectedAt": started_at}
 
 
 def parse_memory_size(value):
@@ -476,6 +491,33 @@ class SampleQueue:
         self.connection.close()
 
 
+def import_legacy_queue(path, destination, now=None):
+    """Copy retained v1 rows read-only; rollback must retain its original queue."""
+    path = Path(path)
+    if not path.exists():
+        return
+    if path.resolve() == destination.path.resolve():
+        raise ValueError("legacy and v2 queue paths must differ")
+    now = time.time() if now is None else now
+    try:
+        source = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=5)
+        try:
+            rows = source.execute("SELECT sample_key, collected_at, payload, payload_bytes FROM queue WHERE collected_at >= ? ORDER BY collected_at, sample_key",
+                                  (now - RETENTION_SECONDS,))
+            while True:
+                batch = rows.fetchmany(BATCH_SIZE)
+                if not batch:
+                    break
+                for _, _, payload, _ in batch:
+                    destination.enqueue(json.loads(payload), now=now)
+        finally:
+            source.close()
+    except (sqlite3.Error, ValueError, TypeError, KeyError):
+        # The original file remains available to v1 rollback and a later v2
+        # retry; never print stored telemetry or environment values here.
+        LOGGER.warning("legacy queue import deferred; original queue retained")
+
+
 def validate_endpoint(value):
     parsed = urllib.parse.urlsplit(value)
     if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or parsed.username
@@ -484,30 +526,142 @@ def validate_endpoint(value):
     return value
 
 
-def deliver(queue, endpoint, token, max_batches=12):
-    """A failed/ambiguous response leaves the batch intact for idempotent retry."""
+def delivery_batch(queue):
+    """Coordinator-only: freeze up to 20 rows before crossing a thread boundary."""
     queue.prune()
+    batch = queue.batch()
+    if not batch:
+        return None
+    keys = tuple(key for key, _ in batch)
+    payload = json.dumps({"samples": [sample for _, sample in batch]}, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    return keys, payload
+
+
+def send_delivery_batch(batch, endpoint, token):
+    """Network worker: immutable bytes/keys in, acknowledged keys out; no SQLite."""
+    keys, payload = batch
+    request = urllib.request.Request(endpoint, data=payload, method="POST", headers={
+        "Content-Type": "application/json", "Authorization": "Bearer " + token,
+        "User-Agent": "personal-homepage-monitor/1"})
+    try:
+        with local_http_opener().open(request, timeout=4) as response:
+            if 200 <= response.status < 300:
+                return keys
+    except urllib.error.HTTPError as error:
+        error.close()
+    except (OSError, urllib.error.URLError, ValueError):
+        pass
+    LOGGER.warning("ingest deferred; batch=%d", len(keys))
+    return ()
+
+
+def deliver(queue, endpoint, token, max_batches=12):
+    """Synchronous diagnostic wrapper; the daemon uses the isolated worker."""
     for _ in range(max_batches):
-        batch = queue.batch()
+        batch = delivery_batch(queue)
         if not batch:
             return True
-        payload = json.dumps({"samples": [sample for _, sample in batch]}, ensure_ascii=False, allow_nan=False).encode("utf-8")
-        request = urllib.request.Request(endpoint, data=payload, method="POST", headers={
-            "Content-Type": "application/json", "Authorization": "Bearer " + token,
-            "User-Agent": "personal-homepage-monitor/1"})
-        try:
-            with local_http_opener().open(request, timeout=4) as response:
-                if not 200 <= response.status < 300:
-                    return False
-        except urllib.error.HTTPError as error:
-            error.close()
-            LOGGER.warning("ingest deferred; queued=%d", queue.count())
+        acknowledged = send_delivery_batch(batch, endpoint, token)
+        if not acknowledged:
             return False
-        except (OSError, urllib.error.URLError, ValueError):
-            LOGGER.warning("ingest deferred; queued=%d", queue.count())
-            return False
-        queue.acknowledge([key for key, _ in batch])
+        queue.acknowledge(acknowledged)
     return queue.count() == 0
+
+
+def run_sampling(queue, sampler, stopping, slow_executor, probe_executor, delivery_executor,
+                 endpoint, token, *, host_id="cloud-primary", once=False, clock=None, timestamp=None):
+    """Coordinator owns SQLite; at most one slow batch and one delivery exist."""
+    clock = clock or time.monotonic
+    timestamp = timestamp or utc_iso
+    next_host = next_checks = clock()
+    slow_future = delivery_future = None
+    pending_checks = None
+    last_host_timestamp = None
+
+    def take_delivery(wait=False):
+        nonlocal delivery_future
+        if delivery_future is None or not (wait or delivery_future.done()):
+            return
+        try:
+            acknowledged = delivery_future.result()
+        except Exception:
+            LOGGER.warning("ingest worker failed; queued samples retained")
+            acknowledged = ()
+        if acknowledged:
+            queue.acknowledge(acknowledged)
+        delivery_future = None
+
+    def take_checks(wait=False):
+        nonlocal slow_future, pending_checks
+        if slow_future is None or not (wait or slow_future.done()):
+            return
+        try:
+            pending_checks = slow_future.result()
+        except Exception:
+            LOGGER.warning("slow check batch failed without a result")
+        slow_future = None
+
+    def persist_host():
+        nonlocal pending_checks, last_host_timestamp
+        collected_at = timestamp()
+        if collected_at == last_host_timestamp:
+            # Shutdown can flush checks in the same millisecond as a host-only
+            # row; give it a distinct key so INSERT OR IGNORE cannot lose them.
+            value = dt.datetime.fromisoformat(collected_at.replace("Z", "+00:00"))
+            collected_at = (value + dt.timedelta(milliseconds=1)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        sample = {"hostId": host_id,
+                  "collectedAt": collected_at, "host": sampler.sample()}
+        if pending_checks is not None:
+            sample.update(pending_checks)
+        # Do not consume a completed snapshot until its sparse row is durable.
+        queue.enqueue(sample)
+        last_host_timestamp = collected_at
+        pending_checks = None
+
+    def start_delivery():
+        nonlocal delivery_future
+        if delivery_future is None:
+            batch = delivery_batch(queue)
+            if batch:
+                delivery_future = delivery_executor.submit(send_delivery_batch, batch, endpoint, token)
+
+    try:
+        if once:
+            # A manual diagnostic still creates one complete sample. Waiting is
+            # confined to this explicit one-shot mode and graceful shutdown.
+            slow_future = slow_executor.submit(collect_checks, probe_executor, timestamp)
+            take_checks(wait=True)
+            persist_host()
+            start_delivery()
+            take_delivery(wait=True)
+            return 0
+        while not stopping.is_set():
+            take_delivery()
+            take_checks()
+            if clock() >= next_host:
+                persist_host()
+                next_host += INTERVAL_SECONDS
+                if next_host <= clock():
+                    next_host = clock() + INTERVAL_SECONDS
+                # A failed/ambiguous POST never removes rows. Recovery drains
+                # one bounded batch per fast tick without growing a task queue.
+                start_delivery()
+            if slow_future is None and pending_checks is None and clock() >= next_checks:
+                slow_future = slow_executor.submit(collect_checks, probe_executor, timestamp)
+                next_checks = clock() + CHECK_INTERVAL_SECONDS
+            deadlines = [next_host]
+            if slow_future is None and pending_checks is None:
+                deadlines.append(next_checks)
+            stopping.wait(max(0, min(deadlines) - clock()))
+    finally:
+        # A signal can arrive between a slow batch's start and the next host
+        # tick. Finish its bounded probes and persist that snapshot once before
+        # closing SQLite; never silently discard or re-stamp it as a new check.
+        take_checks(wait=True)
+        if pending_checks is not None:
+            persist_host()
+        take_delivery(wait=True)
+    return 0
 
 
 def run(once=False):
@@ -533,31 +687,18 @@ def run(once=False):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise ValueError("another collector already holds the state lock") from None
-        queue = SampleQueue(state / "queue.sqlite3")
+        queue = SampleQueue(state / "queue-v2.sqlite3")
+        import_legacy_queue(state / "queue.sqlite3", queue)
         sampler = HostSampler(interface=interface)
         stopping = threading.Event()
         for signum in (signal.SIGTERM, signal.SIGINT):
             signal.signal(signum, lambda *_: stopping.set())
-        deadline = time.monotonic()
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                while not stopping.is_set():
-                    collected_at = utc_iso()
-                    host = sampler.sample()
-                    container_task = executor.submit(collect_containers)
-                    services = collect_services(executor)
-                    containers = container_task.result()
-                    queue.enqueue({"hostId": host_id, "collectedAt": collected_at,
-                                   "host": host, "containers": containers, "services": services})
-                    # Catch-up has a time budget: a slow recovered backend must not
-                    # delay the following sample for up to 12 request timeouts.
-                    deliver(queue, endpoint, token, max_batches=1)
-                    if once:
-                        return 0
-                    deadline += INTERVAL_SECONDS
-                    if deadline <= time.monotonic():
-                        deadline = time.monotonic() + INTERVAL_SECONDS
-                    stopping.wait(max(0, deadline - time.monotonic()))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as slow_executor, \
+                 concurrent.futures.ThreadPoolExecutor(max_workers=4) as probe_executor, \
+                 concurrent.futures.ThreadPoolExecutor(max_workers=1) as delivery_executor:
+                return run_sampling(queue, sampler, stopping, slow_executor, probe_executor,
+                                    delivery_executor, endpoint, token, host_id=host_id, once=once)
         finally:
             queue.close()
     return 0

@@ -36,6 +36,22 @@ function sample(collectedAt = Date.now(), cpuPercent = 10) {
   };
 }
 
+function hostOnly(collectedAt, cpuPercent = 10) {
+  const value = sample(collectedAt, cpuPercent);
+  delete value.containers;
+  delete value.services;
+  return value;
+}
+
+function checkedSample(collectedAt, checksCollectedAt, name) {
+  const value = sample(collectedAt);
+  value.checksCollectedAt = new Date(checksCollectedAt).toISOString();
+  value.containers = [{ name, image: null, state: "running", health: "unknown", restartCount: 0,
+    cpuPercent: null, memoryBytes: null, memoryLimitBytes: null, memoryPercent: null }];
+  value.services = [{ id: name, name, kind: "http", status: "reachable", latencyMs: 1, httpStatus: 303, detail: null }];
+  return value;
+}
+
 test("monitor real PostgreSQL integration (explicit disposable database only)", { skip: !enabled, timeout: 60_000 }, async (t) => {
   // Validate before importing any production module, instantiating a pool, or
   // reading DATABASE_URL. No production env file is sourced by this harness.
@@ -72,7 +88,77 @@ test("monitor real PostgreSQL integration (explicit disposable database only)", 
       const current = await db.readCurrentMonitorSample(now);
       assert.equal(current.sample.host.cpu.percent, 23);
       assert.equal(current.stale, false);
+      assert.equal(current.checksStale, false);
       assert.equal((await db.readCurrentMonitorSample(now + 46_000)).stale, true);
+    });
+
+    await t.test("sparse rows merge newest host with newest captured checks without copying snapshots into storage", async () => {
+      await db.monitorPool().query("truncate monitor_samples");
+      const now = Date.now();
+      const samples = normalizeMonitorBatch({ samples: [
+        checkedSample(now - 9000, now - 12_000, "new-checks"),
+        checkedSample(now - 3000, now - 30_000, "late-old-checks"),
+        hostOnly(now, 88),
+      ] }, now);
+      await db.writeMonitorSamples(samples);
+      assert.deepEqual(await db.writeMonitorSamples(samples), { accepted: 3, inserted: 0, duplicates: 3 });
+      const stored = (await db.monitorPool().query("select sample from monitor_samples order by collected_at desc limit 1")).rows[0].sample;
+      for (const key of ["containers", "services", "checksCollectedAt"]) assert.equal(Object.hasOwn(stored, key), false);
+      const current = await db.readCurrentMonitorSample(now);
+      assert.equal(current.sample.host.cpu.percent, 88);
+      assert.equal(current.sample.collectedAt, new Date(now).toISOString());
+      assert.equal(current.sample.checksCollectedAt, new Date(now - 12_000).toISOString());
+      assert.equal(current.sample.containers[0].name, "new-checks");
+      assert.equal(current.sample.services[0].httpStatus, 303);
+      assert.equal(current.stale, false);
+      assert.equal(current.checksStale, false);
+      assert.equal((await db.readCurrentMonitorSample(now + 33_000)).checksStale, false, "exactly 45 seconds is still within the threshold");
+      const aged = await db.readCurrentMonitorSample(now + 33_001);
+      assert.equal(aged.stale, false);
+      assert.equal(aged.checksStale, true);
+    });
+
+    await t.test("fresh host data does not refresh stale or missing checks", async () => {
+      await db.monitorPool().query("truncate monitor_samples");
+      const now = Date.now();
+      await db.writeMonitorSamples(normalizeMonitorBatch({ samples: [checkedSample(now - 60_000, now - 70_000, "old-checks"), hostOnly(now)] }, now));
+      const staleChecks = await db.readCurrentMonitorSample(now);
+      assert.equal(staleChecks.stale, false);
+      assert.equal(staleChecks.checksStale, true);
+      assert.equal(staleChecks.sample.services[0].id, "old-checks");
+      await db.monitorPool().query("truncate monitor_samples");
+      await db.writeMonitorSamples(normalizeMonitorBatch(hostOnly(now), now));
+      const missingChecks = await db.readCurrentMonitorSample(now);
+      assert.equal(missingChecks.stale, false);
+      assert.equal(missingChecks.checksStale, true);
+      assert.equal(missingChecks.sample.checksCollectedAt, null);
+      assert.deepEqual(missingChecks.sample.containers, []);
+      assert.deepEqual(missingChecks.sample.services, []);
+      await db.monitorPool().query("truncate monitor_samples");
+      const empty = await db.readCurrentMonitorSample(now);
+      assert.equal(empty.sample, null);
+      assert.equal(empty.stale, true);
+      assert.equal(empty.checksStale, true);
+    });
+
+    await t.test("pre-upgrade stored snapshots use their original time and retained checks expire independently", async () => {
+      await db.monitorPool().query("truncate monitor_samples");
+      const now = Date.now();
+      // Bypass normalization to reproduce JSON stored before checksCollectedAt existed.
+      const legacy = sample(now - 15_000);
+      await db.monitorPool().query("insert into monitor_samples(host_id,collected_at,sample) values ($1,$2,$3)", [legacy.hostId, legacy.collectedAt, legacy]);
+      await db.writeMonitorSamples(normalizeMonitorBatch(hostOnly(now), now));
+      const current = await db.readCurrentMonitorSample(now);
+      assert.equal(current.sample.checksCollectedAt, legacy.collectedAt);
+      assert.equal(current.checksStale, false);
+      assert.deepEqual(current.sample.services, []);
+      await db.monitorPool().query("truncate monitor_samples");
+      await db.writeMonitorSamples(normalizeMonitorBatch(checkedSample(now, now - 7 * 86400_000 + 2000, "expiring"), now));
+      const expired = await db.readCurrentMonitorSample(now + 3000);
+      assert.equal(expired.stale, false);
+      assert.equal(expired.checksStale, true);
+      assert.equal(expired.sample.checksCollectedAt, null);
+      assert.deepEqual(expired.sample.containers, []);
     });
 
     for (const range of ["1h", "24h", "7d"]) {
@@ -81,10 +167,11 @@ test("monitor real PostgreSQL integration (explicit disposable database only)", 
         const step = MONITOR_HISTORY_RANGES[range].intervalSeconds * 1000;
         const end = Math.floor(Date.now() / step) * step;
         const now = end + 3000;
-        const samples = [sample(end - 4 * step + 1000, 10), sample(end - 2 * step + 1000, 30), sample(end - 2 * step + 2000, 50)];
+        const samples = [hostOnly(end - 4 * step + 1000, 10), hostOnly(end - 2 * step + 1000, 30), hostOnly(end - 2 * step + 2000, 50)];
         await db.writeMonitorSamples(normalizeMonitorBatch({ samples }, now));
         const history = await db.readMonitorHistory(range, now);
         assert.equal(history.intervalSeconds * 1000, step);
+        assert.equal(history.points.length, MONITOR_HISTORY_RANGES[range].durationSeconds / (step / 1000) + 1);
         const point = (offset) => history.points.find((item) => Date.parse(item.collectedAt) === end - offset * step);
         assert.equal(point(4).cpuPercent, 10);
         assert.equal(point(2).cpuPercent, 40);

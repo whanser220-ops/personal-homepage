@@ -22,6 +22,51 @@ test("sample normalization preserves missing first-sample rates, Docker CPU over
   assert.equal(normalized.containers[0].cpuPercent, 125);
   assert.equal(normalized.services[0].status, "reachable");
   assert.equal(normalized.services[0].httpStatus, 302);
+  assert.equal(normalized.checksCollectedAt, normalized.collectedAt, "legacy checks use their original sample time");
+});
+
+test("host-only samples stay sparse while completed empty checks remain an explicit snapshot", () => {
+  const value = sample();
+  delete value.containers;
+  delete value.services;
+  value.host.network.interface = null;
+  const normalized = normalizeMonitorSample(value, now);
+  for (const key of ["containers", "services", "checksCollectedAt"]) assert.equal(Object.hasOwn(normalized, key), false);
+  assert.equal(normalized.host.network.interface, null);
+  const empty = normalizeMonitorSample({ ...value, containers: [], services: [], checksCollectedAt: value.collectedAt }, now);
+  assert.deepEqual(empty.containers, []);
+  assert.deepEqual(empty.services, []);
+  assert.equal(empty.checksCollectedAt, value.collectedAt);
+  assert.equal(normalizeMonitorBatch({ samples: [value, sample(), empty] }, now).length, 3);
+});
+
+test("partial detail fields cannot imply a completed or fresh check snapshot", () => {
+  for (const mutate of [
+    (value) => { delete value.containers; },
+    (value) => { delete value.services; },
+    (value) => { delete value.containers; delete value.services; value.checksCollectedAt = value.collectedAt; },
+    (value) => { delete value.containers; value.checksCollectedAt = value.collectedAt; },
+    (value) => { value.containers = null; },
+    (value) => { value.services = null; },
+  ]) {
+    const value = sample(); mutate(value);
+    assert.throws(() => normalizeMonitorSample(value, now), MonitorValidationError);
+  }
+});
+
+test("check capture times are retained UTC timestamps no later than their host sample", () => {
+  const value = sample();
+  value.checksCollectedAt = "2026-10-23T11:59:45Z";
+  assert.equal(normalizeMonitorSample(value, now).checksCollectedAt, "2026-10-23T11:59:45.000Z");
+  value.checksCollectedAt = value.collectedAt;
+  assert.equal(normalizeMonitorSample(value, now).checksCollectedAt, value.collectedAt);
+  value.checksCollectedAt = new Date(now - 7 * 86400_000).toISOString();
+  assert.equal(normalizeMonitorSample(value, now).checksCollectedAt, value.checksCollectedAt);
+  for (const time of [new Date(now + 1).toISOString(), new Date(now - 7 * 86400_000 - 1).toISOString(),
+    "2026-02-30T11:59:45Z", "2026-10-23T11:59:45+00:00", "not-a-date", null, undefined]) {
+    value.checksCollectedAt = time;
+    assert.throws(() => normalizeMonitorSample(value, now), MonitorValidationError);
+  }
 });
 
 test("unknown fields cannot smuggle container environment variables or health logs into storage", () => {
@@ -64,7 +109,7 @@ test("backfill accepts old retained samples but rejects expired and future times
 });
 
 test("all history windows preserve missing buckets as null rather than invented zeroes", () => {
-  for (const [range, count, interval] of [["1h", 241, 15], ["24h", 289, 300], ["7d", 337, 1800]]) {
+  for (const [range, count, interval] of [["1h", 1201, 3], ["24h", 289, 300], ["7d", 337, 1800]]) {
     const result = buildMonitorHistoryPoints([{ collectedAt: new Date(now), cpuPercent: "17.5", memoryPercent: 0 }], range, now);
     assert.equal(result.intervalSeconds, interval);
     assert.equal(result.points.length, count);
@@ -73,6 +118,17 @@ test("all history windows preserve missing buckets as null rather than invented 
     assert.equal(result.points.at(-2).cpuPercent, null);
     assert.equal(result.points.at(-1).rxBytesPerSecond, null);
   }
+});
+
+test("three-second history keeps individual host observations and a missing fast tick separate", () => {
+  const result = buildMonitorHistoryPoints([
+    { collectedAt: new Date(now - 9000), cpuPercent: 10 },
+    { collectedAt: new Date(now - 3000), cpuPercent: 80, rxBytesPerSecond: 0 },
+    { collectedAt: new Date(now), cpuPercent: null },
+  ], "1h", now);
+  assert.deepEqual(result.points.slice(-4).map((point) => point.cpuPercent), [10, null, 80, null]);
+  assert.equal(result.points.at(-2).rxBytesPerSecond, 0);
+  assert.equal(result.points.at(-3).rxBytesPerSecond, null);
 });
 
 test("body reader enforces actual streamed size, content type and valid JSON", async () => {

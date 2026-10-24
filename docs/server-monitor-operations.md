@@ -6,9 +6,9 @@
 
 `宿主机 Python/systemd 采集器 → 127.0.0.1:3000/api/monitor/ingest → Next.js → 现有 PostgreSQL → 授权后的浏览器看板`。
 
-采集器每 15 秒采样，先写本机 SQLite，再按批投递；失败保留最多 1 小时，恢复后补传，以 `hostId + collectedAt` 去重。PostgreSQL 的 `monitor_samples` 保存 7 天，按小时清理；`monitor_sessions`、`monitor_oauth_transactions` 和 `monitor_housekeeping` 分别保存会话、短期登录事务和清理协调状态。网站容器不挂载 Docker socket。
+采集器每 3 秒采集宿主机资源，每 15 秒启动一次 Docker 与服务检查；慢检查和 HTTP 投递在有界后台任务中执行，不阻塞主机采样。所有样本先写本机 SQLite，再按批投递；失败保留最多 1 小时，恢复后补传，以 `hostId + collectedAt` 去重。慢快照仅在完成后的下一条样本中携带一次，以 `checksCollectedAt` 保存检查开始时间，其余样本只存主机资源。PostgreSQL 的 `monitor_samples` 保存 7 天，按小时清理；`monitor_sessions`、`monitor_oauth_transactions` 和 `monitor_housekeeping` 分别保存会话、短期登录事务和清理协调状态。网站容器不挂载 Docker socket。
 
-指标来自宿主机 `/proc`、根文件系统和指定 Docker 容器。HTTP 检查、进程检查、TCP 可达分别展示；3xx/401/403 只说明 HTTP 端点可达，不能证明业务健康。所有检查均为服务器本机视角，不能独立证明公网可用性。首帧和计数回退的差分指标为 `null`，历史曲线保留缺口；最后采样超过 45 秒显示“数据已过期”。
+指标来自宿主机 `/proc`、根文件系统和指定 Docker 容器。HTTP 检查、进程检查、TCP 可达分别展示；3xx/401/403 只说明 HTTP 端点可达，不能证明业务健康。所有检查均为服务器本机视角，不能独立证明公网可用性。首帧和计数回退的差分指标为 `null`，历史曲线保留缺口。主机采样与检查快照分别判断 45 秒过期，主机更新不会刷新检查时间。页面实时值每 3 秒请求，历史每 30 秒请求；切换范围立即加载。1 小时曲线按 3 秒聚合，24 小时按 5 分钟、7 天按 30 分钟聚合。
 
 ## Google 登录与私有访问
 
@@ -26,9 +26,9 @@ OAuth 出网经过 `personal-homepage-monitor-proxy.socket`：监听 `personal-h
 | --- | --- |
 | `/etc/personal-homepage/app.env` | 现有网站环境，包含 `DATABASE_URL`；沿用原有权限，不能输出内容或放入 Git。 |
 | `/etc/personal-homepage-monitor/web.env` | root:root、0600；父目录 0700。键名：`MONITOR_INGEST_TOKEN`、`MONITOR_GOOGLE_CLIENT_ID`、`MONITOR_GOOGLE_CLIENT_SECRET`、`MONITOR_OWNER_EMAIL`、`MONITOR_PUBLIC_URL`、`MONITOR_OAUTH_PROXY_URL`。 |
-| `/etc/personal-homepage-monitor.env` | root:root、0600。键名：`MONITOR_INGEST_TOKEN`、`MONITOR_INGEST_URL`、`MONITOR_HOST_ID`、`MONITOR_INTERVAL_SECONDS`、`MONITOR_STATE_DIR`；可选 `MONITOR_NETWORK_INTERFACE`。采样周期由采集器固定为 15 秒。 |
+| `/etc/personal-homepage-monitor.env` | root:root、0600。键名：`MONITOR_INGEST_TOKEN`、`MONITOR_INGEST_URL`、`MONITOR_HOST_ID`、`MONITOR_STATE_DIR`；可选 `MONITOR_NETWORK_INTERFACE`。采集器固定为主机 3 秒、慢检查 15 秒；旧的 `MONITOR_INTERVAL_SECONDS` 不生效。 |
 | `/opt/personal-homepage-monitor/collector.py` | root 拥有、0644，不能允许采集器账号修改。 |
-| `/var/lib/personal-homepage-monitor/` | `server-monitor` 拥有、0700；含 `queue.sqlite3` 和进程锁，SQLite 为 0600。 |
+| `/var/lib/personal-homepage-monitor/` | `server-monitor` 拥有、0700；新版使用 `queue-v2.sqlite3` 和原有进程锁，SQLite 为 0600。启动时只读导入旧 `queue.sqlite3` 中仍在保留期内的数据；旧文件不修改，供旧版回退使用。 |
 | `/var/lib/personal-homepage-monitor-deployment/` | 当前安装事务备份，0700；备份文件和 `metadata.json` 为 0600，成功 commit 后移除。 |
 
 服务用户 `server-monitor` 通过 `docker` 补充组执行固定检查；Docker socket 仍具有宿主机管理能力，必须保护采集器程序、单元和环境文件。不要把完整环境、OAuth code、Cookie、令牌或 SQL 连接串写进诊断记录。
@@ -71,4 +71,4 @@ grep -E '^(anon|file|kernel|slab) ' "/sys/fs/cgroup$collector_cgroup/memory.stat
 cat "/sys/fs/cgroup$collector_cgroup/memory.events"
 ```
 
-`MemoryCurrent` 包含服务 cgroup 内的子进程和文件缓存等，不能与 Python 主进程 RSS 混为一个口径；`MemoryPeak` 是该 cgroup 的历史峰值，要结合启动时间理解。对照期间同时确认采样仍约 15 秒一次、没有跨轮重叠或连续追赶、最新样本没有超过 45 秒，以及失败后队列仍能恢复投递。记录 OOM 相关计数是否增长，不通过每轮强制 GC、修改全局分配器或降低内存上限来代替验证。
+`MemoryCurrent` 包含服务 cgroup 内的子进程和文件缓存等，不能与 Python 主进程 RSS 混为一个口径；`MemoryPeak` 是该 cgroup 的历史峰值，要结合启动时间理解。对照期间同时确认主机采样约 3 秒一次、慢检查约 15 秒一次、没有跨轮重叠或连续追赶、两类数据分别未超过 45 秒，以及失败后队列仍能恢复投递。检查 `queue-v2.sqlite3` 的待投递数量；旧 `queue.sqlite3` 仅保留用于回退，不代表新队列状态。记录 OOM 相关计数是否增长，不通过每轮强制 GC、修改全局分配器或降低内存上限来代替验证。

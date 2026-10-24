@@ -101,7 +101,7 @@ def install_runtime():
     if any('\n' in value or '\r' in value for value in values.values()):
         raise RuntimeError('Invalid multiline credential')
     write(WEB_ENV, ''.join(f'{key}={value}\n' for key, value in values.items()))
-    write(COLLECTOR_ENV, f'MONITOR_INGEST_TOKEN={token}\nMONITOR_INGEST_URL=http://127.0.0.1:3000/api/monitor/ingest\nMONITOR_HOST_ID=cloud-primary\nMONITOR_INTERVAL_SECONDS=15\nMONITOR_STATE_DIR={STATE}\n')
+    write(COLLECTOR_ENV, f'MONITOR_INGEST_TOKEN={token}\nMONITOR_INGEST_URL=http://127.0.0.1:3000/api/monitor/ingest\nMONITOR_HOST_ID=cloud-primary\nMONITOR_STATE_DIR={STATE}\n')
     write(Path('/opt/personal-homepage-monitor/collector.py'), (REPO / 'services/server-monitor/collector.py').read_text(), 0o644)
     write(Path('/etc/systemd/system/personal-homepage-monitor.service'), (REPO / 'services/server-monitor/personal-homepage-monitor.service').read_text(), 0o644)
     write(Path('/etc/systemd/system/personal-homepage-monitor-proxy.socket'), f'[Unit]\nDescription=Private OAuth proxy relay for the website\nRequires=docker.service\nAfter=docker.service\n\n[Socket]\nListenStream={gateway}:17891\nAccept=no\n\n[Install]\nWantedBy=sockets.target\n', 0o644)
