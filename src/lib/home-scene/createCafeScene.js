@@ -4,6 +4,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { createInsetWater } from "./createInsetWater.js";
 import { createIcedCoffee } from "./createIcedCoffee.js";
 import { createCafeAO } from "./createCafeAO.js";
+import { createFrameClock, createGpuTimer, createResolutionBudget, maximumPixelRatio } from "./renderBudget.js";
 
 // A restrained illustrated palette: world-space light creates the same diagonal
 // afternoon sun across every surface, with real shadow maps for local occlusion.
@@ -95,7 +96,8 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   let disposed = false,
     frame = 0,
     loaded = false,
-    visible = true;
+    visible = true,
+    contextLost = false;
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
@@ -142,6 +144,11 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   const ao = createCafeAO(renderer, scene, camera);
   const tank = createInsetWater(renderer, scene);
   const coffee = createIcedCoffee(renderer, scene);
+  const clock = createFrameClock();
+  const resolution = createResolutionBudget(maximumPixelRatio(host.clientWidth, host.clientHeight, window.devicePixelRatio || 1));
+  let gpuTimer = createGpuTimer(renderer.getContext());
+  let lastDraw, pendingPixelRatio, lastCapture = -Infinity, animationSeconds = 0;
+  let frames = 0, captures = 0, lastDiagnostics = -Infinity;
   let root;
   const dustGeometry = new THREE.BufferGeometry();
   const positions = new Float32Array(45 * 3);
@@ -171,17 +178,72 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   scene.add(dust);
   function draw(time = 0) {
     frame = 0;
-    if (disposed || !loaded || !visible || document.hidden) return;
-    if (!reduced.matches) dust.position.y = Math.sin(time * 0.00008) * 0.22;
-    tank.update(reduced.matches ? 0 : time * 0.001);
-    coffee.update(time * .001, !reduced.matches);
-    tank.capture(camera);
-    coffee.render(camera, ao.apply);
+    if (disposed || contextLost || !loaded || !visible || document.hidden) return;
+    if (pendingPixelRatio !== undefined) {
+      const next = pendingPixelRatio;
+      pendingPixelRatio = undefined;
+      setResolution(next);
+    }
+    if (!clock.due(time)) { schedule(); return; }
+    const frameMs = lastDraw === undefined ? 0 : time - lastDraw;
+    lastDraw = time;
+    if (!reduced.matches) animationSeconds += Math.min(frameMs, 50) / 1000;
+    dust.position.y = reduced.matches ? 0 : Math.sin(animationSeconds * 0.08) * 0.22;
+    tank.update(reduced.matches ? 0 : animationSeconds);
+    coffee.update(animationSeconds, !reduced.matches);
+    const gpuMs = gpuTimer.poll();
+    const started = performance.now();
+    gpuTimer.begin();
+    try {
+      // Camera and room are fixed. Reuse both water captures between updates;
+      // the surface shader and coffee motion still animate at the scene rate.
+      const captureInterval = 1000 / (host.clientWidth < 700 ? 6 : 8);
+      if (time - lastCapture >= captureInterval) {
+        tank.capture(camera);
+        lastCapture = time;
+        captures++;
+      }
+      coffee.render(camera, ao.apply);
+    } finally {
+      gpuTimer.end();
+    }
+    frames++;
+    const renderMs = performance.now() - started;
+    const pixelRatio = resolution.sample({ time, frameMs, renderMs, gpuMs });
+    // Resize immediately before the next draw so clearing the canvas cannot
+    // leave a blank frame on screen between two animation ticks.
+    if (pixelRatio !== null) pendingPixelRatio = pixelRatio;
+    // Local diagnostic counters make the render budget observable without
+    // adding UI, timers, network telemetry, or per-frame React updates.
+    if (time - lastDiagnostics >= 1000) {
+      host.dataset.sceneFrames = String(frames);
+      host.dataset.sceneCaptures = String(captures);
+      host.dataset.sceneAOUpdates = String(ao.maskUpdates);
+      host.dataset.scenePixelRatio = renderer.getPixelRatio().toFixed(2);
+      lastDiagnostics = time;
+    }
     if (host.dataset.ready !== "true") { host.dataset.ready = "true"; onReady?.(); }
-    if (!reduced.matches) frame = requestAnimationFrame(draw);
+    if (!reduced.matches || pixelRatio !== null) schedule();
   }
   function schedule() {
-    if (!frame && loaded && !disposed) frame = requestAnimationFrame(draw);
+    if (!frame && loaded && !disposed && !contextLost && visible && !document.hidden) frame = requestAnimationFrame(draw);
+  }
+  function refresh() {
+    clock.reset();
+    resolution.reset();
+    gpuTimer.clear();
+    lastDraw = undefined;
+    lastCapture = -Infinity;
+    ao.invalidate();
+    schedule();
+  }
+  function setResolution(pixelRatio) {
+    renderer.setPixelRatio(pixelRatio);
+    renderer.setSize(Math.max(1, host.clientWidth), Math.max(1, host.clientHeight), false);
+    tank.resize();
+    coffee.resize();
+    ao.resize();
+    refresh();
   }
   function resize() {
     const w = Math.max(1, host.clientWidth),
@@ -201,36 +263,37 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     // Match the accessible controls to the Blender radio's front face.
     const player = new THREE.Vector3(3.85, 5.10, 3.325).project(camera);
     onPlayerPosition?.({ x: (player.x + 1) * w / 2, y: (1 - player.y) * h / 2, width: 1.9 * h / height });
-    renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio || 1, w < 700 ? 1.4 : 1.75),
-    );
-    renderer.setSize(w, h, false);
-    tank.resize();
-    coffee.resize();
-    ao.resize();
-    schedule();
+    pendingPixelRatio = undefined;
+    setResolution(resolution.setMaximum(maximumPixelRatio(w, h, window.devicePixelRatio || 1)));
   }
   function onMotion() {
-    dust.position.y = 0;
-    schedule();
+    refresh();
   }
   function onVisibility() {
     if (document.hidden) {
       cancelAnimationFrame(frame);
       frame = 0;
-    } else schedule();
+    } else refresh();
   }
   function onContextLost(event) {
     event.preventDefault();
+    contextLost = true;
     delete host.dataset.ready;
     cancelAnimationFrame(frame);
     frame = 0;
+  }
+  function onContextRestored() {
+    contextLost = false;
+    // Extensions and query handles from the lost context are no longer valid.
+    gpuTimer = createGpuTimer(renderer.getContext());
+    renderer.shadowMap.needsUpdate = true;
+    refresh();
   }
   const sizeObserver = new ResizeObserver(resize);
   sizeObserver.observe(host);
   const intersection = new IntersectionObserver(([entry]) => {
     visible = entry.isIntersecting;
-    if (visible) schedule();
+    if (visible) refresh();
     else {
       cancelAnimationFrame(frame);
       frame = 0;
@@ -240,6 +303,7 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   document.addEventListener("visibilitychange", onVisibility);
   reduced.addEventListener("change", onMotion);
   renderer.domElement.addEventListener("webglcontextlost", onContextLost);
+  renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
   resize();
   new GLTFLoader()
     .loadAsync("/assets/home-scene/afternoon-room.glb")
@@ -286,6 +350,12 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     document.removeEventListener("visibilitychange", onVisibility);
     reduced.removeEventListener("change", onMotion);
     renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
+    renderer.domElement.removeEventListener("webglcontextrestored", onContextRestored);
+    gpuTimer.clear();
+    delete host.dataset.sceneFrames;
+    delete host.dataset.sceneCaptures;
+    delete host.dataset.sceneAOUpdates;
+    delete host.dataset.scenePixelRatio;
     tank.dispose();
     coffee.dispose();
     ao.dispose();
