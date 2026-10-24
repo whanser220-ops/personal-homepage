@@ -36,6 +36,8 @@ Git 插件记录的仓库 URL 使用 `git@github.com:whanser220-ops/personal-hom
 
 迁移后的首次轮询还会读取历史构建保存的旧 SCM URL。因此本仓库的 Git 传输改写同时兼容旧 `ssh://git@ssh.github.com:443/whanser220-ops/personal-homepage.git`，将它改写到同一个无显式端口的目标；保留历史构建记录原样，不依赖修改旧构建来恢复轮询。
 
+控制器中的 `curl` 等 HTTP 客户端通过 Compose 设置的 `HTTP_PROXY`、`HTTPS_PROXY` 及对应小写变量使用既有代理 `http://172.17.0.1:17891`；内部地址由 `NO_PROXY` 绕过代理。`Verify Site` 在控制器执行，继续检查公网 IP 和 `warmhanser.com` 的 HTTPS 入口，并保留 TLS 证书校验。Git 的 SSH 传输仍由独立 `14443` 隧道维护。
+
 ## 运行状态与数据边界
 
 迁移保留 Jenkins `2.555.3` 和原控制器镜像，避免迁移同时升级 Jenkins 或插件。运行定义位于 WSL Linux 文件系统：
