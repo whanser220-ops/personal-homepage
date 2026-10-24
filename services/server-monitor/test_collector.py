@@ -1,9 +1,14 @@
 """Offline regression tests: python -m unittest discover -s services/server-monitor."""
 import importlib.util
+import concurrent.futures
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
+import ssl
+import sys
 import tempfile
+import threading
 import time
 import types
 import unittest
@@ -112,8 +117,8 @@ class ProbeTests(unittest.TestCase):
         self.assertEqual(result["httpStatus"], 303)
         response.read.assert_not_called()
 
-    def test_http_health_500_and_auth_403_are_distinct(self):
-        for code, expected in ((500, "unhealthy"), (403, "reachable")):
+    def test_http_health_500_and_auth_401_403_are_distinct(self):
+        for code, expected in ((500, "unhealthy"), (401, "reachable"), (403, "reachable")):
             with mock.patch.object(collector, "local_http_opener") as factory:
                 factory.return_value.open.side_effect = urllib.error.HTTPError("http://127.0.0.1", code, "error", {}, None)
                 self.assertEqual(collector.http_probe("test", "Test", "http://127.0.0.1/")["status"], expected)
@@ -123,8 +128,9 @@ class ProbeTests(unittest.TestCase):
             self.assertEqual(collector.tcp_probe("test", "Test", 4321)["status"], "reachable")
 
     def test_process_active_is_separate_from_http(self):
-        with mock.patch.object(collector, "command", return_value=(0, "active\n")):
-            result = collector.systemd_probe("study-agent", "Study Agent", "study-agent.service")
+        output = "Id=study-agent.service\nLoadState=loaded\nActiveState=active\n"
+        with mock.patch.object(collector, "command", return_value=(0, output)):
+            result = collector.systemd_probes()[0]
         self.assertEqual(result["kind"], "process")
         self.assertEqual(result["status"], "healthy")
 
@@ -161,6 +167,218 @@ class ProbeTests(unittest.TestCase):
             factory.return_value.open.side_effect = OSError(secret)
             result = collector.http_probe("test", "Test", "http://127.0.0.1/")
         self.assertNotIn(secret, json.dumps(result))
+
+
+class LocalHttpTests(unittest.TestCase):
+    """Exercise real urllib requests on loopback, without contacting other services."""
+    def setUp(self):
+        self.requests = []
+        requests = self.requests
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                requests.append((self.path, self.headers.get("Authorization")))
+                status = int(self.path.rsplit("/", 1)[-1]) if self.path.startswith("/status/") else 200
+                self.send_response(status)
+                if 300 <= status < 400:
+                    self.send_header("Location", f"http://127.0.0.1:{self.server.server_port}/sink")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length", "0")))
+                requests.append((self.path, self.headers.get("Authorization")))
+                self.send_response(int(self.path.rsplit("/", 1)[-1]))
+                self.send_header("Location", f"http://127.0.0.1:{self.server.server_port}/sink")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *_):
+                pass
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.addCleanup(self.thread.join, 2)
+        self.addCleanup(self.server.server_close)
+        self.addCleanup(self.server.shutdown)
+        self.base = f"http://127.0.0.1:{self.server.server_port}"
+
+    def test_http_only_transport_never_creates_tls_or_reads_environment_proxies(self):
+        def probe():
+            opener = collector.local_http_opener()
+            with opener.open(self.base + "/status/204", timeout=2) as response:
+                self.assertEqual(response.status, 204)
+            for url in ("https://127.0.0.1/", "file:///should-not-open", "ftp://127.0.0.1/"):
+                with self.assertRaises(urllib.error.URLError):
+                    opener.open(url, timeout=0.1)
+
+        with mock.patch.dict(os.environ, {"HTTP_PROXY": "http://127.0.0.1:1", "HTTPS_PROXY": "http://127.0.0.1:1", "ALL_PROXY": "http://127.0.0.1:1", "NO_PROXY": ""}), \
+             mock.patch.object(collector.urllib.request, "getproxies", side_effect=AssertionError("proxy environment read")), \
+             mock.patch.object(ssl, "_create_default_https_context", side_effect=AssertionError("unexpected TLS context")), \
+             concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(probe).result(timeout=3)
+        self.assertEqual(self.requests, [("/status/204", None)])
+
+    def test_auth_statuses_and_redirects_are_reachable_without_following(self):
+        for status in (301, 302, 303, 307, 308, 401, 403):
+            with self.subTest(status=status):
+                result = collector.http_probe("auth", "Authentication", self.base + f"/status/{status}")
+                self.assertEqual(result["status"], "reachable")
+                self.assertEqual(result["httpStatus"], status)
+        self.assertFalse(any(path == "/sink" for path, _ in self.requests))
+
+    def test_bearer_token_is_never_sent_to_a_redirect_target_or_acknowledged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            queue = collector.SampleQueue(Path(directory) / "queue.sqlite3")
+            try:
+                queue.enqueue(sample())
+                for status in (307, 308):
+                    with self.subTest(status=status), self.assertLogs(collector.LOGGER, level="WARNING"):
+                        self.assertFalse(collector.deliver(queue, self.base + f"/ingest/{status}", "test-only-bearer-value"))
+                    self.assertEqual(queue.count(), 1)
+            finally:
+                queue.close()
+        self.assertEqual(self.requests, [(f"/ingest/{status}", "Bearer test-only-bearer-value") for status in (307, 308)])
+
+
+class OpenerReuseTests(unittest.TestCase):
+    def test_reuses_within_each_thread_and_isolates_between_threads(self):
+        barrier = threading.Barrier(2)
+
+        def openers():
+            first = collector.local_http_opener()
+            barrier.wait(timeout=2)
+            return first, collector.local_http_opener()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(openers) for _ in range(2)]
+            pairs = [future.result(timeout=3) for future in futures]
+        self.assertIs(pairs[0][0], pairs[0][1])
+        self.assertIs(pairs[1][0], pairs[1][1])
+        self.assertIsNot(pairs[0][0], pairs[1][0])
+
+
+class SystemdBatchTests(unittest.TestCase):
+    def test_fixed_units_and_fields_are_queried_once_and_mapped_by_id(self):
+        output = "\n\n".join([
+            "Id=docker.service\nLoadState=loaded\nActiveState=active",
+            "Id=study-agent.service\nLoadState=loaded\nActiveState=active",
+            "Id=study-agent-remote.service\nLoadState=loaded\nActiveState=failed",
+            "Id=nginx.service\nLoadState=not-found\nActiveState=inactive",
+        ])
+        with mock.patch.object(collector, "command", return_value=(1, output)) as execute:
+            results = collector.systemd_probes()
+        self.assertEqual([item["id"] for item in results], [item[0] for item in collector.SYSTEMD_SERVICES])
+        self.assertEqual([item["status"] for item in results], ["healthy", "unhealthy", "unknown", "healthy"])
+        execute.assert_called_once()
+        argv = execute.call_args.args[0]
+        self.assertEqual(argv[:2], ["systemctl", "show"])
+        self.assertEqual(set(argv[-len(collector.SYSTEMD_SERVICES):]), {item[2] for item in collector.SYSTEMD_SERVICES})
+        fields = next(item.split("=", 1)[1] for item in argv if item.startswith("--property="))
+        self.assertEqual(set(fields.split(",")), {"Id", "LoadState", "ActiveState"})
+        self.assertTrue(all(item["kind"] == "process" for item in results))
+
+    def test_missing_unit_cannot_hide_successful_units(self):
+        output = "Id=docker.service\nLoadState=loaded\nActiveState=active\n"
+        with mock.patch.object(collector, "command", return_value=(0, output)):
+            results = collector.systemd_probes()
+        self.assertEqual([item["status"] for item in results], ["unknown", "unknown", "unknown", "healthy"])
+
+    def test_masking_a_running_unit_does_not_claim_its_process_has_stopped(self):
+        for state, expected in (("active", "healthy"), ("inactive", "unhealthy")):
+            output = f"Id=study-agent.service\nLoadState=masked\nActiveState={state}\n"
+            with self.subTest(state=state), mock.patch.object(collector, "command", return_value=(0, output)):
+                result = collector.systemd_probes()[0]
+            self.assertEqual(result["status"], expected)
+
+    def test_timeout_and_unavailable_output_stay_unknown_without_leaking_output(self):
+        for code, output in ((None, ""), (None, "Id=study-agent.service\nLoadState=loaded\nActiveState=active\n"), (1, "private systemd failure output")):
+            with self.subTest(code=code), mock.patch.object(collector, "command", return_value=(code, output)):
+                results = collector.systemd_probes()
+            self.assertEqual(len(results), 4)
+            self.assertTrue(all(item["status"] == "unknown" for item in results))
+            self.assertNotIn("private systemd failure output", json.dumps(results))
+
+
+class SchedulingTests(unittest.TestCase):
+    def test_one_bounded_pool_is_reused_and_ticks_do_not_overlap_or_catch_up(self):
+        main_thread = threading.get_ident()
+        clock = {"now": 100.0, "round": 0, "active": 0, "peak": 0}
+        starts, waits, workers, deliveries, created = [], [], [set(), set()], [], []
+        worker_threads = set()
+        lock = threading.Lock()
+
+        class Stopping:
+            def is_set(self):
+                return len(waits) >= 2
+
+            def set(self):
+                pass
+
+            def wait(self, seconds):
+                self_test.assertEqual(clock["active"], 0)
+                waits.append(seconds)
+                clock["now"] += seconds
+
+        def host_sample():
+            self.assertEqual(clock["active"], 0)
+            starts.append(clock["now"])
+            clock["round"] = len(starts) - 1
+            clock["now"] += 5 if len(starts) == 1 else 20
+            return {"hostname": "scheduler-test"}
+
+        def job(result):
+            with lock:
+                clock["active"] += 1
+                clock["peak"] = max(clock["peak"], clock["active"])
+                workers[clock["round"]].add(threading.get_ident())
+                worker_threads.add(threading.current_thread())
+            try:
+                time.sleep(0.005)
+                return result
+            finally:
+                with lock:
+                    clock["active"] -= 1
+
+        real_executor = concurrent.futures.ThreadPoolExecutor
+        def pool(*args, **kwargs):
+            created.append(kwargs.get("max_workers", args[0] if args else None))
+            return real_executor(*args, **kwargs)
+
+        def deliver(queue, endpoint, token, max_batches):
+            self.assertEqual(threading.get_ident(), main_thread, "SQLite stays on the coordinator thread")
+            self.assertEqual(clock["active"], 0)
+            self.assertEqual(max_batches, 1)
+            batch = queue.batch()
+            deliveries.append(len(batch))
+            queue.acknowledge([key for key, _ in batch])
+            return True
+
+        self_test = self
+        with tempfile.TemporaryDirectory() as directory, \
+             mock.patch.dict(os.environ, {"MONITOR_INGEST_TOKEN": "x" * 48, "MONITOR_STATE_DIR": directory, "MONITOR_INGEST_URL": "http://127.0.0.1:3000/api/monitor/ingest", "MONITOR_HOST_ID": "cloud-primary"}), \
+             mock.patch.dict(sys.modules, {"fcntl": types.SimpleNamespace(flock=mock.Mock(), LOCK_EX=1, LOCK_NB=2)}), \
+             mock.patch.object(collector.signal, "signal"), \
+             mock.patch.object(collector, "threading", types.SimpleNamespace(Event=Stopping)), \
+             mock.patch.object(collector.time, "monotonic", side_effect=lambda: clock["now"]), \
+             mock.patch.object(collector, "HostSampler", return_value=types.SimpleNamespace(sample=host_sample)), \
+             mock.patch.object(collector.concurrent.futures, "ThreadPoolExecutor", side_effect=pool), \
+             mock.patch.object(collector, "collect_containers", side_effect=lambda: job([])), \
+             mock.patch.object(collector, "http_probe", side_effect=lambda identifier, name, url: job(collector.service_result(identifier, name, "http", "healthy"))), \
+             mock.patch.object(collector, "tcp_probe", side_effect=lambda identifier, name, port: job(collector.service_result(identifier, name, "tcp", "reachable"))), \
+             mock.patch.object(collector, "postgres_probe", side_effect=lambda: job(collector.service_result("postgres", "PostgreSQL", "process", "healthy"))), \
+             mock.patch.object(collector, "systemd_probes", side_effect=lambda: job([collector.service_result(identifier, name, "process", "healthy") for identifier, name, _ in collector.SYSTEMD_SERVICES])), \
+             mock.patch.object(collector, "deliver", side_effect=deliver):
+            self.assertEqual(collector.run(), 0)
+        self.assertEqual(created, [4])
+        self.assertLessEqual(clock["peak"], 4)
+        self.assertGreater(clock["peak"], 1)
+        self.assertTrue(workers[0] & workers[1], "workers survive across sampling rounds")
+        self.assertEqual(starts, [100, 115])
+        self.assertEqual(waits, [10, 15], "a 20-second sample skips missed ticks instead of overlapping catch-up")
+        self.assertEqual(deliveries, [1, 1])
+        self.assertTrue(all(not worker.is_alive() for worker in worker_threads))
 
 
 class QueueTests(unittest.TestCase):
@@ -234,10 +452,13 @@ class QueueTests(unittest.TestCase):
 
     def test_ingest_redirect_never_acknowledges_samples(self):
         self.queue.enqueue(sample())
+        response = mock.Mock()
         with mock.patch.object(collector, "local_http_opener") as factory:
-            factory.return_value.open.side_effect = urllib.error.HTTPError("http://127.0.0.1", 302, "redirect", {}, None)
+            factory.return_value.open.side_effect = urllib.error.HTTPError("http://127.0.0.1", 302, "redirect", {}, response)
             collector.deliver(self.queue, "http://127.0.0.1:3000/api/monitor/ingest", "secret")
         self.assertEqual(self.queue.count(), 1)
+        response.close.assert_called_once()
+        response.read.assert_not_called()
 
 
 class EndpointTests(unittest.TestCase):

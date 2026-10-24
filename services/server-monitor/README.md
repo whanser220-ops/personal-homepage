@@ -35,10 +35,14 @@ sudo journalctl -u personal-homepage-monitor.service --since '10 min ago'
 - 网络吞吐量、磁盘吞吐量和 CPU 百分比首帧、采集器重启后的首帧均为 `null`；计数回退或出口切换后保留 `null`，不会把回退显示成负数或零。
 - Docker 只查询四个固定容器的名称、镜像、状态、健康状态、重启次数和资源统计，不读取环境变量或 health-check 日志。不存在或读取失败的字段为 `null` / `unknown`。
 - HTTP 不跟随重定向、不读取响应 body。2xx 表示 HTTP 检查通过；3xx、401、403 仅表示 HTTP 端点可达。Study Agent 的 303 登录跳转不会被误报为故障。
-- systemd `is-active` 单独显示 Study Agent、远程运行、Nginx 和 Docker 的进程状态；只证明进程在运行。PostgreSQL 使用容器内 `pg_isready -q`，通过固定脚本引用容器内 `POSTGRES_USER` 和 `POSTGRES_DB`（默认 PostgreSQL 镜像的 postgres 身份），不提供数据库密码，避免把容器 root 用户当数据库角色持续写入 FATAL 日志。
+- systemd 每轮通过一次 `show` 查询固定的四个服务，仅读取 `Id`、`LoadState`、`ActiveState`，分别显示 Study Agent、远程运行、Nginx 和 Docker 的进程状态；只证明进程在运行。单个服务缺失不影响其他服务的结果，查询超时或结果缺失显示未知。PostgreSQL 使用容器内 `pg_isready -q`，通过固定脚本引用容器内 `POSTGRES_USER` 和 `POSTGRES_DB`（默认 PostgreSQL 镜像的 postgres 身份），不提供数据库密码，避免把容器 root 用户当数据库角色持续写入 FATAL 日志。
 - 远程运行的 4321 和 Perforce 的 1666 仅做 TCP 探测，成功为 `reachable`，不声称业务健康。网站、白板和 Jenkins 使用固定的本机 HTTP URL。
 
 采样与探测都有超时；一次采样完成后才开始下一次，长采样跳过错过的 tick，不并发追赶。文件锁同时阻止手工运行与服务重叠。探测批次并行以控制总耗时，Docker stats 最多等待 5 秒，其他命令/HTTP/TCP 最多等待 3 秒。
+
+采集器启动时创建一个最多四个 worker 的线程池，在采样轮次间复用。主线程提交独立探测并等待结果，worker 不向同一线程池提交子任务再等待；SQLite 和投递仍由主线程执行，退出时等待探测结束并关闭线程池。
+
+本机 HTTP 请求使用手工构造的 HTTP-only opener，每个线程独立缓存并复用。它不创建默认 HTTPS handler 或 TLS/CA 上下文，不读取环境代理，不支持 HTTPS、FTP、file 协议，也不跟随重定向。复用的是 opener 和 handler，不代表建立了 TCP 连接池；网站 Google OAuth 的 HTTPS 出网不受此采集器调整影响。
 
 ## 缓存、补传和回退
 
@@ -60,4 +64,4 @@ sudo systemctl disable --now personal-homepage-monitor.service
 python3 -m unittest discover -s services/server-monitor -p 'test_*.py' -v
 ```
 
-测试覆盖真实差分、首帧与计数回退、根盘单设备选择、Docker 白名单、认证跳转与 TCP 检查的语义，以及持久队列重启、重试、幂等、1 小时过期、容量和批量补传。线上还需对照宿主机命令核对数值，并验证公网 HTTP/HTTPS 入口不能访问采集接口；这不是采集器本地测试能够证明的。
+测试覆盖真实差分、首帧与计数回退、根盘单设备选择、Docker 白名单、认证跳转与 TCP 检查的语义，以及持久队列重启、重试、幂等、1 小时过期、容量和批量补传。另通过真实回环 HTTP 服务器验证 opener 不创建 TLS、不读代理环境、拒绝非 HTTP 协议、认证状态可达且 Bearer 不随重定向外送；验证线程内复用、线程间隔离、四 worker 池跨轮复用、长采样不重叠追赶，以及 systemd 批次的缺失与失败处理。线上还需对照宿主机命令核对数值，并验证公网 HTTP/HTTPS 入口不能访问采集接口；这不是采集器本地测试能够证明的。

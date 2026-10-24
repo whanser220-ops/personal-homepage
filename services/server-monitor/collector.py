@@ -31,6 +31,7 @@ RETENTION_SECONDS = 3600
 QUEUE_MAX_BYTES = 20 * 1024 * 1024
 BATCH_SIZE = 20
 PROBE_TIMEOUT = 3
+_HTTP_LOCAL = threading.local()
 CONTAINER_NAMES = (
     "personal-homepage", "learning-whiteboard", "jenkins",
     "personal-homepage-postgres",
@@ -83,8 +84,19 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def local_http_opener():
-    # Ignore HTTP_PROXY/HTTPS_PROXY: every request made by this process is local.
-    return urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    # All collector URLs are local HTTP. build_opener() also constructs an
+    # HTTPSHandler/SSL context, which is unnecessary work for every probe.
+    # urllib handlers keep parent/state references: cache within each thread,
+    # never share one opener across the persistent pool's worker threads.
+    opener = getattr(_HTTP_LOCAL, "opener", None)
+    if opener is None:
+        opener = urllib.request.OpenerDirector()
+        for handler in (urllib.request.ProxyHandler({}), urllib.request.UnknownHandler(),
+                        urllib.request.HTTPHandler(), urllib.request.HTTPDefaultErrorHandler(),
+                        NoRedirect(), urllib.request.HTTPErrorProcessor()):
+            opener.add_handler(handler)
+        _HTTP_LOCAL.opener = opener
+    return opener
 
 
 def service_result(identifier, name, kind, status="unknown", **extra):
@@ -122,14 +134,39 @@ def tcp_probe(identifier, name, port):
         return service_result(identifier, name, "tcp", "unhealthy", detail="本机 TCP 连接失败或超时")
 
 
-def systemd_probe(identifier, name, unit):
-    code, output = command(["systemctl", "is-active", unit])
-    state = output.strip()
-    if code == 0 and state == "active":
-        return service_result(identifier, name, "process", "healthy", detail="systemd active；仅验证进程运行")
-    if state in ("inactive", "failed", "activating", "deactivating", "reloading", "maintenance"):
-        return service_result(identifier, name, "process", "unhealthy", detail="systemd " + state)
-    return service_result(identifier, name, "process", detail="无法读取 systemd 进程状态")
+def systemd_probes():
+    units = [unit for _, _, unit in SYSTEMD_SERVICES]
+    code, output = command(["systemctl", "show", "--property=Id,LoadState,ActiveState", *units])
+    states = {}
+    if code is not None:
+        properties = {}
+        for line in [*output.splitlines(), ""]:
+            if not line.strip():
+                if properties.get("Id") in units:
+                    states[properties["Id"]] = properties
+                properties = {}
+            elif "=" in line:
+                key, value = line.split("=", 1)
+                if key in ("Id", "LoadState", "ActiveState"):
+                    properties[key] = value
+    results = []
+    for identifier, name, unit in SYSTEMD_SERVICES:
+        properties = states.get(unit, {})
+        load, state = properties.get("LoadState"), properties.get("ActiveState")
+        if load == "not-found":
+            result = service_result(identifier, name, "process", detail="systemd 单元不存在")
+        elif load in ("loaded", "masked") and state == "active":
+            # Masking prevents a future start, but an already-running process
+            # still satisfies the same process-only check as is-active did.
+            result = service_result(identifier, name, "process", "healthy", detail="systemd active；仅验证进程运行")
+        elif load in ("error", "bad-setting", "masked"):
+            result = service_result(identifier, name, "process", "unhealthy", detail="systemd 单元无法加载")
+        elif load == "loaded" and state in ("inactive", "failed", "activating", "deactivating", "reloading", "maintenance"):
+            result = service_result(identifier, name, "process", "unhealthy", detail="systemd " + state)
+        else:
+            result = service_result(identifier, name, "process", detail="无法读取 systemd 进程状态")
+        results.append(result)
+    return results
 
 
 def postgres_probe():
@@ -146,29 +183,34 @@ def postgres_probe():
     return service_result("postgres", "PostgreSQL", "process", detail="无法运行容器内 pg_isready")
 
 
-def collect_services():
+def collect_services(executor):
     jobs = [(http_probe, values) for values in HTTP_SERVICES]
-    jobs += [(systemd_probe, values) for values in SYSTEMD_SERVICES]
+    jobs += [(systemd_probes, ())]
     jobs += [(tcp_probe, ("remote-run-port", "远程运行端口", 4321)),
              (tcp_probe, ("perforce", "Perforce", 1666)), (postgres_probe, ())]
-    # Every job has an internal timeout. The next sample cannot start until all
-    # jobs finish, so periodic ticks never create overlapping probe batches.
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs)) as executor:
-        futures = [executor.submit(function, *args) for function, args in jobs]
-        results = []
-        for (function, args), future in zip(jobs, futures):
-            try:
+    # Called by the coordinating main thread, not by one of this pool's workers.
+    # Every job has its own timeout and all finish before the next sample starts.
+    futures = [executor.submit(function, *args) for function, args in jobs]
+    results = []
+    for (function, args), future in zip(jobs, futures):
+        try:
+            if function is systemd_probes:
+                results.extend(future.result())
+            else:
                 results.append(future.result())
-            except Exception:
-                # Never include exception text; external commands/HTTP errors can
-                # otherwise turn sensitive information into stored telemetry.
-                LOGGER.warning("service probe failed without a result")
-                if function is postgres_probe:
-                    results.append(service_result("postgres", "PostgreSQL", "process", detail="探测未返回结果"))
-                else:
-                    kind = "http" if function is http_probe else ("tcp" if function is tcp_probe else "process")
-                    results.append(service_result(args[0], args[1], kind, detail="探测未返回结果"))
-        return results
+        except Exception:
+            # Never include exception text; external commands/HTTP errors can
+            # otherwise turn sensitive information into stored telemetry.
+            LOGGER.warning("service probe failed without a result")
+            if function is systemd_probes:
+                results.extend(service_result(identifier, name, "process", detail="探测未返回结果")
+                               for identifier, name, _ in SYSTEMD_SERVICES)
+            elif function is postgres_probe:
+                results.append(service_result("postgres", "PostgreSQL", "process", detail="探测未返回结果"))
+            else:
+                kind = "http" if function is http_probe else "tcp"
+                results.append(service_result(args[0], args[1], kind, detail="探测未返回结果"))
+    return results
 
 
 def parse_memory_size(value):
@@ -457,6 +499,10 @@ def deliver(queue, endpoint, token, max_batches=12):
             with local_http_opener().open(request, timeout=4) as response:
                 if not 200 <= response.status < 300:
                     return False
+        except urllib.error.HTTPError as error:
+            error.close()
+            LOGGER.warning("ingest deferred; queued=%d", queue.count())
+            return False
         except (OSError, urllib.error.URLError, ValueError):
             LOGGER.warning("ingest deferred; queued=%d", queue.count())
             return False
@@ -494,25 +540,24 @@ def run(once=False):
             signal.signal(signum, lambda *_: stopping.set())
         deadline = time.monotonic()
         try:
-            while not stopping.is_set():
-                collected_at = utc_iso()
-                host = sampler.sample()
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                while not stopping.is_set():
+                    collected_at = utc_iso()
+                    host = sampler.sample()
                     container_task = executor.submit(collect_containers)
-                    service_task = executor.submit(collect_services)
+                    services = collect_services(executor)
                     containers = container_task.result()
-                    services = service_task.result()
-                queue.enqueue({"hostId": host_id, "collectedAt": collected_at,
-                               "host": host, "containers": containers, "services": services})
-                # Catch-up has a time budget: a slow recovered backend must not
-                # delay the following sample for up to 12 request timeouts.
-                deliver(queue, endpoint, token, max_batches=1)
-                if once:
-                    return 0
-                deadline += INTERVAL_SECONDS
-                if deadline <= time.monotonic():
-                    deadline = time.monotonic() + INTERVAL_SECONDS
-                stopping.wait(max(0, deadline - time.monotonic()))
+                    queue.enqueue({"hostId": host_id, "collectedAt": collected_at,
+                                   "host": host, "containers": containers, "services": services})
+                    # Catch-up has a time budget: a slow recovered backend must not
+                    # delay the following sample for up to 12 request timeouts.
+                    deliver(queue, endpoint, token, max_batches=1)
+                    if once:
+                        return 0
+                    deadline += INTERVAL_SECONDS
+                    if deadline <= time.monotonic():
+                        deadline = time.monotonic() + INTERVAL_SECONDS
+                    stopping.wait(max(0, deadline - time.monotonic()))
         finally:
             queue.close()
     return 0

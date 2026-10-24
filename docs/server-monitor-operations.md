@@ -54,3 +54,21 @@ OAuth 出网经过 `personal-homepage-monitor-proxy.socket`：监听 `personal-h
 - 使用真实 Google 账号完成正式域名登录，确认指定账号能访问；无权限账号、匿名、过期会话、伪造回调均不能读指标。退出后刷新仍为未登录；本地测试 Cookie 只能验证本地 UI，不能计作 Google 登录成功。
 - 等待连续采样，与宿主机命令核对 CPU、内存、磁盘、网络及容器状态；检查 1h/24h/7d 范围、超过 45 秒的数据过期提示、缺口以及手机布局。首次没有七天历史是正常的，不能填充虚假曲线。
 - 在受控窗口验证网站或数据库短暂不可用、采集器重启后的队列补传与去重，并检查清理周期；同时确认网站、白板、Study Agent、Jenkins 与已有构建指标仍正常。外部通知和整机失联告警不在当前版本范围内。
+
+## 采集器资源占用对照
+
+采集器使用按线程复用的 HTTP-only opener、一个持久的四 worker 线程池，以及一次固定字段的 systemd 批量查询。它们减少了重复的 TLS/CA 初始化、handler 和线程创建、systemctl 子进程启动；具体减少多少常驻内存需要实测，不能把 SQLite 的 20 MiB 文件上限或线程的虚拟地址空间直接当成实际 RAM 占用。SQLite 保留原有单连接、持久化、容量、过期和补传规则，systemd 内存上限也不因本次优化调整。
+
+发布前后各在相近服务负载下连续记录至少 10 分钟，区分启动阶段与稳定阶段，记录版本、服务启动时间和每次观测时间。只读快照可使用：
+
+```sh
+systemctl show personal-homepage-monitor.service \
+  -p MainPID -p ActiveEnterTimestamp -p MemoryCurrent -p MemoryPeak -p TasksCurrent
+collector_pid="$(systemctl show personal-homepage-monitor.service -p MainPID --value)"
+grep -E '^(VmRSS|RssAnon|RssFile|Threads):' "/proc/$collector_pid/status"
+collector_cgroup="$(systemctl show personal-homepage-monitor.service -p ControlGroup --value)"
+grep -E '^(anon|file|kernel|slab) ' "/sys/fs/cgroup$collector_cgroup/memory.stat"
+cat "/sys/fs/cgroup$collector_cgroup/memory.events"
+```
+
+`MemoryCurrent` 包含服务 cgroup 内的子进程和文件缓存等，不能与 Python 主进程 RSS 混为一个口径；`MemoryPeak` 是该 cgroup 的历史峰值，要结合启动时间理解。对照期间同时确认采样仍约 15 秒一次、没有跨轮重叠或连续追赶、最新样本没有超过 45 秒，以及失败后队列仍能恢复投递。记录 OOM 相关计数是否增长，不通过每轮强制 GC、修改全局分配器或降低内存上限来代替验证。
