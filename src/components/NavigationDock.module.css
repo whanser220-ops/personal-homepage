@@ -25,8 +25,34 @@
   transition: width 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+.navigation-dock[data-collapsible="true"] {
+  /* Keep the home dock legible without re-blurring the animated WebGL scene. */
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+  backdrop-filter: none;
+  isolation: isolate;
+}
+
 .navigation-dock[data-collapsible="true"][data-expanded="false"] {
   width: calc(var(--dock-item) + var(--dock-pad-x) * 2 + 2px);
+}
+
+.navigation-dock[data-collapsible="true"][data-expanded="true"] {
+  overflow: visible;
+}
+
+.navigation-dock[data-collapsible="true"][data-expanded="true"]::after {
+  /* Reserve the final hover area immediately while the capsule grows. */
+  content: "";
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: -1px;
+  z-index: -1;
+  box-sizing: border-box;
+  width: var(--dock-expanded-width);
+  max-width: inherit;
+  border-radius: inherit;
+  pointer-events: auto;
 }
 
 .dock-items {

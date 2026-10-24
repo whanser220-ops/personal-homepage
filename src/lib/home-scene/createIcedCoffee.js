@@ -57,6 +57,10 @@ export function createIcedCoffee(renderer, world) {
   const originals = [], clones = [], materials = new Set();
   const bounds = new THREE.Box3(), point = new THREE.Vector3();
   const motionUniforms = { uTime: { value: 0 }, uMotion: { value: 1 } };
+  // All sampler uniforms stay complete even when no AO processor is supplied.
+  const whiteAO = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  whiteAO.needsUpdate = true;
+  const aoUniforms = { uAO: { value: whiteAO }, uAOIntensity: { value: 0 } };
   const floatingIce = [];
   const rotation = new THREE.Quaternion(), euler = new THREE.Euler(), position = new THREE.Vector3();
   let previousSeconds;
@@ -154,30 +158,32 @@ export function createIcedCoffee(renderer, world) {
     depthFunc: THREE.AlwaysDepth,
   });
   const presentMaterial = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: composite.texture }, uDepth: { value: composite.depthTexture } },
+    uniforms: { uColor: { value: composite.texture }, uDepth: { value: composite.depthTexture }, ...aoUniforms },
     vertexShader: quadVertex,
     fragmentShader: `
-      varying vec2 vUv;uniform sampler2D uColor,uDepth;
+      varying vec2 vUv;uniform sampler2D uColor,uDepth,uAO;uniform float uAOIntensity;
       void main(){
-        gl_FragColor=texture2D(uColor,vUv);gl_FragDepth=texture2D(uDepth,vUv).r;
+        vec4 color=texture2D(uColor,vUv),ao=texture2D(uAO,vUv);
+        gl_FragColor=vec4(color.rgb*mix(vec3(1.),ao.rgb,uAOIntensity),color.a*ao.a);
+        gl_FragDepth=texture2D(uDepth,vUv).r;
         #include <colorspace_fragment>
       }
     `,
     depthFunc: THREE.AlwaysDepth,
   });
   const glassMaterial = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: composite.texture }, uDepth: { value: composite.depthTexture }, uResolution: { value: size } },
+    uniforms: { uColor: { value: composite.texture }, uDepth: { value: composite.depthTexture }, uResolution: { value: size }, ...aoUniforms },
     vertexShader: geometryVertex,
     fragmentShader: `
       varying vec3 vWorld,vNormal,vViewNormal;
-      uniform sampler2D uColor,uDepth;uniform vec2 uResolution;
+      uniform sampler2D uColor,uDepth,uAO;uniform vec2 uResolution;uniform float uAOIntensity;
       void main(){
         vec3 n=normalize(vNormal),v=normalize(cameraPosition-vWorld);
         float fresnel=.025+.975*pow(1.-abs(dot(n,v)),4.);
         vec2 uv=gl_FragCoord.xy/uResolution;
         vec2 bent=clamp(uv+normalize(vViewNormal).xy*.0026,vec2(.001),vec2(.999));
         if(texture2D(uDepth,bent).r<gl_FragCoord.z)bent=uv;
-        vec3 color=texture2D(uColor,bent).rgb;
+        vec3 color=texture2D(uColor,bent).rgb*mix(vec3(1.),texture2D(uAO,bent).rgb,uAOIntensity);
         color=mix(color,vec3(.62,.78,.80),.13+fresnel*.48);
         float h=vWorld.y-4.56;
         float lip=smoothstep(1.62,1.685,h);
@@ -237,7 +243,7 @@ export function createIcedCoffee(renderer, world) {
     liquidBuffer.setSize(Math.min(512,w),Math.min(512,h));iceBuffer.setSize(Math.min(512,w),Math.min(512,h));
     uniforms.uDepthRange.value=camera.far-camera.near;
   }
-  function render(camera, processColor) {
+  function render(camera, updateAO) {
     if(!ready){renderer.render(world,camera);return;}
     const previous=renderer.getRenderTarget(),clear=renderer.getClearColor(new THREE.Color()),alpha=renderer.getClearAlpha(),auto=renderer.autoClear;
     try {
@@ -248,10 +254,11 @@ export function createIcedCoffee(renderer, world) {
       renderer.setRenderTarget(liquidBuffer);renderer.render(liquidScene,layerCamera);
       renderer.setRenderTarget(iceBuffer);renderer.render(iceScene,layerCamera);
       quad.material=mergeMaterial;renderer.setRenderTarget(composite);renderer.render(passScene,passCamera);
-      // Occlude linear scene color before sRGB output and glass highlights.
-      const color = processColor ? processColor(composite) : composite.texture;
-      presentMaterial.uniforms.uColor.value = color;
-      glassMaterial.uniforms.uColor.value = color;
+      // Refresh only the cached mask here. Both existing output shaders occlude
+      // current linear color before sRGB conversion and glass highlights.
+      const mask = updateAO?.(composite);
+      aoUniforms.uAO.value = mask?.texture || whiteAO;
+      aoUniforms.uAOIntensity.value = mask?.intensity ?? 0;
       quad.material=presentMaterial;renderer.setRenderTarget(previous);renderer.render(passScene,passCamera);
       renderer.autoClear=false;renderer.render(glassScene,camera);
     } finally {
@@ -279,6 +286,6 @@ export function createIcedCoffee(renderer, world) {
   }
   return {attach,resize,render,update,dispose(){
     [background,liquidBuffer,iceBuffer,composite].forEach(t=>t.dispose());
-    materials.forEach(m=>m.dispose());quad.geometry.dispose();clones.forEach(o=>o.removeFromParent());
+    materials.forEach(m=>m.dispose());whiteAO.dispose();quad.geometry.dispose();clones.forEach(o=>o.removeFromParent());
   }};
 }

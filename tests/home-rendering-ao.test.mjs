@@ -19,13 +19,13 @@ function setup(context) {
     setRenderTarget: target => { renderTarget = target; },
     getClearColor: target => target.copy(clearColor),
     getClearAlpha: () => clearAlpha,
-    setClearColor(color) { clearColor.set(color); },
+    setClearColor(color, alpha = clearAlpha) { clearColor.set(color); clearAlpha = alpha; },
     setClearAlpha(alpha) { clearAlpha = alpha; },
     clear() {},
     render(mesh) {
       draws.push({
         material: mesh.material,
-        source: mesh.material.uniforms.uColor?.value,
+        depth: mesh.material.uniforms.tDepth?.value,
         target: renderTarget,
       });
     },
@@ -37,19 +37,19 @@ function setup(context) {
   return { ao, renderer, camera, source, draws, previousTarget, setTime: time => { now = time; } };
 }
 
-test("reuses the denoised AO while composing the latest color every frame", context => {
+test("returns a cached mask without per-frame color copies or a full-size output target", context => {
   const { ao, renderer, source, draws, previousTarget } = setup(context);
   try {
-    const output = ao.apply(source);
-    // Two real GTAOPass draws (AO and denoise), then one color composition.
-    assert.equal(draws.length, 3);
-    assert.equal(draws.at(-1).source, source.texture);
-    assert.equal(draws.at(-1).target.texture, output);
+    const mask = ao.apply(source);
+    // Only the real GTAOPass AO and denoise draws remain.
+    assert.equal(draws.length, 2);
+    assert.equal(draws.at(-1).target.texture, mask.texture);
+    assert.equal(mask.intensity, 0.55);
+    assert.deepEqual(draws.map(draw => [draw.target.width, draw.target.height]), [[960, 540], [960, 540]]);
 
     const nextColor = new THREE.Texture();
-    assert.equal(ao.apply({ ...source, texture: nextColor }), output);
-    assert.equal(draws.length, 4);
-    assert.equal(draws.at(-1).source, nextColor);
+    assert.equal(ao.apply({ ...source, texture: nextColor }), mask);
+    assert.equal(draws.length, 2);
     assert.equal(renderer.getRenderTarget(), previousTarget);
     assert.equal(renderer.autoClear, true);
   } finally {
@@ -61,26 +61,29 @@ test("refreshes the mask after explicit invalidation, resize, depth replacement 
   const { ao, camera, source, draws } = setup(context);
   try {
     ao.apply(source);
-    assert.equal(draws.length, 3);
+    assert.equal(draws.length, 2);
     ao.invalidate();
     ao.apply(source);
-    assert.equal(draws.length, 6);
+    assert.equal(draws.length, 4);
     ao.resize();
     ao.apply(source);
-    assert.equal(draws.length, 9);
+    assert.equal(draws.length, 6);
     source.depthTexture = new THREE.DepthTexture(1280, 720);
     ao.apply(source);
-    assert.equal(draws.length, 12);
+    assert.equal(draws.length, 8);
+    assert.equal(draws.at(-2).depth, source.depthTexture);
+    assert.equal(draws.at(-1).depth, source.depthTexture);
     camera.fov = 50;
     camera.updateProjectionMatrix();
     ao.apply(source);
-    assert.equal(draws.length, 15);
+    assert.equal(draws.length, 10);
     camera.position.x = 1;
     camera.updateMatrixWorld();
     ao.apply(source);
-    assert.equal(draws.length, 18);
+    assert.equal(draws.length, 12);
     ao.apply(source);
-    assert.equal(draws.length, 19);
+    assert.equal(draws.length, 12);
+    assert.equal(ao.maskUpdates, 6);
   } finally {
     ao.dispose();
   }
@@ -90,19 +93,19 @@ test("refreshes moving depth at 4 Hz without scheduling extra animation frames",
   const { ao, source, draws, setTime } = setup(context);
   try {
     ao.apply(source);
-    assert.equal(draws.length, 3);
+    assert.equal(draws.length, 2);
     setTime(249);
     ao.apply(source);
-    assert.equal(draws.length, 4);
+    assert.equal(draws.length, 2);
     setTime(250);
     ao.apply(source);
-    assert.equal(draws.length, 7);
+    assert.equal(draws.length, 4);
     setTime(499);
     ao.apply(source);
-    assert.equal(draws.length, 8);
+    assert.equal(draws.length, 4);
     setTime(500);
     ao.apply(source);
-    assert.equal(draws.length, 11);
+    assert.equal(draws.length, 6);
   } finally {
     ao.dispose();
   }
@@ -117,10 +120,29 @@ test("restores the caller render state and retries an interrupted mask render", 
     assert.throws(() => ao.apply(source), /interrupted draw/);
     assert.equal(renderer.getRenderTarget(), previousTarget);
     assert.equal(renderer.autoClear, false);
+    assert.equal(renderer.getClearAlpha(), 0.8);
+    assert.deepEqual(renderer.getClearColor(new THREE.Color()).toArray(), [0.25, 0.5, 0.75]);
+    assert.equal(ao.maskUpdates, 0);
     renderer.render = originalRender;
     ao.apply(source);
-    assert.equal(draws.length, 3);
+    assert.equal(draws.length, 2);
+    assert.equal(ao.maskUpdates, 1);
   } finally {
     ao.dispose();
   }
+});
+
+test("releases cached mask targets and materials without owning the source depth", context => {
+  const { ao, source, draws } = setup(context);
+  ao.apply(source);
+  const targets = new Set(draws.map(draw => draw.target));
+  const materials = new Set(draws.map(draw => draw.material));
+  let targetDisposals = 0, materialDisposals = 0, depthDisposals = 0;
+  for (const target of targets) target.addEventListener("dispose", () => targetDisposals++);
+  for (const material of materials) material.addEventListener("dispose", () => materialDisposals++);
+  source.depthTexture.addEventListener("dispose", () => depthDisposals++);
+  ao.dispose();
+  assert.equal(targetDisposals, 2);
+  assert.equal(materialDisposals, 2);
+  assert.equal(depthDisposals, 0);
 });

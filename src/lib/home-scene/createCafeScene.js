@@ -5,6 +5,7 @@ import { createInsetWater } from "./createInsetWater.js";
 import { createIcedCoffee } from "./createIcedCoffee.js";
 import { createCafeAO } from "./createCafeAO.js";
 import { createFrameClock, scenePixelRatio } from "./renderBudget.js";
+import { observeNavigationActivity } from "./navigationActivity.js";
 
 // A restrained illustrated palette: world-space light creates the same diagonal
 // afternoon sun across every surface, with real shadow maps for local occlusion.
@@ -97,7 +98,9 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     frame = 0,
     loaded = false,
     visible = true,
-    contextLost = false;
+    contextLost = false,
+    navigationActive = false,
+    needsRender = true;
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
@@ -174,9 +177,17 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     }),
   );
   scene.add(dust);
+  function updateDiagnostics() {
+    host.dataset.sceneFrames = String(frames);
+    host.dataset.sceneCaptures = String(captures);
+    host.dataset.sceneAOUpdates = String(ao.maskUpdates);
+    host.dataset.scenePixelRatio = renderer.getPixelRatio().toFixed(2);
+    host.dataset.sceneNavigationPaused = String(navigationActive);
+  }
   function draw(time = 0) {
     frame = 0;
     if (disposed || contextLost || !loaded || !visible || document.hidden) return;
+    if (navigationActive && !needsRender) return;
     if (!clock.due(time)) { schedule(); return; }
     const frameMs = lastDraw === undefined ? 0 : time - lastDraw;
     lastDraw = time;
@@ -193,23 +204,22 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
       captures++;
     }
     coffee.render(camera, ao.apply);
+    needsRender = false;
     frames++;
     // Local diagnostic counters make the render budget observable without
     // adding UI, timers, network telemetry, or per-frame React updates.
     if (time - lastDiagnostics >= 1000) {
-      host.dataset.sceneFrames = String(frames);
-      host.dataset.sceneCaptures = String(captures);
-      host.dataset.sceneAOUpdates = String(ao.maskUpdates);
-      host.dataset.scenePixelRatio = renderer.getPixelRatio().toFixed(2);
+      updateDiagnostics();
       lastDiagnostics = time;
     }
     if (host.dataset.ready !== "true") { host.dataset.ready = "true"; onReady?.(); }
     if (!reduced.matches) schedule();
   }
   function schedule() {
-    if (!frame && loaded && !disposed && !contextLost && visible && !document.hidden) frame = requestAnimationFrame(draw);
+    if (!frame && loaded && !disposed && !contextLost && visible && !document.hidden && (!navigationActive || needsRender)) frame = requestAnimationFrame(draw);
   }
   function refresh() {
+    needsRender = true;
     clock.reset();
     lastDraw = undefined;
     lastCapture = -Infinity;
@@ -280,6 +290,21 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   reduced.addEventListener("change", onMotion);
   renderer.domElement.addEventListener("webglcontextlost", onContextLost);
   renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
+  const stopObservingNavigation = observeNavigationActivity(
+    document.querySelector('nav[data-collapsible="true"]'),
+    active => {
+      navigationActive = active;
+      updateDiagnostics();
+      if (active && !needsRender) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      } else if (!active) {
+        clock.reset();
+        lastDraw = undefined;
+        schedule();
+      }
+    },
+  );
   resize();
   new GLTFLoader()
     .loadAsync("/assets/home-scene/afternoon-room.glb")
@@ -319,6 +344,7 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     });
   return () => {
     disposed = true;
+    stopObservingNavigation();
     cancelAnimationFrame(frame);
     delete host.dataset.ready;
     sizeObserver.disconnect();
@@ -331,6 +357,7 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     delete host.dataset.sceneCaptures;
     delete host.dataset.sceneAOUpdates;
     delete host.dataset.scenePixelRatio;
+    delete host.dataset.sceneNavigationPaused;
     tank.dispose();
     coffee.dispose();
     ao.dispose();

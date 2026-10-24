@@ -197,6 +197,7 @@ export function NavigationDock({ className = "" }) {
               className={css("dashboard-nav-link", isActive && "is-active")}
               data-dock-index={index + 1}
               href={item.href}
+              prefetch={isHome ? false : undefined}
               key={item.label}
               onMouseEnter={() => setSpotIndex(index + 1)}
               title={item.label}
