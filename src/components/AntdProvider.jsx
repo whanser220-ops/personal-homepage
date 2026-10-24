@@ -12,7 +12,7 @@ const defaultTokens = {
   warning: "#c9822b",
   destructive: "#b42318",
   foreground: "#3f352e",
-  background: "#fff8f1",
+  background: "#FAF9F5",
   card: "#fffdf9",
   border: "#dfcec0",
   radius: 8,

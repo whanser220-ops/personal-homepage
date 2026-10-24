@@ -16,8 +16,12 @@ const dockItems = [
 ];
 
 function getActiveIndex(pathname) {
-  const itemIndex = dockItems.findIndex((item) => pathname === item.href);
-  return itemIndex >= 0 ? itemIndex + 1 : 0;
+  if (pathname === "/") return 0;
+
+  const itemIndex = dockItems.findIndex(
+    (item) => pathname === item.href || pathname?.startsWith(`${item.href}/`),
+  );
+  return itemIndex >= 0 ? itemIndex + 1 : null;
 }
 
 function css(...names) {
@@ -36,10 +40,25 @@ export function NavigationDock({ className = "" }) {
 
   return (
     <nav
-      aria-label="首页导航"
+      aria-label="主要导航"
       className={cn(css("navigation-dock"), className)}
-      onMouseLeave={() => setSpotIndex(activeIndex)}
-      style={{ "--dock-spot-index": spotIndex }}
+      onMouseLeave={(event) => {
+        const focusedItem = event.currentTarget.contains(document.activeElement)
+          ? document.activeElement.closest("[data-dock-index]")
+          : null;
+        setSpotIndex(focusedItem ? Number(focusedItem.dataset.dockIndex) : activeIndex);
+      }}
+      onFocus={(event) => {
+        const focusedItem = event.target.closest("[data-dock-index]");
+        if (focusedItem) setSpotIndex(Number(focusedItem.dataset.dockIndex));
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setSpotIndex(activeIndex);
+      }}
+      style={{
+        "--dock-spot-index": spotIndex ?? 0,
+        "--dock-spot-opacity": spotIndex === null ? 0 : 1,
+      }}
     >
       <span className={css("dock-spot")} aria-hidden="true" />
       <Link
@@ -56,7 +75,7 @@ export function NavigationDock({ className = "" }) {
 
       {dockItems.map((item, index) => {
         const Icon = item.icon;
-        const isActive = pathname === item.href;
+        const isActive = activeIndex === index + 1;
 
         return (
           <Link

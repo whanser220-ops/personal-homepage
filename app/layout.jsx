@@ -1,4 +1,5 @@
 import { AntdRegistry } from "@ant-design/nextjs-registry";
+import { Header } from "../src/components/Header.jsx";
 import { PageTransition } from "../src/components/PageTransition.jsx";
 import { ThemeProvider } from "../src/components/ThemeProvider.jsx";
 import "../src/styles.css";
@@ -34,6 +35,7 @@ export default function RootLayout({ children }) {
       <body>
         <ThemeProvider>
           <AntdRegistry>
+            <Header />
             <PageTransition>{children}</PageTransition>
           </AntdRegistry>
         </ThemeProvider>

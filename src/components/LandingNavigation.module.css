@@ -18,23 +18,20 @@
   min-height: 100svh;
   overflow: hidden;
   color: var(--ink);
-  background: #d8c5ad;
   font-family: Georgia, "STKaiti", "KaiTi", "Microsoft YaHei", serif;
 }
 
+.noteHomepage {
+  background: #d8c5ad;
+}
+
 .articlePage {
-  background: #FAF9F5;
-  color: #262621;
+  color: var(--foreground);
   font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
 }
 
 .articlePage .archiveBody {
   width: min(1180px, calc(100% - 44px));
-}
-
-:global(.dark) .articlePage {
-  background: #1e1916;
-  color: #f5e8dc;
 }
 
 :global(.dark) .noteHomepage,
@@ -52,11 +49,13 @@
   --blue-soft: #354b59;
   --honey: #e1b66f;
   --paper-shadow: 0 22px 52px rgba(0, 0, 0, 0.42), 0 2px 2px rgba(0, 0, 0, 0.3);
+}
+
+:global(.dark) .noteHomepage {
   background: #171718;
 }
 
-.homepageWallImage,
-.archiveWallImage {
+.homepageWallImage {
   position: absolute;
   inset: 0 0 auto;
   z-index: -3;
@@ -68,13 +67,11 @@
   transition: filter 260ms ease;
 }
 
-:global(.dark) .homepageWallImage,
-:global(.dark) .archiveWallImage {
+:global(.dark) .homepageWallImage {
   filter: brightness(0.48) saturate(0.68) contrast(1.12) sepia(0.08);
 }
 
-.homepageScrim,
-.archiveScrim {
+.homepageScrim {
   position: absolute;
   inset: 0;
   z-index: -2;
@@ -84,8 +81,7 @@
     radial-gradient(circle at 51% 45%, transparent 0 23%, rgba(39, 28, 21, 0.12) 66%, rgba(25, 19, 16, 0.25) 100%);
 }
 
-:global(.dark) .homepageScrim,
-:global(.dark) .archiveScrim {
+:global(.dark) .homepageScrim {
   background:
     linear-gradient(180deg, rgba(10, 12, 17, 0.12), rgba(10, 12, 17, 0.54)),
     radial-gradient(circle at 51% 43%, rgba(49, 67, 78, 0.04), rgba(6, 9, 13, 0.52) 76%);
@@ -101,6 +97,9 @@
   justify-content: space-between;
   gap: 24px;
   width: 100%;
+}
+
+.homeTopbar {
   padding: clamp(20px, 2.6vw, 40px) clamp(22px, 3.2vw, 52px) 0;
 }
 
@@ -153,69 +152,6 @@
   color: #6f5949;
   font-family: "Microsoft YaHei", sans-serif;
   font-size: 0.7rem;
-}
-
-.portfolioNavigation {
-  display: flex;
-  box-sizing: border-box;
-  align-items: center;
-  gap: clamp(4px, 0.7vw, 10px);
-  min-height: 66px;
-  padding: 7px 10px;
-  border: 1px solid var(--line);
-  border-radius: 28px;
-  background: color-mix(in srgb, var(--paper-bright) 95%, transparent);
-  box-shadow: var(--paper-shadow);
-  backdrop-filter: blur(8px);
-}
-
-.portfolioNavigation a,
-.portfolioThemeToggle {
-  display: inline-flex;
-  box-sizing: border-box;
-  width: 50px;
-  height: 50px;
-  min-width: 50px;
-  min-height: 50px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  cursor: pointer;
-  transition: background-color 160ms ease, box-shadow 160ms ease, color 160ms ease, transform 160ms ease;
-}
-
-.portfolioNavigation a:hover,
-.portfolioNavigation a:focus-visible,
-.portfolioNavigation a.isActive,
-.portfolioThemeToggle:hover,
-.portfolioThemeToggle:focus-visible {
-  color: var(--olive);
-  transform: translateY(-2px);
-}
-
-.portfolioNavigation a:hover,
-.portfolioNavigation a:focus-visible,
-.portfolioNavigation a.isActive {
-  background: color-mix(in srgb, var(--olive-soft) 82%, var(--paper-bright));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--olive) 28%, transparent), 0 5px 12px rgba(54, 45, 36, 0.12);
-}
-
-.portfolioThemeToggle {
-  border: 2px solid currentColor;
-}
-
-.portfolioNavigation a span,
-.portfolioThemeToggle span {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
 }
 
 .homeLayout {
@@ -544,49 +480,16 @@
 
 .illustratedPage {
   min-height: 100svh;
+  padding-top: 112px;
   overflow: visible;
   overflow-x: clip;
-  background: #cdb99f;
-}
-
-.illustratedPage.articlePage {
-  background: #FAF9F5;
-  color: #262621;
-  font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
-}
-
-:global(.dark) .illustratedPage.articlePage {
-  background: #1e1916;
-  color: #f5e8dc;
-}
-
-.archiveWallImage {
-  position: fixed;
-  height: 100svh;
-  opacity: 0.3;
-  filter: blur(2px) saturate(0.76);
-  transform: scale(1.015);
-}
-
-:global(.dark) .archiveWallImage {
-  opacity: 0.2;
-  filter: blur(2px) brightness(0.4) saturate(0.54);
-}
-
-.archiveScrim {
-  position: fixed;
-  background:
-    linear-gradient(120deg, rgba(240, 222, 196, 0.94), rgba(207, 184, 153, 0.86)),
-    rgba(240, 222, 196, 0.86);
-}
-
-:global(.dark) .archiveScrim {
-  background: linear-gradient(120deg, rgba(24, 22, 21, 0.94), rgba(17, 24, 29, 0.92));
+  background: var(--background);
 }
 
 .archiveTopbar {
   max-width: 1440px;
   margin: 0 auto;
+  padding: 0 clamp(22px, 3.2vw, 52px);
 }
 
 .archiveBody {
@@ -796,30 +699,22 @@
   .archiveTopbar {
     flex-direction: column;
     gap: 14px;
+  }
+
+  .homeTopbar {
     padding: 18px 16px 0;
+  }
+
+  .illustratedPage {
+    padding-top: 100px;
+  }
+
+  .archiveTopbar {
+    padding: 0 16px;
   }
 
   .identityCard {
     width: min(252px, 78vw);
-  }
-
-  .portfolioNavigation {
-    width: calc(100vw - 32px);
-    max-width: calc(100vw - 32px);
-    flex: none;
-    justify-content: space-between;
-    overflow: visible;
-    padding: 6px;
-  }
-
-  .portfolioNavigation a,
-  .portfolioThemeToggle {
-    width: 46px;
-    height: 46px;
-    min-width: 0;
-    min-height: 46px;
-    flex: 1 1 0;
-    max-width: 52px;
   }
 
   .homeLayout {
@@ -919,13 +814,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .identityCard,
-  .portfolioNavigation a,
-  .portfolioThemeToggle,
   .articleCard,
   .projectDossier,
   .archiveProjectCard,
-  .homepageWallImage,
-  .archiveWallImage {
+  .homepageWallImage {
     scroll-behavior: auto;
     transition: none;
   }

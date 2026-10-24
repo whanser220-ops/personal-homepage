@@ -1,15 +1,5 @@
 import Link from "next/link";
-import { BookOpen, FolderKanban, Home, UserRound } from "lucide-react";
-
-import { ThemeToggle } from "./ThemeToggle.jsx";
 import styles from "./LandingNavigation.module.css";
-
-const navigationItems = [
-  { href: "/", key: "home", label: "首页", icon: Home },
-  { href: "/articles", key: "articles", label: "文章", icon: BookOpen },
-  { href: "/projects", key: "projects", label: "项目", icon: FolderKanban },
-  { href: "/about", key: "about", label: "关于我", icon: UserRound },
-];
 
 export function IdentityCard() {
   return (
@@ -31,50 +21,11 @@ export function IdentityCard() {
   );
 }
 
-export function PortfolioNavigation({ active }) {
-  return (
-    <nav aria-label="主要导航" className={styles.portfolioNavigation}>
-      {navigationItems.map((item) => {
-        const Icon = item.icon;
-        return (
-          <Link
-            aria-current={active === item.key ? "page" : undefined}
-            aria-label={item.label}
-            className={active === item.key ? styles.isActive : undefined}
-            href={item.href}
-            key={item.key}
-            title={item.label}
-          >
-            <Icon aria-hidden="true" size={25} strokeWidth={1.85} />
-            <span>{item.label}</span>
-          </Link>
-        );
-      })}
-      <ThemeToggle className={styles.portfolioThemeToggle} />
-    </nav>
-  );
-}
-
-export function IllustratedPageFrame({ active, eyebrow, title, description, children, showHero = true }) {
+export function IllustratedPageFrame({ eyebrow, title, description, children, showHero = true }) {
   return (
     <main className={`${styles.illustratedPage} ${showHero ? "" : styles.articlePage}`}>
-      {showHero ? (
-        <>
-          <img
-            alt=""
-            aria-hidden="true"
-            className={styles.archiveWallImage}
-            height="1271"
-            src="/assets/hero-character-wall.png"
-            width="1672"
-          />
-          <div aria-hidden="true" className={styles.archiveScrim} />
-        </>
-      ) : null}
-
       <header className={styles.archiveTopbar}>
         <IdentityCard />
-        <PortfolioNavigation active={active} />
       </header>
 
       <div className={styles.archiveBody}>

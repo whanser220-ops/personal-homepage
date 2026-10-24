@@ -1,5 +1,7 @@
 .build-monitor-page {
+  --dock-clearance: 96px;
   min-height: 100vh;
+  padding-top: var(--dock-clearance);
   background: var(--background);
   color: var(--foreground);
   font-size: 14px;
@@ -9,7 +11,7 @@
   display: grid;
   min-height: 100vh;
   place-items: center;
-  padding: 24px;
+  padding: calc(var(--dock-clearance) + 24px) 24px 24px;
   background: var(--background);
 }
 
@@ -189,36 +191,16 @@
 
 .build-monitor-topbar {
   position: sticky;
-  top: 0;
+  top: var(--dock-clearance);
   z-index: 10;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 18px;
   align-items: center;
   border-bottom: 1px solid var(--border);
   padding: 14px 24px;
   background: color-mix(in srgb, var(--background) 94%, transparent);
   backdrop-filter: blur(10px);
-}
-
-.build-monitor-home {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 42px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 3px 10px 3px 4px;
-  background: var(--card);
-  color: var(--foreground);
-  font-weight: 800;
-}
-
-.build-monitor-home img {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  object-fit: cover;
 }
 
 .build-monitor-title {
@@ -851,14 +833,14 @@
 }
 
 @media (max-width: 640px) {
+  .build-monitor-page {
+    --dock-clearance: 84px;
+  }
+
   .build-monitor-topbar,
   .build-monitor-main {
     padding-left: 14px;
     padding-right: 14px;
-  }
-
-  .build-monitor-home {
-    width: fit-content;
   }
 
   .build-monitor-stats,

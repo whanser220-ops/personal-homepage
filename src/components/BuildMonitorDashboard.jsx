@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -458,12 +457,6 @@ export function BuildMonitorDashboard({ initialSnapshot = null, initialNowMs = n
   return (
     <div className={css("build-monitor-page", "build-monitor-dashboard-ready")}>
       <header className={css("build-monitor-topbar")}>
-        <UiButton asChild className={css("build-monitor-home")} variant="ghost">
-          <Link href="/" aria-label="返回首页">
-            <img src="/assets/site-logo.png" alt="" width="34" height="34" />
-            <span>Huang</span>
-          </Link>
-        </UiButton>
         <div className={css("build-monitor-title")}>
           <Typography.Title level={1}>构建监控</Typography.Title>
           <Typography.Text type="secondary">{formatRunSubtitle(run, revision)}</Typography.Text>

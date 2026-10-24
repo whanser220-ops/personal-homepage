@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { animate } from "animejs";
 
-function shouldHandleLink(event, anchor) {
+function shouldHandleLink(event, anchor, allowCurrentPage = false) {
   if (
     event.defaultPrevented ||
     event.button !== 0 ||
@@ -25,7 +25,7 @@ function shouldHandleLink(event, anchor) {
     return false;
   }
 
-  if (url.pathname === current.pathname && url.search === current.search) {
+  if (!allowCurrentPage && url.pathname === current.pathname && url.search === current.search) {
     return false;
   }
 
@@ -42,32 +42,54 @@ export function PageTransition({ children }) {
   const pathname = usePathname();
   const contentRef = useRef(null);
   const isTransitioningRef = useRef(false);
+  const pendingNavigationRef = useRef(null);
+  const animationRef = useRef(null);
 
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return;
+  const cancelTransition = useCallback(() => {
+    if (pendingNavigationRef.current !== null) {
+      window.clearTimeout(pendingNavigationRef.current);
+      pendingNavigationRef.current = null;
     }
-
-    const content = contentRef.current;
-
-    if (!content) {
-      return;
-    }
-
+    animationRef.current?.cancel();
+    animationRef.current = null;
     isTransitioningRef.current = false;
     document.documentElement.classList.remove("is-route-changing");
-    content.style.opacity = "";
-    content.style.transform = "";
-    content.style.filter = "";
-    content.style.pointerEvents = "";
+
+    const content = contentRef.current;
+    if (!content) return;
 
     const targets = getTransitionTargets(content);
-
-    for (const target of Array.isArray(targets) ? targets : [targets]) {
+    for (const target of [content, ...(Array.isArray(targets) ? targets : [targets])]) {
+      target.style.opacity = "";
+      target.style.transform = "";
+      target.style.filter = "";
       target.style.pointerEvents = "";
     }
+  }, []);
 
-    animate(targets, {
+  useEffect(() => {
+    function handleHeaderClick(event) {
+      const anchor = event.target.closest?.(".site-header a[href]");
+      if (isTransitioningRef.current && anchor && shouldHandleLink(event, anchor, true)) {
+        cancelTransition();
+      }
+    }
+
+    document.addEventListener("click", handleHeaderClick, true);
+    return () => {
+      document.removeEventListener("click", handleHeaderClick, true);
+      cancelTransition();
+    };
+  }, [cancelTransition]);
+
+  useEffect(() => {
+    cancelTransition();
+    const content = contentRef.current;
+    if (!content || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return cancelTransition;
+    }
+
+    animationRef.current = animate(getTransitionTargets(content), {
       opacity: [0, 1],
       translateY: ["1.25rem", "0rem"],
       scale: [0.985, 1],
@@ -75,7 +97,8 @@ export function PageTransition({ children }) {
       duration: 620,
       ease: "outCubic",
     });
-  }, [pathname]);
+    return cancelTransition;
+  }, [pathname, cancelTransition]);
 
   function handleClick(event) {
     const anchor = event.target.closest?.("a[href]");
@@ -110,7 +133,8 @@ export function PageTransition({ children }) {
       target.style.pointerEvents = "none";
     }
 
-    animate(targets, {
+    animationRef.current?.cancel();
+    animationRef.current = animate(targets, {
       opacity: 0,
       translateY: "-0.85rem",
       scale: 0.985,
@@ -119,7 +143,8 @@ export function PageTransition({ children }) {
       ease: "inCubic",
     });
 
-    window.setTimeout(() => {
+    pendingNavigationRef.current = window.setTimeout(() => {
+      pendingNavigationRef.current = null;
       router.push(anchor.pathname + anchor.search + anchor.hash);
     }, 250);
   }

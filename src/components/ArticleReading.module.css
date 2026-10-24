@@ -3,7 +3,7 @@
   margin: 0 auto;
   padding: 24px clamp(20px, 4vw, 54px) 96px;
   color: #262621;
-  background: #faf9f5;
+  background: var(--background);
   font-family: "Noto Serif SC", serif;
 }
 
@@ -77,7 +77,7 @@
 .mobileTocWrap { display: none; }
 .mobileToc { display: none; }
 
-:global(.dark) .articleShell { color: #e7e1d8; background: #211d1a; }
+:global(.dark) .articleShell { color: #e7e1d8; }
 :global(.dark) .backLink, :global(.dark) .articleBody p, :global(.dark) .articleBody ol, :global(.dark) .bulletList, :global(.dark) .articleBody table { color: #c8beb2; }
 :global(.dark) .mapLink, :global(.dark) .articleBody a, :global(.dark) .figureOpen, :global(.dark) .sourceNotes a { color: #e5a17d; }
 :global(.dark) .articleHeader { border-color: #49413a; }
