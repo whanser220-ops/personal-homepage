@@ -34,6 +34,8 @@ Git 插件记录的仓库 URL 使用 `git@github.com:whanser220-ops/personal-hom
 
 不要将 `ssh.github.com` 传输地址写成 Jenkins SCM URL，否则 GitHub 事件无法按 `github.com` 匹配推送。Git 传输改写 URL 也不要显式携带 `:443`，避免 Git 生成的 `ssh -p 443` 覆盖容器 SSH 配置里的本机隧道端口。
 
+迁移后的首次轮询还会读取历史构建保存的旧 SCM URL。因此本仓库的 Git 传输改写同时兼容旧 `ssh://git@ssh.github.com:443/whanser220-ops/personal-homepage.git`，将它改写到同一个无显式端口的目标；保留历史构建记录原样，不依赖修改旧构建来恢复轮询。
+
 ## 运行状态与数据边界
 
 迁移保留 Jenkins `2.555.3` 和原控制器镜像，避免迁移同时升级 Jenkins 或插件。运行定义位于 WSL Linux 文件系统：
