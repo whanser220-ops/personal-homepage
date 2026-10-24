@@ -34,7 +34,9 @@ BATCH_SIZE = 20
 PROBE_TIMEOUT = 3
 _HTTP_LOCAL = threading.local()
 CONTAINER_NAMES = (
-    "personal-homepage", "learning-whiteboard", "jenkins",
+    # Jenkins now runs in local WSL; probe its forwarded HTTP endpoint below.
+    # The stopped cloud container is retained for rollback, not current health.
+    "personal-homepage", "learning-whiteboard",
     "personal-homepage-postgres",
 )
 HTTP_SERVICES = (

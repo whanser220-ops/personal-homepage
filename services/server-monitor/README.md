@@ -33,7 +33,7 @@ sudo journalctl -u personal-homepage-monitor.service --since '10 min ago'
 - CPU 从 `/proc/stat` 差分，平均负载来自 `/proc/loadavg`；内存和 Swap 来自 `/proc/meminfo`。CPU 百分比为整台宿主机 0–100%；容器 CPU 使用 Docker 的 CPU 百分比，多核可超过 100%。
 - 根盘容量使用 `statvfs('/')`，磁盘吞吐量只对根文件系统设备的 `/proc/diskstats` 计数差分，不重复累加整盘、分区和 device-mapper。扇区按 Linux diskstats 的 512 字节计算。根设备不能定位时，吞吐量为 `null`。
 - 网络吞吐量、磁盘吞吐量和 CPU 百分比首帧、采集器重启后的首帧均为 `null`；计数回退或出口切换后保留 `null`，不会把回退显示成负数或零。
-- Docker 只查询四个固定容器的名称、镜像、状态、健康状态、重启次数和资源统计，不读取环境变量或 health-check 日志。不存在或读取失败的字段为 `null` / `unknown`。
+- Docker 只查询网站、学习白板和 PostgreSQL 三个固定生产容器的名称、镜像、状态、健康状态、重启次数和资源统计，不读取环境变量或 health-check 日志。不存在或读取失败的字段为 `null` / `unknown`。Jenkins 控制器已迁到本机 WSL，其健康状态由云端 `http://127.0.0.1:8080/login` 转发探针判断；留作回退的云端旧 Jenkins 容器不再参与当前容器采样。
 - HTTP 不跟随重定向、不读取响应 body。2xx 表示 HTTP 检查通过；3xx、401、403 仅表示 HTTP 端点可达。Study Agent 的 303 登录跳转不会被误报为故障。
 - systemd 每轮通过一次 `show` 查询固定的四个服务，仅读取 `Id`、`LoadState`、`ActiveState`，分别显示 Study Agent、远程运行、Nginx 和 Docker 的进程状态；只证明进程在运行。单个服务缺失不影响其他服务的结果，查询超时或结果缺失显示未知。PostgreSQL 使用容器内 `pg_isready -q`，通过固定脚本引用容器内 `POSTGRES_USER` 和 `POSTGRES_DB`（默认 PostgreSQL 镜像的 postgres 身份），不提供数据库密码，避免把容器 root 用户当数据库角色持续写入 FATAL 日志。
 - 远程运行的 4321 和 Perforce 的 1666 仅做 TCP 探测，成功为 `reachable`，不声称业务健康。网站、白板和 Jenkins 使用固定的本机 HTTP URL。

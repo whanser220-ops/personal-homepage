@@ -1,6 +1,6 @@
 # 本机 Harbor 镜像仓库
 
-个人主页镜像仓库使用本机 Docker Desktop 上的 Harbor：
+个人主页镜像仓库使用本机 WSL 发行版 `DockerEngine` 中的 Harbor，由该发行版里的 Linux Docker Engine 运行：
 
 ```text
 UI/API:   http://127.0.0.1:18081
@@ -17,35 +17,43 @@ harbor-personal-homepage
 
 ## Docker 访问边界
 
-本机 Harbor 部署在 Windows 的 Docker Desktop 上。对本机 Docker 来说，`127.0.0.1:18081` 就是 Harbor。
+Jenkins 控制器、临时 Agent 和 Harbor 都运行在本机 WSL `DockerEngine` 的 Docker Engine 上。Agent 挂载宿主的 Docker socket，调用同一个 Docker Engine 构建和推送镜像；镜像地址里的 `127.0.0.1:18081` 由这个 Docker Engine 访问，指向本机 Harbor。
 
-云服务器上的 Jenkins 和部署脚本运行在 `1.117.232.198`，它们看到的 `127.0.0.1` 是云服务器自己，不是 Windows 本机。如果要让云端 Jenkins 自动 push/pull 本机 Harbor，需要保持一个从本机到云服务器的反向 SSH 隧道：
+云服务器上的 Docker 和部署脚本运行在 `1.117.232.198`，它们看到的 `127.0.0.1` 是云服务器自己。云端拉取本机 Harbor 镜像，仍需要本机到云服务器的反向 SSH 隧道：
 
-```powershell
-ssh -N -T -i "C:\Users\huang\Documents\云服务器\.ssh\agent.pem" `
-  -o IdentitiesOnly=yes `
-  -o ExitOnForwardFailure=yes `
-  -R 127.0.0.1:18081:127.0.0.1:18081 `
-  ubuntu@1.117.232.198
+```text
+云端 127.0.0.1:18081
+  -> SSH 反向隧道
+  -> WSL DockerEngine 的 127.0.0.1:18081
+  -> Harbor
 ```
 
-有这条隧道时，云服务器上的 `127.0.0.1:18081` 会转发到本机 Harbor。没有这条隧道时，云端 Jenkins 的 registry login/push/pull 会失败。
+这条隧道由 WSL 的 `jenkins-tunnel-registry.service` 维护。隧道中断时，本机仍可构建和推送，但云服务器不能拉取镜像，部署会失败。
 
-Jenkins 控制器运行在云服务器的 Docker 容器里，容器内的 `127.0.0.1` 是 Jenkins 容器本身。为了让控制器也能检查 Harbor，云服务器上需要保留一个桥接转发：
+云服务器上保留 `jenkins-harbor-bridge.service`，供需要访问仓库的云端容器通过 Docker 网桥地址使用：
 
 ```text
 172.17.0.1:18081 -> 127.0.0.1:18081
 ```
 
-本机维护脚本：
+部署 SSH 连接也保留独立隧道，由 `jenkins-tunnel-deploy.service` 维护：
 
 ```text
-C:\Users\huang\harbor-local\start-harbor-tunnel.ps1
+本机 Agent -> WSL Docker 网桥 172.17.0.1:10022
+  -> SSH 本地转发 -> 云服务器 127.0.0.1:22
+```
+
+Jenkins 控制器迁到本机后，云端 `8080` 只转发 UI、API 和 GitHub Webhook。完整链路与恢复方式见 [本机 Jenkins 控制器](jenkins-local-controller.md)。
+
+在 PowerShell 中查看两条保留隧道的状态：
+
+```powershell
+wsl -d DockerEngine -- systemctl status jenkins-tunnel-registry.service jenkins-tunnel-deploy.service --no-pager
 ```
 
 ## 镜像发布流程
 
-Jenkins agent 容器执行镜像构建和推送：
+本机 Jenkins 调度临时 Agent；Agent 通过本机 Docker Engine 执行镜像构建和推送：
 
 ```text
 docker build -t 127.0.0.1:18081/personal-homepage/personal-homepage:<commit> \
