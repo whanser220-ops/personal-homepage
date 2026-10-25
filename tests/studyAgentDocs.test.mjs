@@ -35,6 +35,14 @@ test("accepts expandable function and provider-hosted tools, without interpretin
   assert.equal(document.overview.lead, '<script>alert("text only")</script>');
 });
 
+test("accepts microsecond deployment receipts and bounded nanosecond ISO timestamps", () => {
+  const document = documentFixture();
+  document.deployment.verifiedAt = "2026-10-25T04:25:30.610132Z";
+  document.generatedAt = "2026-10-25T12:27:38.123456789+08:00";
+  assert.equal(document.generatedAt.length, 35);
+  assert.equal(validateStudyAgentDocs(document), document);
+});
+
 const invalidDocuments = [
   ["unsupported schema", (doc) => { doc.schemaVersion = 2; }],
   ["short revision", (doc) => { doc.revision = "abcdef"; }],
@@ -46,6 +54,8 @@ const invalidDocuments = [
   ["wrong generator", (doc) => { doc.generator.engine = "external"; }],
   ["unknown nested field", (doc) => { doc.generator.apiKey = "must not pass"; }],
   ["invalid ISO timestamp", (doc) => { doc.generatedAt = "yesterday"; }],
+  ["more than nine fractional digits", (doc) => { doc.deployment.verifiedAt = "2026-10-25T04:25:30.1234567890Z"; }],
+  ["timestamp over the total length limit", (doc) => { doc.generatedAt = "2026-10-25T12:27:38.1234567890+08:00"; }],
   ["normalized invalid date", (doc) => { doc.generatedAt = "2026-02-30T00:00:00Z"; }],
   ["invalid deployment time", (doc) => { doc.deployment.verifiedAt = "2026-01-01"; }],
   ["wrong runtime", (doc) => { doc.deployment.runtime = "other"; }],

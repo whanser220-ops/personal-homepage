@@ -8,7 +8,7 @@ export const MAX_STUDY_AGENT_DOCS_BYTES = 512 * 1024;
 const REVISION = /^[a-f0-9]{40}$/;
 const SOURCE_DIGEST = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,79}$/;
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 const BAD_CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
 const UNSAFE_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 
