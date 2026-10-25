@@ -8,6 +8,13 @@ services:
     env_file:
       - ${ENV_FILE:-/etc/personal-homepage/app.env}
       - ${MONITOR_ENV_FILE:-/etc/personal-homepage-monitor/web.env}
+    environment:
+      STUDY_AGENT_DOCS_FILE: /app/study-agent-docs/current.json
+    volumes:
+      - type: bind
+        source: /var/lib/study-agent-remote/documentation/public
+        target: /app/study-agent-docs
+        read_only: true
     ports:
       - "127.0.0.1:${HOST_PORT:-3000}:3000"
     networks:

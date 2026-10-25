@@ -13,7 +13,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN node --test tests/home-render*.test.mjs tests/monitor*.test.mjs && npm run build
+RUN node --test tests/home-render*.test.mjs tests/monitor*.test.mjs tests/studyAgentDocs.test.mjs && npm run build
 
 FROM node:26-bookworm-slim AS runner
 
