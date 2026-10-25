@@ -83,9 +83,31 @@ function text(input, length = 128, nullable = false) {
   return nullable && !input ? null : input;
 }
 
-function vector(data) {
-  if (data.resultType !== "vector") throw new Error("invalid_prometheus_response");
-  return data.result.filter((entry) => entry?.metric?.host_id === MONITOR_HOST_ID && typeof entry.metric.__name__ === "string" && entry.metric.__name__.startsWith(PREFIX) && Array.isArray(entry.value));
+function groupMetric(name, group) {
+  return group === "host" ? name.startsWith(PREFIX + "host_") : /^server_monitor_(checks_|container_|service_)/.test(name);
+}
+
+function scrapeFrames(data, groups = ["host", "checks"]) {
+  if (data.resultType !== "matrix") throw new Error("invalid_prometheus_response");
+  const series = data.result.filter((entry) => entry?.metric?.host_id === MONITOR_HOST_ID && typeof entry.metric.__name__ === "string" && entry.metric.__name__.startsWith(PREFIX));
+  for (const entry of series) {
+    if (!Array.isArray(entry.values) || entry.values.length > 64 || entry.values.some((pair) => !Array.isArray(pair) || pair.length !== 2 || !Number.isFinite(Number(pair[0])))) throw new Error("invalid_prometheus_response");
+  }
+  const entries = [];
+  for (const group of groups) {
+    const captures = series.filter((entry) => entry.metric.__name__ === `${PREFIX}${group}_collected_at_seconds` && entry.values.length);
+    // More than one capture series means multiple targets claim this host;
+    // never silently choose a different exporter or merge two scrape batches.
+    if (captures.length > 1) throw new Error("ambiguous_prometheus_series");
+    if (!captures.length) continue;
+    const frame = Math.max(...captures[0].values.map((pair) => Math.round(Number(pair[0]) * 1000)));
+    for (const entry of series.filter((item) => groupMetric(item.metric.__name__, group))) {
+      const pairs = entry.values.filter((pair) => Math.round(Number(pair[0]) * 1000) === frame);
+      if (pairs.length > 1) throw new Error("ambiguous_prometheus_series");
+      if (pairs.length) entries.push({ metric: entry.metric, value: pairs[0] });
+    }
+  }
+  return entries;
 }
 
 function one(entries, name, labels = {}) {
@@ -107,10 +129,11 @@ function info(entries, name, identity, max) {
 
 function numeric(entries, name, labels = {}, max) { return value(one(entries, name, labels)?.value?.[1], max); }
 
-// Successful scrapes use normal instant-vector staleness rules: an omitted
-// gauge remains null and an old image/status label cannot return. Only a whole
-// missing snapshot falls back to its last capture timestamp and an instant
-// query at that original scrape; old values keep their real age across restart.
+// Prometheus can retain an old info label for its 5 minute lookback after a
+// restart because its scrape cache no longer knows to mark that label stale.
+// A raw range selector exposes actual sample times: select only metrics from
+// the exact host/check capture-gauge scrape frame, including null omissions.
+// Older snapshots use the same atomic selection and keep their true age.
 async function restoreMissingSnapshots(entries, now, query) {
   const missing = ["host", "checks"].filter((group) => captured(entries, group, now) === null);
   if (!missing.length) return entries;
@@ -123,14 +146,14 @@ async function restoreMissingSnapshots(entries, now, query) {
     const seconds = value(candidates[0]?.value?.[1]);
     if (seconds === null || seconds * 1000 < now - MONITOR_RETENTION_MS || seconds * 1000 > now + 60_000) return [];
     const pattern = group === "host" ? "server_monitor_host_.+" : "server_monitor_(checks_.+|container_.+|service_.+)";
-    return vector(await query("/api/v1/query", { query: `{__name__=~"${pattern}",host_id="${MONITOR_HOST_ID}"}`, time: String(seconds + 0.001) }));
+    return scrapeFrames(await query("/api/v1/query", { query: `{__name__=~"${pattern}",host_id="${MONITOR_HOST_ID}"}[60s]`, time: String(seconds + 0.001) }), [group]);
   }));
   return [...entries.filter((entry) => !missing.some((group) => group === "host" ? entry.metric.__name__.startsWith(PREFIX + "host_") : /^server_monitor_(checks_|container_|service_)/.test(entry.metric.__name__))), ...restored.flat()];
 }
 
 export async function readPrometheusCurrent(now = Date.now(), options = {}) {
   const query = context(options);
-  const entries = await restoreMissingSnapshots(vector(await query("/api/v1/query", { query: `{__name__=~"server_monitor_.+",host_id="${MONITOR_HOST_ID}"}`, time: String(now / 1000) })), now, query);
+  const entries = await restoreMissingSnapshots(scrapeFrames(await query("/api/v1/query", { query: `{__name__=~"server_monitor_.+",host_id="${MONITOR_HOST_ID}"}[60s]`, time: String(now / 1000) })), now, query);
   const hostTime = captured(entries, "host", now), checksTime = captured(entries, "checks", now);
   let sample = null;
   if (hostTime !== null) {

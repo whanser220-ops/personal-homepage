@@ -10,6 +10,7 @@ function metric(name, number, labels = {}, at = NOW) {
   return { metric: { __name__: `server_monitor_${name}`, host_id: HOST, ...labels }, value: [at / 1000, String(number)] };
 }
 function vector(result) { return { resultType: "vector", result }; }
+function matrix(entries, at) { return { resultType: "matrix", result: entries.map((entry) => ({ metric: entry.metric, values: [[at === undefined ? entry.value[0] : at / 1000, entry.value[1]]] })) }; }
 function snapshot(hostTime = NOW - 1000, checksTime = NOW - 12_000) {
   return [
     metric("host_collected_at_seconds", hostTime / 1000), metric("checks_collected_at_seconds", checksTime / 1000),
@@ -24,7 +25,7 @@ function snapshot(hostTime = NOW - 1000, checksTime = NOW - 12_000) {
     metric("service_http_status", 303, { id: "jenkins" }), metric("service_latency_ms", 7, { id: "jenkins" }),
   ];
 }
-function fixed(entries) { return { env, request: async () => vector(entries) }; }
+function fixed(entries) { return { env, request: async (_settings, _path, params) => params.query.includes("last_over_time") ? vector([]) : matrix(entries) }; }
 
 test("private Prometheus URL has a fixed port and no DNS, credentials, paths or proxy target", () => {
   assert.equal(prometheusSettings(env).origin, "http://172.30.0.1:19091");
@@ -81,21 +82,74 @@ test("successful scrape omissions cannot resurrect old resource values or change
   const current = await readPrometheusCurrent(NOW, { env, request: async (_settings, _path, params) => {
     calls++;
     assert.doesNotMatch(params.query, /last_over_time/);
-    return vector(entries);
+    return matrix(entries);
   } });
   assert.equal(calls, 1);
   assert.equal(current.sample.containers[0].cpuPercent, null);
   assert.equal(current.sample.containers.length, 1);
 });
 
+test("Prometheus restart orphan labels and omitted gauges cannot cross the latest raw scrape frame", async () => {
+  const hostFrame = NOW - 1200, checksFrame = NOW - 12_000;
+  const data = matrix(snapshot(hostFrame + 1, checksFrame + 1).filter((entry) => !entry.metric.__name__.endsWith("container_cpu_percent")));
+  for (const entry of data.result) entry.values[0][0] = (entry.metric.__name__.startsWith("server_monitor_host_") ? hostFrame : checksFrame) / 1000;
+  data.result.push(...matrix([
+    metric("container_info", 1, { name: "website", image: "website:old", state: "exited", health: "unknown" }),
+    metric("container_cpu_percent", 99, { name: "website" }),
+    metric("service_info", 1, { id: "jenkins", name: "Jenkins", kind: "http", status: "unhealthy", detail: "old result" }),
+  ], checksFrame - 15_000).result);
+  data.result.push(...matrix([
+    metric("host_info", 1, { hostname: "old-server", mount: "/old", interface: "eth1" }),
+    metric("host_memory_available_bytes", 1500),
+  ], hostFrame - 3000).result);
+  let calls = 0;
+  const current = await readPrometheusCurrent(NOW, { env, request: async (_settings, _path, params) => {
+    calls++;
+    assert.match(params.query, /\[60s\]$/);
+    return data;
+  } });
+  assert.equal(calls, 1);
+  assert.equal(current.sample.host.hostname, "server");
+  assert.equal(current.sample.host.memory.availableBytes, null);
+  assert.equal(current.sample.containers.length, 1);
+  assert.equal(current.sample.containers[0].image, "website:abc123");
+  assert.equal(current.sample.containers[0].cpuPercent, null);
+  assert.equal(current.sample.services.length, 1);
+  assert.equal(current.sample.services[0].status, "reachable");
+  assert.equal(Date.parse(current.sample.collectedAt), hostFrame + 1);
+  assert.equal(Date.parse(current.sample.checksCollectedAt), checksFrame + 1);
+});
+
+test("raw scrape frame preserves the outage grace and separate host/check capture ages", async () => {
+  const hostFrame = NOW - 30_000, checksFrame = NOW - 20_000;
+  const data = matrix(snapshot(hostFrame + 1, checksFrame + 1));
+  for (const entry of data.result) entry.values[0][0] = (entry.metric.__name__.startsWith("server_monitor_host_") ? hostFrame : checksFrame) / 1000;
+  const options = { env, request: async () => data };
+  const grace = await readPrometheusCurrent(NOW, options);
+  assert.equal(grace.stale, false);
+  assert.equal(grace.checksStale, false);
+  const expired = await readPrometheusCurrent(NOW + 20_000, options);
+  assert.equal(expired.stale, true);
+  assert.equal(expired.checksStale, false);
+  assert.equal(expired.sample.collectedAt, grace.sample.collectedAt);
+});
+
+test("multiple capture series and duplicate samples within one selected frame fail explicitly", async () => {
+  await assert.rejects(readPrometheusCurrent(NOW, fixed([...snapshot(), metric("host_collected_at_seconds", NOW / 1000, { instance: "other-target" })])), /ambiguous/);
+  const data = matrix(snapshot());
+  const cpu = data.result.find((entry) => entry.metric.__name__ === "server_monitor_host_cpu_percent");
+  cpu.values.push([...cpu.values[0]]);
+  await assert.rejects(readPrometheusCurrent(NOW, { env, request: async () => data }), /ambiguous/);
+});
+
 test("exporter outage restores a whole last snapshot at its original time, preserving the 45 second grace", async () => {
   const capture = NOW - 30_000, calls = [];
   const current = await readPrometheusCurrent(NOW, { env, request: async (_settings, _path, params) => {
     calls.push(params);
-    if (calls.length === 1) return vector(snapshot().filter((entry) => /^server_monitor_(checks_|service_|container_)/.test(entry.metric.__name__)));
+    if (calls.length === 1) return matrix(snapshot().filter((entry) => /^server_monitor_(checks_|service_|container_)/.test(entry.metric.__name__)));
     if (calls.length === 2) return vector([{ metric: { host_id: HOST, monitor_group: "host" }, value: [NOW / 1000, String(capture / 1000)] }]);
     assert.equal(Number(params.time), capture / 1000 + 0.001);
-    return vector(snapshot(capture).filter((entry) => entry.metric.__name__.startsWith("server_monitor_host_")));
+    return matrix(snapshot(capture).filter((entry) => entry.metric.__name__.startsWith("server_monitor_host_")), capture);
   } });
   assert.equal(calls.length, 3);
   assert.equal(current.stale, false);
@@ -108,12 +162,35 @@ test("outage beyond 45 seconds remains stale after historical snapshot retrieval
   const capture = NOW - 61_000;
   const current = await readPrometheusCurrent(NOW, { env, request: async (_settings, _path, params) => {
     if (params.query.includes("last_over_time")) return vector(["host", "checks"].map((group) => ({ metric: { host_id: HOST, monitor_group: group }, value: [NOW / 1000, String(capture / 1000)] })));
-    if (Number(params.time) === NOW / 1000) return vector([]);
-    return vector(snapshot(capture, capture).filter((entry) => params.query.includes("server_monitor_host_.+") ? entry.metric.__name__.startsWith("server_monitor_host_") : /^server_monitor_(checks_|service_|container_)/.test(entry.metric.__name__)));
+    if (Number(params.time) === NOW / 1000) return matrix([]);
+    return matrix(snapshot(capture, capture).filter((entry) => params.query.includes("server_monitor_host_.+") ? entry.metric.__name__.startsWith("server_monitor_host_") : /^server_monitor_(checks_|service_|container_)/.test(entry.metric.__name__)), capture);
   } });
   assert.equal(current.stale, true);
   assert.equal(current.checksStale, true);
   assert.equal(Date.parse(current.sample.collectedAt), capture);
+});
+
+test("historical outage fallback also excludes labels and gauges outside its original raw frame", async () => {
+  const capture = NOW - 180_000, frame = capture - 1;
+  const current = await readPrometheusCurrent(NOW, { env, request: async (_settings, _path, params) => {
+    if (params.query.includes("last_over_time")) return vector(["host", "checks"].map((group) => ({ metric: { host_id: HOST, monitor_group: group }, value: [NOW / 1000, String(capture / 1000)] })));
+    if (Number(params.time) === NOW / 1000) return matrix([]);
+    assert.match(params.query, /\[60s\]$/);
+    const host = params.query.includes("server_monitor_host_.+");
+    const items = snapshot(capture, capture).filter((entry) => host ? entry.metric.__name__.startsWith("server_monitor_host_") : /^server_monitor_(checks_|service_|container_)/.test(entry.metric.__name__));
+    const data = matrix(items.filter((entry) => !entry.metric.__name__.endsWith("container_cpu_percent")), frame);
+    if (!host) data.result.push(...matrix([
+      metric("container_info", 1, { name: "website", image: "website:orphan", state: "exited", health: "unknown" }),
+      metric("container_cpu_percent", 77, { name: "website" }),
+    ], frame - 15_000).result);
+    return data;
+  } });
+  assert.equal(current.stale, true);
+  assert.equal(current.checksStale, true);
+  assert.equal(Date.parse(current.sample.collectedAt), capture);
+  assert.equal(current.sample.containers.length, 1);
+  assert.equal(current.sample.containers[0].image, "website:abc123");
+  assert.equal(current.sample.containers[0].cpuPercent, null);
 });
 
 test("no retained capture returns no sample, not fabricated fresh data", async () => {
@@ -132,14 +209,14 @@ test("wrong-host data cannot be displayed and duplicate metric targets fail expl
 
 test("Prometheus errors and malformed result types propagate instead of returning legacy current", async () => {
   await assert.rejects(readPrometheusCurrent(NOW, { env, request: async () => { throw new Error("offline"); } }), /offline/);
-  await assert.rejects(readPrometheusCurrent(NOW, { env, request: async () => ({ resultType: "matrix", result: [] }) }), /invalid_prometheus/);
+  await assert.rejects(readPrometheusCurrent(NOW, { env, request: async () => ({ resultType: "vector", result: [] }) }), /invalid_prometheus/);
 });
 
 test("current queries keep the short timeout while historical aggregation has a bounded longer allowance", async () => {
   await readPrometheusCurrent(NOW, { env, request: async (_settings, _path, params, signal) => {
     assert.equal(params.timeout, "5s");
     assert.equal(signal.aborted, false);
-    return vector(snapshot());
+    return matrix(snapshot());
   } });
   await readPrometheusHistory("7d", NOW, { env, request: async (_settings, path, params, signal) => {
     assert.equal(params.timeout, "8s");
