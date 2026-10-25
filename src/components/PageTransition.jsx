@@ -85,7 +85,9 @@ export function PageTransition({ children }) {
   useEffect(() => {
     cancelTransition();
     const content = contentRef.current;
-    if (!content || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    // The homepage owns its coffee-to-scene entrance; avoid a second full-page
+    // blur/scale animation while its canvas and renderer are warming up.
+    if (!content || pathname === "/" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       return cancelTransition;
     }
 

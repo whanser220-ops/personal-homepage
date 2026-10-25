@@ -107,25 +107,83 @@ function createRoomEnvironment(renderer) {
   }
 }
 
-export function createCafeScene(host, onPlayerPosition, onReady) {
+export function createCafeScene(host, onPlayerPosition, onReady, options = {}) {
   const startedAt = performance.now();
   host.dataset.sceneState = "initializing";
   let disposed = false,
+    failed = false,
     frame = 0,
     loaded = false,
     visible = true,
     contextLost = false,
     navigationActive = false,
+    presented = options.initiallyPresented ?? true,
     needsRender = true;
+  let renderer, scene, environment, ao, tank, coffee, sun, root;
+  let modelManager, sizeObserver, intersection, stopObservingNavigation;
+  let detachListeners = () => {};
+  function cleanup() {
+    if (disposed) return;
+    disposed = true;
+    stopObservingNavigation?.();
+    cancelAnimationFrame(frame);
+    frame = 0;
+    modelManager?.abort?.();
+    sizeObserver?.disconnect();
+    intersection?.disconnect();
+    detachListeners();
+    for (const key of ["ready", "sceneFrames", "sceneCaptures", "sceneAOUpdates", "scenePixelRatio", "sceneNavigationPaused", "scenePresentationPaused", "sceneState", "sceneModelMs", "sceneFirstFrameMs"]) delete host.dataset[key];
+    tank?.dispose();
+    coffee?.dispose();
+    ao?.dispose();
+    if (scene) {
+      scene.environment = null;
+      disposeTree(scene);
+    }
+    if (root && root.parent !== scene) disposeTree(root);
+    environment?.dispose();
+    sun?.shadow.dispose();
+    renderer?.dispose();
+    renderer?.domElement.remove();
+    if (failed) host.dataset.sceneState = "error";
+  }
+  cleanup.setPresented = () => {};
+  function fail(error) {
+    if (disposed || failed) return;
+    failed = true;
+    loaded = false;
+    cancelAnimationFrame(frame);
+    frame = 0;
+    delete host.dataset.ready;
+    host.dataset.sceneState = "error";
+    const reason = error instanceof Error ? error : new Error(String(error));
+    // Release after the current render/loader stack unwinds, so its finally
+    // blocks can still restore renderer state before resources are disposed.
+    queueMicrotask(cleanup);
+    onReady?.(false);
+    options.onError?.(reason);
+    console.error("Cafe scene unavailable.", reason);
+  }
+  try {
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const renderer = new THREE.WebGLRenderer({
+  renderer = new THREE.WebGLRenderer({
     antialias: true,
     alpha: false,
     powerPreference: "low-power",
   });
+  renderer.debug.onShaderError = () => {
+    throw new Error("Cafe scene shader compilation failed.");
+  };
   // Start I/O before the synchronous environment/effect setup. The homepage
   // also preloads this URL so a cold visit overlaps it with the renderer chunk.
-  const modelLoad = new GLTFLoader().loadAsync("/assets/home-scene/afternoon-room.glb");
+  modelManager = new THREE.LoadingManager();
+  // GLTFLoader tolerates failed image decoding by returning a null texture.
+  // The manager still reports that failure, so an incomplete room is not ready.
+  modelManager.onError = url => fail(new Error(`Cafe scene resource could not be loaded: ${url}`));
+  new GLTFLoader(modelManager)
+    .loadAsync("/assets/home-scene/afternoon-room.glb")
+    .then(onModelLoaded)
+    .catch(fail);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
   renderer.shadowMap.enabled = true;
@@ -133,13 +191,13 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   renderer.shadowMap.autoUpdate = false;
   renderer.domElement.setAttribute("aria-hidden", "true");
   host.appendChild(renderer.domElement);
-  const scene = new THREE.Scene();
+  scene = new THREE.Scene();
   scene.background = new THREE.Color("#d5bba0");
-  let environment = createRoomEnvironment(renderer);
+  environment = createRoomEnvironment(renderer);
   scene.environment = environment.texture;
   const camera = new THREE.OrthographicCamera(-10, 10, 12.71, 0, 0.1, 70);
   const target = new THREE.Vector3(0, 6.355, 0);
-  const sun = new THREE.DirectionalLight(0xffffff, 1);
+  sun = new THREE.DirectionalLight(0xffffff, 1);
   sun.position.set(7, 14, 12);
   sun.target.position.set(0, 6, 0);
   sun.castShadow = true;
@@ -159,13 +217,12 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   sun.shadow.radius = 2.5;
   const sky = new THREE.HemisphereLight(0xe0efff, 0xb7a18b, 0.85);
   scene.add(sun, sun.target, sky);
-  const ao = createCafeAO(renderer, scene, camera);
-  const tank = createInsetWater(renderer, scene);
-  const coffee = createIcedCoffee(renderer, scene);
+  ao = createCafeAO(renderer, scene, camera);
+  tank = createInsetWater(renderer, scene);
+  coffee = createIcedCoffee(renderer, scene);
   const clock = createFrameClock();
   let lastDraw, lastCapture = -Infinity, animationSeconds = 0;
   let frames = 0, captures = 0, lastDiagnostics = -Infinity;
-  let root;
   const dustGeometry = new THREE.BufferGeometry();
   const positions = new Float32Array(45 * 3);
   let seed = 91;
@@ -198,12 +255,15 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     host.dataset.sceneAOUpdates = String(ao.maskUpdates);
     host.dataset.scenePixelRatio = renderer.getPixelRatio().toFixed(2);
     host.dataset.sceneNavigationPaused = String(navigationActive);
+    host.dataset.scenePresentationPaused = String(!presented);
   }
   function draw(time = 0) {
     frame = 0;
-    if (disposed || contextLost || !loaded || !visible || document.hidden) return;
-    if (navigationActive && !needsRender) return;
+    if (disposed || failed || contextLost || !loaded || !visible || document.hidden) return;
+    if ((!presented || navigationActive) && !needsRender) return;
     if (!clock.due(time)) { schedule(); return; }
+    try {
+    if (renderer.getContext().isContextLost()) { onContextLost(); return; }
     const frameMs = lastDraw === undefined ? 0 : time - lastDraw;
     lastDraw = time;
     if (!reduced.matches) animationSeconds += Math.min(frameMs, 50) / 1000;
@@ -219,6 +279,8 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
       captures++;
     }
     coffee.render(camera, ao.apply);
+    if (failed) return;
+    if (renderer.getContext().isContextLost()) { onContextLost(); return; }
     needsRender = false;
     frames++;
     // Local diagnostic counters make the render budget observable without
@@ -234,9 +296,13 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
       onReady?.(true);
     }
     if (!reduced.matches) schedule();
+    } catch (error) {
+      if (renderer.getContext().isContextLost()) onContextLost();
+      else fail(error);
+    }
   }
   function schedule() {
-    if (!frame && loaded && !disposed && !contextLost && visible && !document.hidden && (!navigationActive || needsRender)) frame = requestAnimationFrame(draw);
+    if (!frame && loaded && !disposed && !failed && !contextLost && visible && !document.hidden && ((!navigationActive && presented) || needsRender)) frame = requestAnimationFrame(draw);
   }
   function refresh() {
     needsRender = true;
@@ -284,7 +350,8 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     } else refresh();
   }
   function onContextLost(event) {
-    event.preventDefault();
+    event?.preventDefault?.();
+    if (disposed || failed || contextLost) return;
     contextLost = true;
     delete host.dataset.ready;
     host.dataset.sceneState = "context-lost";
@@ -293,6 +360,7 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     frame = 0;
   }
   function onContextRestored() {
+    if (disposed || failed) return;
     try {
       // Render-target pixels have no CPU source to re-upload after context loss.
       // Rebuild the environment before replacing the static preview with 3D.
@@ -304,13 +372,12 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
       renderer.shadowMap.needsUpdate = true;
       refresh();
     } catch (error) {
-      host.dataset.sceneState = "error";
-      console.error("Cafe environment could not be restored.", error);
+      fail(error);
     }
   }
-  const sizeObserver = new ResizeObserver(resize);
+  sizeObserver = new ResizeObserver(resize);
   sizeObserver.observe(host);
-  const intersection = new IntersectionObserver(([entry]) => {
+  intersection = new IntersectionObserver(([entry]) => {
     visible = entry.isIntersecting;
     if (visible) refresh();
     else {
@@ -323,7 +390,13 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   reduced.addEventListener("change", onMotion);
   renderer.domElement.addEventListener("webglcontextlost", onContextLost);
   renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
-  const stopObservingNavigation = observeNavigationActivity(
+  detachListeners = () => {
+    document.removeEventListener("visibilitychange", onVisibility);
+    reduced.removeEventListener("change", onMotion);
+    renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
+    renderer.domElement.removeEventListener("webglcontextrestored", onContextRestored);
+  };
+  stopObservingNavigation = observeNavigationActivity(
     document.querySelector('nav[data-collapsible="true"]'),
     active => {
       navigationActive = active;
@@ -338,11 +411,25 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
       }
     },
   );
+  cleanup.setPresented = value => {
+    if (disposed || failed) return;
+    const next = Boolean(value);
+    if (presented === next) return;
+    presented = next;
+    updateDiagnostics();
+    if (!next && !needsRender) {
+      cancelAnimationFrame(frame);
+      frame = 0;
+    } else if (next) {
+      clock.reset();
+      lastDraw = undefined;
+      schedule();
+    }
+  };
   resize();
   host.dataset.sceneState = "loading-model";
-  modelLoad
-    .then((gltf) => {
-      if (disposed) {
+  function onModelLoaded(gltf) {
+      if (disposed || failed) {
         disposeTree(gltf.scene);
         return;
       }
@@ -372,41 +459,11 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
       host.dataset.sceneState = "rendering";
       host.dataset.sceneModelMs = String(Math.round(performance.now() - startedAt));
       schedule();
-    })
-    .catch((error) => {
-      if (!disposed) {
-        host.dataset.sceneState = "error";
-        onReady?.(false);
-        console.error("Cafe scene unavailable.", error);
-      }
-    });
-  return () => {
-    disposed = true;
-    stopObservingNavigation();
-    cancelAnimationFrame(frame);
-    delete host.dataset.ready;
-    sizeObserver.disconnect();
-    intersection.disconnect();
-    document.removeEventListener("visibilitychange", onVisibility);
-    reduced.removeEventListener("change", onMotion);
-    renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
-    renderer.domElement.removeEventListener("webglcontextrestored", onContextRestored);
-    delete host.dataset.sceneFrames;
-    delete host.dataset.sceneCaptures;
-    delete host.dataset.sceneAOUpdates;
-    delete host.dataset.scenePixelRatio;
-    delete host.dataset.sceneNavigationPaused;
-    delete host.dataset.sceneState;
-    delete host.dataset.sceneModelMs;
-    delete host.dataset.sceneFirstFrameMs;
-    tank.dispose();
-    coffee.dispose();
-    ao.dispose();
-    scene.environment = null;
-    environment.dispose();
-    disposeTree(scene);
-    sun.shadow.dispose();
-    renderer.dispose();
-    renderer.domElement.remove();
-  };
+  }
+  return cleanup;
+  } catch (error) {
+    fail(error);
+    cleanup();
+    return cleanup;
+  }
 }
