@@ -62,9 +62,10 @@ Google 出网继续通过原 `personal-homepage-monitor-proxy.socket` 的私网 
 Jenkins 正式发布按以下顺序执行：
 
 1. `install-server-monitor.py prepare` 备份 OAuth/旧采集器文件与状态，保留已有后端配置；`install-prometheus.py prepare` 独立备份新栈和网站环境，安装并用 `promtool check config` 校验，等待两个 scrape job 成功、两类采样时间新鲜、私网 relay 可查询。
-2. `cutover` 仅在验证成功后设置网站环境和首次切换时间；随后按原流程更新网站、白板、HTTP/HTTPS snippet，执行健康检查与 `nginx -t`，保留 Study Agent 和原代理。
-3. `verify-server-monitor.py` 验证页面、Google 配置、匿名读取 401、公网采集 404、新鲜 Prometheus 数据、监听地址，并从真实网站容器查询私网指标。
-4. `finalize` 再次确认新鲜数据后，停止并禁用 `personal-homepage-monitor.service` 旧推送采集器。最后对两个安装事务 `commit`，完成后清理安装备份。不会删除旧 SQLite、PostgreSQL 表、TSDB 或历史发行二进制。
+2. 切换前先运行 `verify-monitor-runtime.py --image <目标镜像>`：临时容器运行目标镜像真实的 `/app/server.js` 和编译后的 Next HTTP 路由，只在容器内部回环监听，不发布端口。只读挂载测试 preload，用内存中的固定伪会话和空旧历史替代数据库，既不注入生产数据库/Google 凭据，也不建立真实会话或写库；真实查询私网 Prometheus，要求匿名/伪造会话 401、当前值新鲜、3 个容器/11 个服务、三档历史点数及实际数据通过。无论通过或失败都按唯一 label 删除本次临时容器；该 preload 不挂到生产网站。
+3. 上述编译运行时验证通过后，`cutover` 才设置网站环境和首次切换时间；随后按原流程更新网站、白板、HTTP/HTTPS snippet，执行健康检查与 `nginx -t`，保留 Study Agent 和原代理。
+4. `verify-server-monitor.py` 验证页面、Google 配置、匿名读取 401、公网采集 404、新鲜 Prometheus 数据、监听地址，并从真实网站容器查询私网指标。
+5. `finalize` 再次确认新鲜数据后，停止并禁用 `personal-homepage-monitor.service` 旧推送采集器。最后对两个安装事务 `commit`，完成后清理安装备份。不会删除旧 SQLite、PostgreSQL 表、TSDB 或历史发行二进制。
 
 部署失败时先回退 Prometheus 事务，再回退旧监控/OAuth事务、Nginx 和上一个网站/白板镜像。Prometheus 事务位于 `/var/lib/personal-homepage-prometheus-deployment/`，旧事务位于 `/var/lib/personal-homepage-monitor-deployment/`，均为 0700，备份文件 0600。存在未结束事务时拒绝覆盖；应先核对失败构建和 metadata，再使用匹配版本 `rollback`，不能直接删除目录解除阻塞。
 

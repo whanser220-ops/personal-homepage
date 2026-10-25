@@ -255,6 +255,9 @@ monitor_prepared=1
 # website starts reading it. Its transaction also preserves legacy unit state.
 sudo python3 deploy/install-prometheus.py prepare
 prometheus_prepared=1
+# Exercise the actual compiled Next HTTP routes with an isolated in-memory
+# session fixture before changing web.env or replacing the production website.
+sudo python3 deploy/verify-monitor-runtime.py --image "$APP_IMAGE" --network "$DOCKER_NETWORK"
 sudo python3 deploy/install-prometheus.py cutover
 compose_cli -f "$COMPOSE_FILE" config >/dev/null
 
