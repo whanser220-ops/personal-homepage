@@ -1,22 +1,95 @@
 global:
   scrape_interval: 15s
-  scrape_timeout: 12s
-  evaluation_interval: 15s
+  scrape_timeout: 5s
+  evaluation_interval: 3s
+
+rule_files:
+  - /etc/personal-homepage-prometheus/node-host.rules.yml
 
 scrape_configs:
-  - job_name: server-monitor-host
+  - job_name: server-monitor-node
     scrape_interval: 3s
     scrape_timeout: 2s
-    metrics_path: /metrics/host
-    sample_limit: 256
+    sample_limit: 2048
     label_limit: 16
     static_configs:
-      - targets: ['127.0.0.1:19100']
-  - job_name: server-monitor-checks
+      - targets: ['127.0.0.1:19101']
+        labels:
+          host_id: cloud-primary
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'node_(cpu_seconds_total|load1|load5|load15|memory_(MemTotal|MemAvailable|SwapTotal|SwapFree)_bytes|filesystem_(size|avail|free)_bytes|disk_(read|written)_bytes_total|network_(receive|transmit)_bytes_total|boot_time_seconds|time_seconds|uname_info|exporter_build_info|scrape_collector_success)'
+        action: keep
+      - source_labels: [__name__, mountpoint]
+        regex: 'node_filesystem_.+;/.+'
+        action: drop
+  - job_name: server-monitor-cadvisor
     scrape_interval: 15s
-    scrape_timeout: 12s
-    metrics_path: /metrics/checks
+    scrape_timeout: 5s
+    honor_timestamps: false
     sample_limit: 1024
     label_limit: 16
     static_configs:
-      - targets: ['127.0.0.1:19100']
+      - targets: ['127.0.0.1:19102']
+        labels:
+          host_id: cloud-primary
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'container_(cpu_usage_seconds_total|memory_working_set_bytes|memory_usage_bytes|spec_memory_limit_bytes|last_seen)'
+        action: keep
+      - source_labels: [name]
+        regex: '/?(personal-homepage|personal-homepage-postgres|learning-whiteboard)'
+        action: keep
+      - regex: 'container_label_.+|container_env_.+'
+        action: labeldrop
+  - job_name: server-monitor-blackbox
+    scrape_interval: 15s
+    scrape_timeout: 4s
+    metrics_path: /probe
+    sample_limit: 64
+    label_limit: 16
+    static_configs:
+      - targets: ['http://127.0.0.1:3000/api/health']
+        labels: {host_id: cloud-primary, id: website, name: '个人网站', kind: http}
+      - targets: ['http://127.0.0.1:4310/whiteboard/health']
+        labels: {host_id: cloud-primary, id: whiteboard, name: '学习白板', kind: http}
+      - targets: ['http://127.0.0.1:8080/login']
+        labels: {host_id: cloud-primary, id: jenkins, name: Jenkins, kind: http}
+      - targets: ['http://127.0.0.1:4320/']
+        labels: {host_id: cloud-primary, id: study-agent-http, name: 'Study Agent HTTP', kind: http}
+      - targets: ['127.0.0.1:4321']
+        labels: {host_id: cloud-primary, id: remote-run-port, name: '远程运行端口', kind: tcp}
+      - targets: ['127.0.0.1:1666']
+        labels: {host_id: cloud-primary, id: perforce, name: Perforce, kind: tcp}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [__param_target]
+        target_label: target
+      - source_labels: [kind]
+        regex: http
+        target_label: __param_module
+        replacement: http_local
+      - source_labels: [kind]
+        regex: tcp
+        target_label: __param_module
+        replacement: tcp_local
+      - target_label: __address__
+        replacement: '127.0.0.1:19103'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'probe_(success|http_status_code|duration_seconds)'
+        action: keep
+  - job_name: server-monitor-custom
+    scrape_interval: 15s
+    scrape_timeout: 8s
+    honor_labels: true
+    metrics_path: /metrics/custom
+    sample_limit: 256
+    label_limit: 16
+    static_configs:
+      - targets: ['127.0.0.1:19104']
+        labels:
+          host_id: cloud-primary

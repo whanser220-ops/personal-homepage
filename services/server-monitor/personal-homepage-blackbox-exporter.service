@@ -1,0 +1,34 @@
+[Unit]
+Description=Fixed local HTTP and TCP probes from official blackbox_exporter
+After=network.target
+
+[Service]
+Type=simple
+User=monitor-blackbox
+Group=monitor-blackbox
+Environment=GOMEMLIMIT=48MiB
+ExecStart=/opt/personal-homepage-prometheus/exporters/blackbox_exporter-0.29.1/blackbox_exporter --config.file=/etc/personal-homepage-prometheus/blackbox.yml --web.listen-address=127.0.0.1:19103
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=localhost
+LockPersonality=true
+CapabilityBoundingSet=
+MemoryMax=96M
+CPUQuota=10%
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

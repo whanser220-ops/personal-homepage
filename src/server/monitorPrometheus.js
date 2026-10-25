@@ -1,5 +1,6 @@
 import http from "node:http";
 import { buildMonitorHistoryPoints, MONITOR_HISTORY_RANGES, MONITOR_HOST_ID, MONITOR_RETENTION_MS } from "./monitorValidation.js";
+import { readStandardMonitorChecks, STANDARD_MONITOR_METRICS } from "./monitorStandardChecks.js";
 
 const PREFIX = "server_monitor_";
 const HOST_FIELDS = Object.freeze({
@@ -27,8 +28,14 @@ export function prometheusSettings(env = process.env) {
   const octets = url.hostname.split(".").map(Number);
   const numeric = /^\d+\.\d+\.\d+\.\d+$/.test(url.hostname) && octets.every((part) => Number.isInteger(part) && part >= 0 && part <= 255);
   const privateAddress = numeric && (url.hostname === "127.0.0.1" || octets[0] === 10 || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) || (octets[0] === 192 && octets[1] === 168));
-  if (url.protocol !== "http:" || !privateAddress || !["19090", "19091"].includes(url.port) || url.username || url.password || url.pathname !== "/" || url.search || url.hash) throw new Error("invalid_monitor_prometheus_url");
+  if (url.protocol !== "http:" || !privateAddress || !["19090", "19091", "19094", "19095"].includes(url.port) || url.username || url.password || url.pathname !== "/" || url.search || url.hash) throw new Error("invalid_monitor_prometheus_url");
   return { origin: url.origin };
+}
+
+export function monitorExporterMode(env = process.env) {
+  const mode = env.MONITOR_EXPORTER_MODE?.trim() || "legacy";
+  if (!["legacy", "standard"].includes(mode)) throw new Error("invalid_monitor_exporter_mode");
+  return mode;
 }
 
 function requestPrometheus(settings, path, params, signal) {
@@ -134,8 +141,8 @@ function numeric(entries, name, labels = {}, max) { return value(one(entries, na
 // A raw range selector exposes actual sample times: select only metrics from
 // the exact host/check capture-gauge scrape frame, including null omissions.
 // Older snapshots use the same atomic selection and keep their true age.
-async function restoreMissingSnapshots(entries, now, query) {
-  const missing = ["host", "checks"].filter((group) => captured(entries, group, now) === null);
+async function restoreMissingSnapshots(entries, now, query, groups = ["host", "checks"]) {
+  const missing = groups.filter((group) => captured(entries, group, now) === null);
   if (!missing.length) return entries;
   const discovery = missing.map((group) => `label_replace(last_over_time(${selector(`${group}_collected_at_seconds`)}[7d]),"monitor_group","${group}","","")`).join(" or ");
   const found = await query("/api/v1/query", { query: discovery, time: String(now / 1000) });
@@ -146,16 +153,23 @@ async function restoreMissingSnapshots(entries, now, query) {
     const seconds = value(candidates[0]?.value?.[1]);
     if (seconds === null || seconds * 1000 < now - MONITOR_RETENTION_MS || seconds * 1000 > now + 60_000) return [];
     const pattern = group === "host" ? "server_monitor_host_.+" : "server_monitor_(checks_.+|container_.+|service_.+)";
-    return scrapeFrames(await query("/api/v1/query", { query: `{__name__=~"${pattern}",host_id="${MONITOR_HOST_ID}"}[60s]`, time: String(seconds + 0.001) }), [group]);
+    // Host aliases are recorded up to one evaluation interval after the raw
+    // node sample. Include that bounded lag, but never substitute a different
+    // capture or advance its age to the recording evaluation timestamp.
+    const through = Math.min(now / 1000, seconds + 10);
+    const restored = scrapeFrames(await query("/api/v1/query", { query: `{__name__=~"${pattern}",host_id="${MONITOR_HOST_ID}"}[60s]`, time: String(through) }), [group]);
+    return captured(restored, group, now) === Math.round(seconds * 1000) ? restored : [];
   }));
   return [...entries.filter((entry) => !missing.some((group) => group === "host" ? entry.metric.__name__.startsWith(PREFIX + "host_") : /^server_monitor_(checks_|container_|service_)/.test(entry.metric.__name__))), ...restored.flat()];
 }
 
 export async function readPrometheusCurrent(now = Date.now(), options = {}) {
-  const query = context(options);
-  const entries = await restoreMissingSnapshots(scrapeFrames(await query("/api/v1/query", { query: `{__name__=~"server_monitor_.+",host_id="${MONITOR_HOST_ID}"}[60s]`, time: String(now / 1000) })), now, query);
+  const query = context(options), standard = monitorExporterMode(options.env) === "standard", groups = standard ? ["host"] : ["host", "checks"];
+  const names = standard ? `server_monitor_host_.+|${STANDARD_MONITOR_METRICS}` : "server_monitor_.+";
+  const raw = await query("/api/v1/query", { query: `{__name__=~"${names}",host_id="${MONITOR_HOST_ID}"}[60s]`, time: String(now / 1000) });
+  const entries = await restoreMissingSnapshots(scrapeFrames(raw, groups), now, query, groups);
   const hostTime = captured(entries, "host", now), checksTime = captured(entries, "checks", now);
-  let sample = null;
+  let sample = null, standardChecks = null;
   if (hostTime !== null) {
     const metadata = info(entries, "host_info", null, 1)[0] || {};
     const host = { hostname: text(metadata.hostname), cpu: {}, memory: {}, swap: {}, disk: { mount: text(metadata.mount) }, network: { interface: text(metadata.interface, 64, true) } };
@@ -176,8 +190,14 @@ export async function readPrometheusCurrent(now = Date.now(), options = {}) {
     }));
     sample = { hostId: MONITOR_HOST_ID, collectedAt: new Date(hostTime).toISOString(), host,
       checksCollectedAt: checksTime === null ? null : new Date(checksTime).toISOString(), containers, services };
+    if (standard) {
+      standardChecks = readStandardMonitorChecks(raw, now, host.memory.totalBytes);
+      sample = { ...sample, containers: standardChecks.containers, services: standardChecks.services, checksCollectedAt: standardChecks.checksCollectedAt };
+    }
   }
-  return { sample, stale: hostTime === null || now - hostTime > 45_000, checksStale: checksTime === null || now - checksTime > 45_000, serverTime: new Date(now).toISOString() };
+  if (standard && !standardChecks) standardChecks = readStandardMonitorChecks(raw, now);
+  return { sample, stale: hostTime === null || now - hostTime > 45_000,
+    checksStale: standard ? standardChecks.checksStale : checksTime === null || now - checksTime > 45_000, serverTime: new Date(now).toISOString() };
 }
 
 function aggregateQuery(durationMs) {

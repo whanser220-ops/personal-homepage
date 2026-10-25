@@ -1,56 +1,151 @@
 #!/usr/bin/env python3
-"""Loopback-only, pull-based Prometheus exporter. Python 3.10+ stdlib.
+"""Only project-specific Docker metadata and process checks. Python 3.10+.
 
-Prometheus owns the 3 s host / 15 s checks schedule. Only the proven, fixed
-read-only sampling functions are reused from collector.py; its push delivery,
-credentials, SQLite queue and main entry point are never invoked here.
+Prometheus scrapes /metrics/custom every 15 s. Host resources, container
+resources and HTTP/TCP probes belong to node_exporter, cAdvisor and blackbox.
+No host sampler, Docker stats, SQLite, push transport or credential is used.
+The legacy collector.py remains separate and is never imported by this service.
 """
 
 import argparse
 import concurrent.futures
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
 import logging
 import math
 import re
 import signal
+import subprocess
 import threading
 import time
 
-import collector
-
-
 LOGGER = logging.getLogger("server-monitor-exporter")
 LISTEN_HOST = "127.0.0.1"
-LISTEN_PORT = 19100
-PREFIX = "server_monitor_"
-HOST_FIELDS = (
-    ("host_cpu_percent", ("cpu", "percent")),
-    ("host_load1", ("cpu", "load1")),
-    ("host_load5", ("cpu", "load5")),
-    ("host_load15", ("cpu", "load15")),
-    ("host_cpu_cores", ("cpu", "cores")),
-    *(("host_memory_" + suffix, ("memory", field)) for suffix, field in (
-        ("total_bytes", "totalBytes"), ("available_bytes", "availableBytes"),
-        ("used_bytes", "usedBytes"), ("used_percent", "usedPercent"))),
-    *(("host_swap_" + suffix, ("swap", field)) for suffix, field in (
-        ("total_bytes", "totalBytes"), ("used_bytes", "usedBytes"), ("used_percent", "usedPercent"))),
-    *(("host_disk_" + suffix, ("disk", field)) for suffix, field in (
-        ("total_bytes", "totalBytes"), ("used_bytes", "usedBytes"),
-        ("available_bytes", "availableBytes"), ("used_percent", "usedPercent"),
-        ("read_bytes_per_second", "readBytesPerSecond"),
-        ("write_bytes_per_second", "writeBytesPerSecond"))),
-    ("host_network_rx_bytes_per_second", ("network", "rxBytesPerSecond")),
-    ("host_network_tx_bytes_per_second", ("network", "txBytesPerSecond")),
-    ("host_uptime_seconds", ("uptimeSeconds",)),
+LISTEN_PORT = 19104
+PREFIX = "server_monitor_custom_"
+PROBE_TIMEOUT = 3
+CACHE_MIN_SECONDS = 14
+CONTAINER_NAMES = ("personal-homepage", "learning-whiteboard", "personal-homepage-postgres")
+SYSTEMD_SERVICES = (
+    ("study-agent", "Study Agent 进程", "study-agent.service"),
+    ("study-agent-remote", "远程运行进程", "study-agent-remote.service"),
+    ("nginx", "Nginx 进程", "nginx.service"),
+    ("docker", "Docker 进程", "docker.service"),
 )
-CONTAINER_FIELDS = (
-    ("container_restart_count", "restartCount"),
-    ("container_cpu_percent", "cpuPercent"),
-    ("container_memory_bytes", "memoryBytes"),
-    ("container_memory_limit_bytes", "memoryLimitBytes"),
-    ("container_memory_percent", "memoryPercent"),
-)
-SERVICE_FIELDS = (("service_latency_ms", "latencyMs"), ("service_http_status", "httpStatus"))
+
+
+def command(argv, timeout=PROBE_TIMEOUT):
+    """Fixed, bounded read-only commands; never return or log stderr."""
+    try:
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False)
+        return result.returncode, result.stdout[:65536]
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        return None, ""
+
+
+def service_result(identifier, name, status="unknown", detail="探测未返回结果"):
+    return {"id": identifier, "name": name, "kind": "process", "status": status, "detail": detail}
+
+
+def collect_container_metadata():
+    # Docker's fixed Go template never includes Config.Env or Health.Log.
+    # Docker 29 treats an absent Health map key as a template error; index/with
+    # keeps containers without a configured health check in the same batch.
+    template = ('{"name":{{json .Name}},"containerId":{{json .Id}},"image":{{json .Config.Image}},'
+                '"state":{{json .State.Status}},"health":'
+                '{{with index .State "Health"}}{{json .Status}}{{else}}null{{end}},'
+                '"restartCount":{{.RestartCount}}}')
+    _, output = command(["docker", "inspect", "--format", template, *CONTAINER_NAMES])
+    inspected = {}
+    for line in output.splitlines():
+        try:
+            item = json.loads(line)
+            name = item["name"].lstrip("/")
+            if name in CONTAINER_NAMES:
+                inspected[name] = item
+        except (ValueError, TypeError, KeyError, AttributeError):
+            continue
+    containers = []
+    for name in CONTAINER_NAMES:
+        item = inspected.get(name, {})
+        identity = item.get("containerId")
+        image = item.get("image")
+        restarts = item.get("restartCount")
+        containers.append({
+            "name": name,
+            "containerId": identity if isinstance(identity, str) and re.fullmatch(r"[0-9a-f]{64}", identity) else None,
+            "image": image if isinstance(image, str) and len(image) <= 256 else None,
+            "state": item.get("state") if item.get("state") in ("created", "restarting", "running", "removing", "paused", "exited", "dead") else "unknown",
+            "health": item.get("health") if item.get("health") in ("healthy", "unhealthy", "starting") else "unknown",
+            "restartCount": restarts if isinstance(restarts, int) and not isinstance(restarts, bool) and 0 <= restarts <= 2 ** 53 - 1 else None,
+        })
+    return containers
+
+
+def systemd_probes():
+    # Preserve the existing process-only semantics, using one fixed field query.
+    units = [unit for _, _, unit in SYSTEMD_SERVICES]
+    code, output = command(["systemctl", "show", "--property=Id,LoadState,ActiveState", *units])
+    states, properties = {}, {}
+    if code is not None:
+        for line in [*output.splitlines(), ""]:
+            if not line.strip():
+                if properties.get("Id") in units:
+                    states[properties["Id"]] = properties
+                properties = {}
+            elif "=" in line:
+                key, value = line.split("=", 1)
+                if key in ("Id", "LoadState", "ActiveState"):
+                    properties[key] = value
+    results = []
+    for identifier, name, unit in SYSTEMD_SERVICES:
+        item = states.get(unit, {})
+        load, state = item.get("LoadState"), item.get("ActiveState")
+        if load == "not-found":
+            result = service_result(identifier, name, detail="systemd 单元不存在")
+        elif load in ("loaded", "masked") and state == "active":
+            result = service_result(identifier, name, "healthy", "systemd active；仅验证进程运行")
+        elif load in ("error", "bad-setting", "masked"):
+            result = service_result(identifier, name, "unhealthy", "systemd 单元无法加载")
+        elif load == "loaded" and state in ("inactive", "failed", "activating", "deactivating", "reloading", "maintenance"):
+            result = service_result(identifier, name, "unhealthy", "systemd " + state)
+        else:
+            result = service_result(identifier, name, detail="无法读取 systemd 进程状态")
+        results.append(result)
+    return results
+
+
+def postgres_probe():
+    # Only these non-secret identity variables are expanded inside the container;
+    # no environment or password is read back or exported. -q suppresses output.
+    probe = 'exec pg_isready -q -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-${POSTGRES_USER:-postgres}}"'
+    code, _ = command(["docker", "exec", "personal-homepage-postgres", "sh", "-c", probe])
+    if code == 0:
+        return service_result("postgres", "PostgreSQL", "healthy", "容器内 pg_isready 接受连接")
+    if code in (1, 2):
+        return service_result("postgres", "PostgreSQL", "unhealthy", "pg_isready 未通过")
+    return service_result("postgres", "PostgreSQL", detail="无法运行容器内 pg_isready")
+
+
+def collect_custom(executor):
+    # One HTTP coordinator submits exactly three leaf jobs to a persistent,
+    # three-worker pool. Each subprocess has its own 3 s deadline.
+    futures = [executor.submit(function) for function in
+               (collect_container_metadata, systemd_probes, postgres_probe)]
+    results = [None, None, None]
+    for index, future in enumerate(futures):
+        try:
+            results[index] = future.result()
+        except Exception:
+            LOGGER.warning("custom probe failed without a result")
+    if results[0] is None:
+        # Unknown metadata is preferable to inventing a container ID or state.
+        results[0] = [{"name": name} for name in CONTAINER_NAMES]
+    if results[1] is None:
+        results[1] = [service_result(identifier, name) for identifier, name, _ in SYSTEMD_SERVICES]
+    if results[2] is None:
+        results[2] = service_result("postgres", "PostgreSQL")
+    return {"containers": results[0], "services": [*results[1], results[2]]}
 
 
 def label_value(value):
@@ -87,80 +182,64 @@ class MetricsText:
         return ("\n".join(self.lines) + "\n").encode("utf-8")
 
 
-def render_host(host_id, host, captured_at):
+def render_custom(host_id, checks, captured_at):
     text = MetricsText()
     labels = {"host_id": host_id}
-    text.gauge("host_info", 1, {**labels, "hostname": host.get("hostname"),
-                               "mount": host.get("disk", {}).get("mount"),
-                               "interface": host.get("network", {}).get("interface")})
-    text.gauge("host_collected_at_seconds", captured_at, labels)
-    for suffix, path in HOST_FIELDS:
-        value = host
-        for field in path:
-            value = value.get(field) if isinstance(value, dict) else None
-        text.gauge(suffix, value, labels)
-    return text.encode()
-
-
-def render_checks(host_id, checks, captured_at):
-    text = MetricsText()
-    labels = {"host_id": host_id}
-    text.gauge("checks_collected_at_seconds", captured_at, labels)
+    text.gauge("collected_at_seconds", captured_at, labels)
     for container in checks["containers"]:
         identity = {**labels, "name": container["name"]}
-        text.gauge("container_info", 1, {**identity, **{
-            field: container.get(field) for field in ("image", "state", "health")}})
-        for suffix, field in CONTAINER_FIELDS:
-            text.gauge(suffix, container.get(field), identity)
+        if container.get("containerId"):
+            identity["container_id"] = container["containerId"]
+        text.gauge("container_info", 1, {**identity, "image": container.get("image"),
+                                       "state": container.get("state") or "unknown",
+                                       "health": container.get("health") or "unknown"})
+        text.gauge("container_restart_count", container.get("restartCount"), identity)
     for service in checks["services"]:
         identity = {**labels, "id": service["id"]}
         text.gauge("service_info", 1, {**identity, **{
             field: service.get(field) for field in ("name", "kind", "status", "detail")}})
-        for suffix, field in SERVICE_FIELDS:
-            text.gauge(suffix, service.get(field), identity)
     return text.encode()
 
 
 class Exporter:
-    """Independent bounded host/check paths; no queued or overlapping samples."""
-    def __init__(self, host_id="cloud-primary", interface=None, *, sampler=None,
-                 checks_sampler=None, clock=time.time):
+    """One bounded custom snapshot; no overlapping collection or task queue."""
+    def __init__(self, host_id="cloud-primary", *, custom_sampler=None, clock=time.time, monotonic=time.monotonic):
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", host_id):
             raise ValueError("invalid host id")
-        if interface and not re.fullmatch(r"[A-Za-z0-9_.-]{1,32}", interface):
-            raise ValueError("invalid network interface")
         self.host_id = host_id
         self.clock = clock
-        self.sampler = sampler or collector.HostSampler(interface=interface)
-        self.checks_sampler = checks_sampler or collector.collect_checks
-        self.probes = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="monitor-probe")
-        self.locks = {scope: threading.Lock() for scope in ("host", "checks")}
-        self.cache = {}
+        self.monotonic = monotonic
+        self.custom_sampler = custom_sampler or collect_custom
+        self.probes = concurrent.futures.ThreadPoolExecutor(max_workers=3, thread_name_prefix="monitor-custom")
+        self.lock = threading.Lock()
+        self.cache = None
+        self.next_capture_at = 0
 
-    def scrape(self, scope):
-        if scope not in self.locks:
-            raise ValueError("invalid metrics scope")
-        lock = self.locks[scope]
-        if not lock.acquire(blocking=False):
+    def scrape(self):
+        if not self.lock.acquire(blocking=False):
             # A duplicate scrape cannot extend a probe deadline or initiate
             # another batch. An old response keeps its old capture timestamp.
-            return self.cache.get(scope)
+            return self.cache
         try:
+            started = self.monotonic()
+            # Two Prometheus instances may briefly overlap during shadow
+            # validation. Keep their fixed commands from running twice per
+            # interval, with 1 s jitter margin for the normal 15 s scrape.
+            # Reused bytes retain the original capture timestamp and age.
+            if self.cache is not None and started < self.next_capture_at:
+                return self.cache
             captured_at = self.clock()
-            if scope == "host":
-                payload = render_host(self.host_id, self.sampler.sample(), captured_at)
-            else:
-                checks = self.checks_sampler(self.probes, lambda: collector.utc_iso(captured_at))
-                payload = render_checks(self.host_id, checks, captured_at)
-            self.cache[scope] = payload
+            payload = render_custom(self.host_id, self.custom_sampler(self.probes), captured_at)
+            self.cache = payload
+            self.next_capture_at = started + CACHE_MIN_SECONDS
             return payload
         except Exception:
             # Prometheus records up=0 for this scrape; never stamp cached or
             # fabricated values as a fresh collection after a failure.
-            LOGGER.warning("%s collection failed without telemetry", scope)
+            LOGGER.warning("custom collection failed without telemetry")
             return None
         finally:
-            lock.release()
+            self.lock.release()
 
     def close(self):
         self.probes.shutdown(wait=True, cancel_futures=True)
@@ -188,10 +267,10 @@ class MetricsHandler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self.respond(200, b"ok\n", "text/plain; charset=utf-8")
             return
-        if self.path not in ("/metrics/host", "/metrics/checks"):
+        if self.path != "/metrics/custom":
             self.respond(404, b"not found\n")
             return
-        payload = self.server.exporter.scrape(self.path.rsplit("/", 1)[-1])
+        payload = self.server.exporter.scrape()
         self.respond(200, payload) if payload is not None else self.respond(503, b"collection unavailable\n")
 
     def do_POST(self):
@@ -245,10 +324,10 @@ class MetricsServer(ThreadingHTTPServer):
         LOGGER.warning("metrics request failed")
 
 
-def run(port=LISTEN_PORT, host_id="cloud-primary", interface=None):
+def run(port=LISTEN_PORT, host_id="cloud-primary"):
     if not 1024 <= port <= 65535:
         raise ValueError("invalid exporter port")
-    exporter = Exporter(host_id, interface)
+    exporter = Exporter(host_id)
     stopping = threading.Event()
     for signum in (signal.SIGTERM, signal.SIGINT):
         signal.signal(signum, lambda *_: stopping.set())
@@ -267,15 +346,18 @@ def run(port=LISTEN_PORT, host_id="cloud-primary", interface=None):
     return 0
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Expose read-only host telemetry to local Prometheus")
+def parse_arguments(argv=None):
+    parser = argparse.ArgumentParser(description="Expose custom Docker metadata and process checks to local Prometheus")
     parser.add_argument("--port", type=int, default=LISTEN_PORT)
     parser.add_argument("--host-id", default="cloud-primary")
-    parser.add_argument("--interface")
-    arguments = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+if __name__ == "__main__":
+    arguments = parse_arguments()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
-        raise SystemExit(run(arguments.port, arguments.host_id, arguments.interface))
+        raise SystemExit(run(arguments.port, arguments.host_id))
     except (OSError, ValueError):
         LOGGER.error("exporter stopped; verify loopback port and local dependencies")
         raise SystemExit(1)

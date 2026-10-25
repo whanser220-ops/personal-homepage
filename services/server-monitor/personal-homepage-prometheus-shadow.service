@@ -1,0 +1,37 @@
+[Unit]
+Description=Isolated Prometheus validation for standard exporters
+After=network.target personal-homepage-node-exporter.service personal-homepage-cadvisor.service personal-homepage-blackbox-exporter.service personal-homepage-monitor-custom.service
+Wants=personal-homepage-node-exporter.service personal-homepage-cadvisor.service personal-homepage-blackbox-exporter.service personal-homepage-monitor-custom.service
+
+[Service]
+Type=simple
+User=prometheus-monitor
+Group=prometheus-monitor
+WorkingDirectory=/var/lib/personal-homepage-prometheus-shadow
+Environment=GOMEMLIMIT=128MiB
+ExecStart=/opt/personal-homepage-prometheus/releases/3.13.5/prometheus --config.file=/etc/personal-homepage-prometheus/shadow/prometheus.yml --storage.tsdb.path=/var/lib/personal-homepage-prometheus-shadow --storage.tsdb.retention.time=1h --storage.tsdb.retention.size=128MB --web.listen-address=127.0.0.1:19094 --web.max-connections=24 --query.max-concurrency=2 --query.max-samples=5000000 --query.timeout=15s
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+StateDirectory=personal-homepage-prometheus-shadow
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+CapabilityBoundingSet=
+MemoryMax=256M
+CPUQuota=60%
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

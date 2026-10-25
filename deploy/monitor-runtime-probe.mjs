@@ -30,8 +30,10 @@ try {
   requireCondition(wrong.status === 401, "runtime_wrong_session_rejected");
   privateResponse(wrong);
   let current;
+  const standard = process.env.MONITOR_EXPORTER_MODE === "standard";
+  const attempts = standard ? 40 : 7;
   const cutoff = Date.parse(process.env.MONITOR_PROMETHEUS_CUTOVER_AT);
-  for (let attempt = 0; attempt < 7; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     const response = await request("/api/monitor/current", ownerCookie);
     requireCondition(response.status === 200, "runtime_current_http_" + response.status);
     privateResponse(response);
@@ -42,8 +44,25 @@ try {
     requireCondition(current.sample.hostId === "cloud-primary" && current.sample.host?.memory?.totalBytes > 0, "runtime_host_metrics_missing");
     requireCondition(current.sample.containers?.length === 3 && current.sample.services?.length === 11, "runtime_inventory_counts_invalid");
     const ratesReady = Number.isFinite(current.sample.host?.cpu?.percent) && Number.isFinite(current.sample.host?.network?.rxBytesPerSecond);
-    if (hostTime >= cutoff && ratesReady) break;
-    requireCondition(attempt < 6, ratesReady ? "runtime_post_cutover_sample_missing" : "runtime_host_rates_missing");
+    const host = current.sample.host;
+    const allHostRatesReady = !standard || [host.network?.txBytesPerSecond, host.disk?.readBytesPerSecond,
+      host.disk?.writeBytesPerSecond, host.memory?.usedPercent, host.swap?.usedPercent, host.disk?.usedPercent].every(Number.isFinite);
+    const resourcesReady = !standard || current.sample.containers.every((container) => container.state === "running" &&
+      typeof container.image === "string" && container.image.length > 0 && Number.isInteger(container.restartCount) && container.restartCount >= 0 &&
+      Number.isFinite(container.cpuPercent) && container.cpuPercent >= 0 && Number.isFinite(container.memoryBytes) && container.memoryBytes > 0 &&
+      Number.isFinite(container.memoryLimitBytes) && container.memoryLimitBytes > 0 && Number.isFinite(container.memoryPercent));
+    if (standard) {
+      requireCondition(current.sample.services.every((service) => {
+        if (service.kind === "process") return service.status === "healthy";
+        if (service.kind === "tcp") return service.status === "reachable";
+        const code = service.httpStatus;
+        return Number.isInteger(code) && (code >= 200 && code < 300 ? service.status === "healthy" :
+          ((code >= 300 && code < 400) || code === 401 || code === 403) && service.status === "reachable");
+      }), "runtime_service_health_or_semantics_invalid");
+    }
+    if (hostTime >= cutoff && ratesReady && allHostRatesReady && resourcesReady) break;
+    requireCondition(attempt < attempts - 1, !resourcesReady ? "runtime_container_resources_missing" :
+      !ratesReady || !allHostRatesReady ? "runtime_host_rates_missing" : "runtime_post_cutover_sample_missing");
     await delay(1000);
   }
   const history = {};
@@ -64,7 +83,7 @@ try {
     history[range] = { status: response.status, points: count, populated };
   }
   console.log(JSON.stringify({ test: "compiled-next-runtime", anonymous: 401, wrongSession: 401,
-    current: 200, containers: 3, services: 11, history }));
+    current: 200, exporterMode: standard ? "standard" : "legacy", containers: 3, services: 11, history }));
 } catch (error) {
   console.error(/^runtime_[A-Za-z0-9_]+$/.test(error.message || "") ? error.message : "runtime_probe_failed_" + error.name);
   process.exitCode = 1;

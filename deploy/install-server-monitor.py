@@ -99,7 +99,7 @@ def install_runtime():
     # Preserve the independent metrics backend across normal website releases.
     # The Prometheus installer changes these only after shadow verification.
     values = {key: value for key, value in previous_values.items() if key in (
-        'MONITOR_DATA_BACKEND', 'MONITOR_PROMETHEUS_URL', 'MONITOR_PROMETHEUS_CUTOVER_AT')}
+        'MONITOR_DATA_BACKEND', 'MONITOR_PROMETHEUS_URL', 'MONITOR_PROMETHEUS_CUTOVER_AT', 'MONITOR_EXPORTER_MODE')}
     values.update({'MONITOR_INGEST_TOKEN': token, 'MONITOR_GOOGLE_CLIENT_ID': google['clientId'],
               'MONITOR_GOOGLE_CLIENT_SECRET': google['clientSecret'], 'MONITOR_OWNER_EMAIL': 'whanser220@gmail.com',
               'MONITOR_PUBLIC_URL': 'https://warmhanser.com', 'MONITOR_OAUTH_PROXY_URL': f'http://{gateway}:17891'})

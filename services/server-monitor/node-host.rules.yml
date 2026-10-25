@@ -1,0 +1,125 @@
+# Keep legacy host labels and metric names so all seven days remain one series.
+# Read only the latest complete node_exporter scrape, including omitted gauges.
+# The capture rule is last: readers select only its exact raw evaluation frame.
+# Missing counters stay absent; rates require two real node_exporter samples.
+groups:
+  - name: server-monitor-node-host
+    interval: 3s
+    rules:
+      - record: server_monitor_host_info
+        expr: "(max by (host_id, hostname) (label_replace(node_uname_info{job=\"server-monitor-node\"} and (timestamp(node_uname_info{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))), \"hostname\", \"$1\", \"nodename\", \"(.*)\"))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+          mount: "/"
+          interface: "__NETWORK_INTERFACE__"
+      - record: server_monitor_host_cpu_percent
+        expr: "(clamp_max(clamp_min(100 * (1 - sum by (host_id) (irate(node_cpu_seconds_total{job=\"server-monitor-node\",mode=~\"idle|iowait\"}[15s]) and (timestamp(node_cpu_seconds_total{job=\"server-monitor-node\",mode=~\"idle|iowait\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))) / count by (host_id) (node_cpu_seconds_total{job=\"server-monitor-node\",mode=\"idle\"} and (timestamp(node_cpu_seconds_total{job=\"server-monitor-node\",mode=\"idle\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))), 0), 100)) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_load1
+        expr: "(max by (host_id) (node_load1{job=\"server-monitor-node\"} and (timestamp(node_load1{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_load5
+        expr: "(max by (host_id) (node_load5{job=\"server-monitor-node\"} and (timestamp(node_load5{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_load15
+        expr: "(max by (host_id) (node_load15{job=\"server-monitor-node\"} and (timestamp(node_load15{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_cpu_cores
+        expr: "(count by (host_id) (node_cpu_seconds_total{job=\"server-monitor-node\",mode=\"idle\"} and (timestamp(node_cpu_seconds_total{job=\"server-monitor-node\",mode=\"idle\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_memory_total_bytes
+        expr: "(max by (host_id) (node_memory_MemTotal_bytes{job=\"server-monitor-node\"} and (timestamp(node_memory_MemTotal_bytes{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_memory_available_bytes
+        expr: "(max by (host_id) (node_memory_MemAvailable_bytes{job=\"server-monitor-node\"} and (timestamp(node_memory_MemAvailable_bytes{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_memory_used_bytes
+        expr: "(clamp_min(max by (host_id) (node_memory_MemTotal_bytes{job=\"server-monitor-node\"} and (timestamp(node_memory_MemTotal_bytes{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))) - max by (host_id) (node_memory_MemAvailable_bytes{job=\"server-monitor-node\"} and (timestamp(node_memory_MemAvailable_bytes{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))), 0)) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_memory_used_percent
+        expr: "(100 * clamp_min(max by (host_id) (node_memory_MemTotal_bytes{job=\"server-monitor-node\"} and (timestamp(node_memory_MemTotal_bytes{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))) - max by (host_id) (node_memory_MemAvailable_bytes{job=\"server-monitor-node\"} and (timestamp(node_memory_MemAvailable_bytes{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))), 0) / clamp_min(max by (host_id) (node_memory_MemTotal_bytes{job=\"server-monitor-node\"} and (timestamp(node_memory_MemTotal_bytes{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))), 1)) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_swap_total_bytes
+        expr: "(max by (host_id) (node_memory_SwapTotal_bytes{job=\"server-monitor-node\"} and (timestamp(node_memory_SwapTotal_bytes{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_swap_used_bytes
+        expr: "(clamp_min(max by (host_id) (node_memory_SwapTotal_bytes{job=\"server-monitor-node\"} and (timestamp(node_memory_SwapTotal_bytes{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))) - max by (host_id) (node_memory_SwapFree_bytes{job=\"server-monitor-node\"} and (timestamp(node_memory_SwapFree_bytes{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))), 0)) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_swap_used_percent
+        expr: "(100 * clamp_min(max by (host_id) (node_memory_SwapTotal_bytes{job=\"server-monitor-node\"} and (timestamp(node_memory_SwapTotal_bytes{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))) - max by (host_id) (node_memory_SwapFree_bytes{job=\"server-monitor-node\"} and (timestamp(node_memory_SwapFree_bytes{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))), 0) / clamp_min(max by (host_id) (node_memory_SwapTotal_bytes{job=\"server-monitor-node\"} and (timestamp(node_memory_SwapTotal_bytes{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))), 1)) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_disk_total_bytes
+        expr: "(max by (host_id) (node_filesystem_size_bytes{job=\"server-monitor-node\",mountpoint=\"/\"} and (timestamp(node_filesystem_size_bytes{job=\"server-monitor-node\",mountpoint=\"/\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_disk_used_bytes
+        expr: "(clamp_min(max by (host_id) (node_filesystem_size_bytes{job=\"server-monitor-node\",mountpoint=\"/\"} and (timestamp(node_filesystem_size_bytes{job=\"server-monitor-node\",mountpoint=\"/\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))) - max by (host_id) (node_filesystem_free_bytes{job=\"server-monitor-node\",mountpoint=\"/\"} and (timestamp(node_filesystem_free_bytes{job=\"server-monitor-node\",mountpoint=\"/\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))), 0)) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_disk_available_bytes
+        expr: "(max by (host_id) (node_filesystem_avail_bytes{job=\"server-monitor-node\",mountpoint=\"/\"} and (timestamp(node_filesystem_avail_bytes{job=\"server-monitor-node\",mountpoint=\"/\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_disk_used_percent
+        expr: "(100 * clamp_min(max by (host_id) (node_filesystem_size_bytes{job=\"server-monitor-node\",mountpoint=\"/\"} and (timestamp(node_filesystem_size_bytes{job=\"server-monitor-node\",mountpoint=\"/\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))) - max by (host_id) (node_filesystem_free_bytes{job=\"server-monitor-node\",mountpoint=\"/\"} and (timestamp(node_filesystem_free_bytes{job=\"server-monitor-node\",mountpoint=\"/\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))), 0) / clamp_min(max by (host_id) (node_filesystem_size_bytes{job=\"server-monitor-node\",mountpoint=\"/\"} and (timestamp(node_filesystem_size_bytes{job=\"server-monitor-node\",mountpoint=\"/\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))), 1)) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_disk_read_bytes_per_second
+        expr: "(sum by (host_id) (irate(node_disk_read_bytes_total{job=\"server-monitor-node\",device=\"__ROOT_DEVICE__\"}[15s]) and (timestamp(node_disk_read_bytes_total{job=\"server-monitor-node\",device=\"__ROOT_DEVICE__\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_disk_write_bytes_per_second
+        expr: "(sum by (host_id) (irate(node_disk_written_bytes_total{job=\"server-monitor-node\",device=\"__ROOT_DEVICE__\"}[15s]) and (timestamp(node_disk_written_bytes_total{job=\"server-monitor-node\",device=\"__ROOT_DEVICE__\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_network_rx_bytes_per_second
+        expr: "(sum by (host_id) (irate(node_network_receive_bytes_total{job=\"server-monitor-node\",device=\"__NETWORK_INTERFACE__\"}[15s]) and (timestamp(node_network_receive_bytes_total{job=\"server-monitor-node\",device=\"__NETWORK_INTERFACE__\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_network_tx_bytes_per_second
+        expr: "(sum by (host_id) (irate(node_network_transmit_bytes_total{job=\"server-monitor-node\",device=\"__NETWORK_INTERFACE__\"}[15s]) and (timestamp(node_network_transmit_bytes_total{job=\"server-monitor-node\",device=\"__NETWORK_INTERFACE__\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_uptime_seconds
+        expr: "(max by (host_id) (node_time_seconds{job=\"server-monitor-node\"} and (timestamp(node_time_seconds{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})))) - max by (host_id) (node_boot_time_seconds{job=\"server-monitor-node\"} and (timestamp(node_boot_time_seconds{job=\"server-monitor-node\"}) == on (host_id) group_left max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100
+      - record: server_monitor_host_collected_at_seconds
+        expr: "(max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"}))) and on (host_id) (max by (host_id) (up{job=\"server-monitor-node\"} == 1) and on (host_id) (max by (host_id) (timestamp(node_time_seconds{job=\"server-monitor-node\"})) > time() - 9))"
+        labels:
+          job: server-monitor-host
+          instance: 127.0.0.1:19100

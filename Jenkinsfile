@@ -85,7 +85,7 @@ printf 'SOURCE_COMMIT_SHA=%s\n' "$(git rev-parse --short HEAD)" > .ci/source.env
                 // Deployment runs on a fresh ephemeral agent, so carry the
                 // runtime manifest explicitly instead of relying on stale
                 // server-side copies.
-                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf,deploy/nginx-learning-whiteboard.conf,deploy/install-whiteboard-nginx.py,deploy/nginx-server-monitor.conf,deploy/install-monitor-nginx.py,deploy/install-server-monitor.py,deploy/install-prometheus.py,deploy/verify-server-monitor.py,deploy/verify-monitor-runtime.py,deploy/monitor-runtime-fixture.mjs,deploy/monitor-runtime-probe.mjs,services/server-monitor/**'
+                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf,deploy/nginx-learning-whiteboard.conf,deploy/install-whiteboard-nginx.py,deploy/nginx-server-monitor.conf,deploy/install-monitor-nginx.py,deploy/install-server-monitor.py,deploy/install-prometheus.py,deploy/install-monitor-exporters.py,deploy/verify-server-monitor.py,deploy/verify-monitor-runtime.py,deploy/monitor-runtime-fixture.mjs,deploy/monitor-runtime-probe.mjs,services/server-monitor/**,tests/monitor-node-rules.test.yml'
             }
         }
 
@@ -213,6 +213,7 @@ deploy_files=(
     deploy/install-monitor-nginx.py
     deploy/install-server-monitor.py
     deploy/install-prometheus.py
+    deploy/install-monitor-exporters.py
     deploy/verify-server-monitor.py
     deploy/verify-monitor-runtime.py
     deploy/monitor-runtime-fixture.mjs
@@ -222,7 +223,15 @@ deploy_files=(
     services/server-monitor/personal-homepage-monitor.service
     services/server-monitor/personal-homepage-monitor-exporter.service
     services/server-monitor/personal-homepage-prometheus.service
+    services/server-monitor/personal-homepage-node-exporter.service
+    services/server-monitor/personal-homepage-cadvisor.service
+    services/server-monitor/personal-homepage-blackbox-exporter.service
+    services/server-monitor/personal-homepage-monitor-custom.service
+    services/server-monitor/personal-homepage-prometheus-shadow.service
     services/server-monitor/prometheus.yml
+    services/server-monitor/node-host.rules.yml
+    services/server-monitor/blackbox.yml
+    tests/monitor-node-rules.test.yml
 )
 for deploy_file in "${deploy_files[@]}"; do
     if [ ! -f "$deploy_file" ]; then

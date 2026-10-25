@@ -1,0 +1,33 @@
+[Unit]
+Description=Native cAdvisor Docker CPU and memory metrics
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+Environment=GOMEMLIMIT=96MiB
+ExecStart=/opt/personal-homepage-prometheus/exporters/cadvisor-0.60.6/cadvisor --listen_ip=127.0.0.1 --port=19102 --docker=unix:///var/run/docker.sock --docker_only=true --disable_root_cgroup_stats=true --enable_metrics=cpu,memory --housekeeping_interval=15s --global_housekeeping_interval=15s --allow_dynamic_housekeeping=false --storage_duration=1m --store_container_labels=false --env_metadata_whitelist= --docker_env_metadata_whitelist= --profiling=false --max_procs=1 --logtostderr=true
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=localhost
+LockPersonality=true
+MemoryMax=192M
+CPUQuota=30%
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

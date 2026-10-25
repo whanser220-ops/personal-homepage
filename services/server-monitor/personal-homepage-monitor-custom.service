@@ -1,0 +1,38 @@
+[Unit]
+Description=Personal homepage custom Docker metadata and process probes
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=server-monitor
+Group=server-monitor
+SupplementaryGroups=docker
+Environment=PYTHONDONTWRITEBYTECODE=1
+WorkingDirectory=/opt/personal-homepage-monitor/custom
+ExecStart=/usr/bin/python3 /opt/personal-homepage-monitor/custom/exporter.py --port=19104
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=localhost
+LockPersonality=true
+CapabilityBoundingSet=
+MemoryMax=128M
+CPUQuota=20%
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

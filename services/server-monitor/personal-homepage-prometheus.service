@@ -1,7 +1,7 @@
 [Unit]
 Description=Independent Prometheus for personal homepage server monitoring
-After=network.target personal-homepage-monitor-exporter.service
-Wants=personal-homepage-monitor-exporter.service
+After=network.target personal-homepage-node-exporter.service personal-homepage-cadvisor.service personal-homepage-blackbox-exporter.service personal-homepage-monitor-custom.service
+Wants=personal-homepage-node-exporter.service personal-homepage-cadvisor.service personal-homepage-blackbox-exporter.service personal-homepage-monitor-custom.service
 
 [Service]
 Type=simple

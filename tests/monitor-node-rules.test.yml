@@ -1,0 +1,461 @@
+{
+  "rule_files": [
+    "node-host.rules.yml"
+  ],
+  "evaluation_interval": "3s",
+  "tests": [
+    {
+      "name": "node metrics retain old labels, iowait convention, zero swap and three second rates",
+      "interval": "3s",
+      "input_series": [
+        {
+          "series": "up{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1+0x5"
+        },
+        {
+          "series": "node_time_seconds{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1000+3x5"
+        },
+        {
+          "series": "node_boot_time_seconds{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1000+0x5"
+        },
+        {
+          "series": "node_load1{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1+0x5"
+        },
+        {
+          "series": "node_load5{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "2+0x5"
+        },
+        {
+          "series": "node_load15{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "3+0x5"
+        },
+        {
+          "series": "node_memory_MemTotal_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1000+0x5"
+        },
+        {
+          "series": "node_memory_MemAvailable_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "400+0x5"
+        },
+        {
+          "series": "node_memory_SwapTotal_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "0+0x5"
+        },
+        {
+          "series": "node_memory_SwapFree_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "0+0x5"
+        },
+        {
+          "series": "node_filesystem_size_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",mountpoint=\"/\"}",
+          "values": "500+0x5"
+        },
+        {
+          "series": "node_filesystem_free_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",mountpoint=\"/\"}",
+          "values": "200+0x5"
+        },
+        {
+          "series": "node_filesystem_avail_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",mountpoint=\"/\"}",
+          "values": "180+0x5"
+        },
+        {
+          "series": "node_uname_info{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",nodename=\"cloud-test\",release=\"example\"}",
+          "values": "1+0x5"
+        },
+        {
+          "series": "node_disk_read_bytes_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",device=\"vda1\"}",
+          "values": "0+30x5"
+        },
+        {
+          "series": "node_disk_written_bytes_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",device=\"vda1\"}",
+          "values": "0+60x5"
+        },
+        {
+          "series": "node_network_receive_bytes_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",device=\"eth0\"}",
+          "values": "0+300x5"
+        },
+        {
+          "series": "node_network_transmit_bytes_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",device=\"eth0\"}",
+          "values": "0+600x5"
+        },
+        {
+          "series": "node_cpu_seconds_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",cpu=\"0\",mode=\"idle\"}",
+          "values": "0+1.5x5"
+        },
+        {
+          "series": "node_cpu_seconds_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",cpu=\"0\",mode=\"iowait\"}",
+          "values": "0+0x5"
+        },
+        {
+          "series": "node_cpu_seconds_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",cpu=\"1\",mode=\"idle\"}",
+          "values": "0+1.5x5"
+        },
+        {
+          "series": "node_cpu_seconds_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",cpu=\"1\",mode=\"iowait\"}",
+          "values": "0+0x5"
+        }
+      ],
+      "promql_expr_test": [
+        {
+          "expr": "server_monitor_host_cpu_percent",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_cpu_percent{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\"}",
+              "value": 50
+            }
+          ]
+        },
+        {
+          "expr": "server_monitor_host_cpu_cores",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_cpu_cores{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\"}",
+              "value": 2
+            }
+          ]
+        },
+        {
+          "expr": "server_monitor_host_memory_used_percent",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_memory_used_percent{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\"}",
+              "value": 60
+            }
+          ]
+        },
+        {
+          "expr": "server_monitor_host_swap_used_percent",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_swap_used_percent{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\"}",
+              "value": 0
+            }
+          ]
+        },
+        {
+          "expr": "server_monitor_host_disk_used_percent",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_disk_used_percent{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\"}",
+              "value": 60
+            }
+          ]
+        },
+        {
+          "expr": "server_monitor_host_disk_available_bytes",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_disk_available_bytes{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\"}",
+              "value": 180
+            }
+          ]
+        },
+        {
+          "expr": "server_monitor_host_disk_read_bytes_per_second",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_disk_read_bytes_per_second{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\"}",
+              "value": 10
+            }
+          ]
+        },
+        {
+          "expr": "server_monitor_host_disk_write_bytes_per_second",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_disk_write_bytes_per_second{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\"}",
+              "value": 20
+            }
+          ]
+        },
+        {
+          "expr": "server_monitor_host_network_rx_bytes_per_second",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_network_rx_bytes_per_second{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\"}",
+              "value": 100
+            }
+          ]
+        },
+        {
+          "expr": "server_monitor_host_network_tx_bytes_per_second",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_network_tx_bytes_per_second{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\"}",
+              "value": 200
+            }
+          ]
+        },
+        {
+          "expr": "server_monitor_host_uptime_seconds",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_uptime_seconds{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\"}",
+              "value": 6
+            }
+          ]
+        },
+        {
+          "expr": "server_monitor_host_collected_at_seconds",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\"}",
+              "value": 6
+            }
+          ]
+        },
+        {
+          "expr": "server_monitor_host_info",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_info{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\",hostname=\"cloud-test\",interface=\"eth0\",mount=\"/\"}",
+              "value": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "failed scrape cannot refresh gauges or capture time through lookback",
+      "interval": "3s",
+      "input_series": [
+        {
+          "series": "up{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1 1 0 0 0 0"
+        },
+        {
+          "series": "node_time_seconds{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1000+3x5"
+        },
+        {
+          "series": "node_boot_time_seconds{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1000+0x5"
+        },
+        {
+          "series": "node_load1{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1+0x5"
+        },
+        {
+          "series": "node_load5{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "2+0x5"
+        },
+        {
+          "series": "node_load15{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "3+0x5"
+        },
+        {
+          "series": "node_memory_MemTotal_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1000+0x5"
+        },
+        {
+          "series": "node_memory_MemAvailable_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "400+0x5"
+        },
+        {
+          "series": "node_memory_SwapTotal_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "0+0x5"
+        },
+        {
+          "series": "node_memory_SwapFree_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "0+0x5"
+        },
+        {
+          "series": "node_filesystem_size_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",mountpoint=\"/\"}",
+          "values": "500+0x5"
+        },
+        {
+          "series": "node_filesystem_free_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",mountpoint=\"/\"}",
+          "values": "200+0x5"
+        },
+        {
+          "series": "node_filesystem_avail_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",mountpoint=\"/\"}",
+          "values": "180+0x5"
+        },
+        {
+          "series": "node_uname_info{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",nodename=\"cloud-test\",release=\"example\"}",
+          "values": "1+0x5"
+        },
+        {
+          "series": "node_disk_read_bytes_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",device=\"vda1\"}",
+          "values": "0+30x5"
+        },
+        {
+          "series": "node_disk_written_bytes_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",device=\"vda1\"}",
+          "values": "0+60x5"
+        },
+        {
+          "series": "node_network_receive_bytes_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",device=\"eth0\"}",
+          "values": "0+300x5"
+        },
+        {
+          "series": "node_network_transmit_bytes_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",device=\"eth0\"}",
+          "values": "0+600x5"
+        },
+        {
+          "series": "node_cpu_seconds_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",cpu=\"0\",mode=\"idle\"}",
+          "values": "0+1.5x5"
+        },
+        {
+          "series": "node_cpu_seconds_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",cpu=\"0\",mode=\"iowait\"}",
+          "values": "0+0x5"
+        },
+        {
+          "series": "node_cpu_seconds_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",cpu=\"1\",mode=\"idle\"}",
+          "values": "0+1.5x5"
+        },
+        {
+          "series": "node_cpu_seconds_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",cpu=\"1\",mode=\"iowait\"}",
+          "values": "0+0x5"
+        }
+      ],
+      "promql_expr_test": [
+        {
+          "expr": "server_monitor_host_cpu_percent",
+          "eval_time": "6s",
+          "exp_samples": []
+        },
+        {
+          "expr": "server_monitor_host_collected_at_seconds",
+          "eval_time": "6s",
+          "exp_samples": []
+        },
+        {
+          "expr": "server_monitor_host_memory_used_percent",
+          "eval_time": "6s",
+          "exp_samples": []
+        }
+      ]
+    },
+    {
+      "name": "an omitted gauge stays missing while other sources remain fresh",
+      "interval": "3s",
+      "input_series": [
+        {
+          "series": "up{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1+0x5"
+        },
+        {
+          "series": "node_time_seconds{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1000+3x5"
+        },
+        {
+          "series": "node_boot_time_seconds{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1000+0x5"
+        },
+        {
+          "series": "node_load1{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1+0x5"
+        },
+        {
+          "series": "node_load5{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "2+0x5"
+        },
+        {
+          "series": "node_load15{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "3+0x5"
+        },
+        {
+          "series": "node_memory_MemTotal_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "1000+0x5"
+        },
+        {
+          "series": "node_memory_MemAvailable_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "400 _ _ _ _ _"
+        },
+        {
+          "series": "node_memory_SwapTotal_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "0+0x5"
+        },
+        {
+          "series": "node_memory_SwapFree_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\"}",
+          "values": "0+0x5"
+        },
+        {
+          "series": "node_filesystem_size_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",mountpoint=\"/\"}",
+          "values": "500+0x5"
+        },
+        {
+          "series": "node_filesystem_free_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",mountpoint=\"/\"}",
+          "values": "200+0x5"
+        },
+        {
+          "series": "node_filesystem_avail_bytes{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",mountpoint=\"/\"}",
+          "values": "180+0x5"
+        },
+        {
+          "series": "node_uname_info{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",nodename=\"cloud-test\",release=\"example\"}",
+          "values": "1+0x5"
+        },
+        {
+          "series": "node_disk_read_bytes_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",device=\"vda1\"}",
+          "values": "0+30x5"
+        },
+        {
+          "series": "node_disk_written_bytes_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",device=\"vda1\"}",
+          "values": "0+60x5"
+        },
+        {
+          "series": "node_network_receive_bytes_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",device=\"eth0\"}",
+          "values": "0+300x5"
+        },
+        {
+          "series": "node_network_transmit_bytes_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",device=\"eth0\"}",
+          "values": "0+600x5"
+        },
+        {
+          "series": "node_cpu_seconds_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",cpu=\"0\",mode=\"idle\"}",
+          "values": "0+1.5x5"
+        },
+        {
+          "series": "node_cpu_seconds_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",cpu=\"0\",mode=\"iowait\"}",
+          "values": "0+0x5"
+        },
+        {
+          "series": "node_cpu_seconds_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",cpu=\"1\",mode=\"idle\"}",
+          "values": "0+1.5x5"
+        },
+        {
+          "series": "node_cpu_seconds_total{job=\"server-monitor-node\",instance=\"127.0.0.1:19101\",host_id=\"cloud-primary\",cpu=\"1\",mode=\"iowait\"}",
+          "values": "0+0x5"
+        }
+      ],
+      "promql_expr_test": [
+        {
+          "expr": "server_monitor_host_memory_available_bytes",
+          "eval_time": "6s",
+          "exp_samples": []
+        },
+        {
+          "expr": "server_monitor_host_memory_used_percent",
+          "eval_time": "6s",
+          "exp_samples": []
+        },
+        {
+          "expr": "server_monitor_host_collected_at_seconds",
+          "eval_time": "6s",
+          "exp_samples": [
+            {
+              "labels": "server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\",instance=\"127.0.0.1:19100\",job=\"server-monitor-host\"}",
+              "value": 6
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

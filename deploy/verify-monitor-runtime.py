@@ -46,7 +46,9 @@ def cleanup(name, identity):
     docker('rm', '--force', name, timeout=15)
 
 
-def verify_runtime(image, network='personal-homepage-net'):
+def verify_runtime(image, network='personal-homepage-net', *, exporter_mode='legacy', prometheus_port=19091):
+    if exporter_mode not in ('legacy', 'standard') or prometheus_port not in (19091, 19095):
+        raise RuntimeError('runtime_probe_invalid_source')
     identity = uuid.uuid4().hex
     name = 'monitor-runtime-probe-' + identity[:12]
     gateway = gateway_for(network)
@@ -55,7 +57,8 @@ def verify_runtime(image, network='personal-homepage-net'):
         'NODE_ENV': 'production', 'NEXT_TELEMETRY_DISABLED': '1', 'HOSTNAME': '127.0.0.1', 'PORT': '3000',
         'DATABASE_URL': 'postgresql://fixture.invalid/noop', 'MONITOR_OWNER_EMAIL': 'whanser220@gmail.com',
         'MONITOR_PUBLIC_URL': 'https://warmhanser.com', 'MONITOR_DATA_BACKEND': 'prometheus',
-        'MONITOR_PROMETHEUS_URL': f'http://{gateway}:19091', 'MONITOR_PROMETHEUS_CUTOVER_AT': cutoff,
+        'MONITOR_PROMETHEUS_URL': f'http://{gateway}:{prometheus_port}', 'MONITOR_PROMETHEUS_CUTOVER_AT': cutoff,
+        'MONITOR_EXPORTER_MODE': exporter_mode,
         'MONITOR_RUNTIME_PROBE': '1',
     }
     with tempfile.TemporaryDirectory(prefix='monitor-runtime-probe-') as temporary:
@@ -88,8 +91,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--image', required=True)
     parser.add_argument('--network', default='personal-homepage-net')
+    parser.add_argument('--exporter-mode', choices=('legacy', 'standard'), default='legacy')
+    parser.add_argument('--prometheus-port', type=int, choices=(19091, 19095), default=19091)
     args = parser.parse_args()
-    verify_runtime(args.image, args.network)
+    verify_runtime(args.image, args.network, exporter_mode=args.exporter_mode, prometheus_port=args.prometheus_port)
 
 
 if __name__ == '__main__':

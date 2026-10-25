@@ -147,6 +147,7 @@ previous_image="$(docker_cli inspect --format '{{.Config.Image}}' "$CONTAINER_NA
 previous_whiteboard_image="$(docker_cli inspect --format '{{.Config.Image}}' learning-whiteboard 2>/dev/null || true)"
 monitor_prepared=0
 prometheus_prepared=0
+exporters_prepared=0
 runtime_switched=0
 nginx_backup=""
 nginx_changed=0
@@ -165,6 +166,9 @@ deployment_exit() {
         fi
         if [ "$prometheus_prepared" -eq 1 ]; then
             sudo python3 deploy/install-prometheus.py rollback
+        fi
+        if [ "$exporters_prepared" -eq 1 ]; then
+            sudo python3 deploy/install-monitor-exporters.py rollback
         fi
         sudo python3 deploy/install-server-monitor.py rollback
         if [ "$runtime_switched" -eq 1 ] && [ -n "$previous_image" ]; then
@@ -251,13 +255,17 @@ docker_cli pull "$APP_IMAGE"
 docker_cli pull "$WHITEBOARD_IMAGE"
 sudo python3 deploy/install-server-monitor.py prepare
 monitor_prepared=1
-# The independent stack must already produce real samples before the new
-# website starts reading it. Its transaction also preserves legacy unit state.
-sudo python3 deploy/install-prometheus.py prepare
-prometheus_prepared=1
+# New exporters and a separate Prometheus validate the replacement while the
+# existing production Prometheus and full Python exporter keep serving users.
+sudo python3 deploy/install-monitor-exporters.py prepare
+exporters_prepared=1
 # Exercise the actual compiled Next HTTP routes with an isolated in-memory
 # session fixture before changing web.env or replacing the production website.
-sudo python3 deploy/verify-monitor-runtime.py --image "$APP_IMAGE" --network "$DOCKER_NETWORK"
+sudo python3 deploy/verify-monitor-runtime.py --image "$APP_IMAGE" --network "$DOCKER_NETWORK" --exporter-mode standard --prometheus-port 19095
+# Switch the production scrape/rule configuration only after the separate
+# candidate passes. Its transaction never rewrites the old Python program.
+sudo python3 deploy/install-prometheus.py prepare
+prometheus_prepared=1
 sudo python3 deploy/install-prometheus.py cutover
 compose_cli -f "$COMPOSE_FILE" config >/dev/null
 
@@ -367,6 +375,9 @@ sudo python3 deploy/verify-server-monitor.py
 # Only retire the push collector after the website, login configuration,
 # private reads and Prometheus samples have all passed release verification.
 sudo python3 deploy/install-prometheus.py finalize
+sudo python3 deploy/install-monitor-exporters.py finalize
+sudo python3 deploy/install-monitor-exporters.py commit
+exporters_prepared=0
 sudo python3 deploy/install-prometheus.py commit
 prometheus_prepared=0
 sudo python3 deploy/install-server-monitor.py commit

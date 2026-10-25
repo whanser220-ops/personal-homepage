@@ -64,7 +64,12 @@ def verify_prometheus_stack():
     installer = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(installer)
     installer.verify()
-    expected = {'19090': '127.0.0.1', '19100': '127.0.0.1', '19091': installer.network_gateway()}
+    values = dict(line.split('=', 1) for line in Path('/etc/personal-homepage-monitor/web.env').read_text().splitlines()
+                  if line and not line.startswith('#') and '=' in line)
+    standard = values.get('MONITOR_EXPORTER_MODE') == 'standard'
+    expected = {'19090': '127.0.0.1', '19091': installer.network_gateway()}
+    expected.update({port: '127.0.0.1' for port in ('19101', '19102', '19103', '19104')} if standard else {'19100': '127.0.0.1'})
+    optional = {'19094': '127.0.0.1', '19095': installer.network_gateway(), '19100': '127.0.0.1'} if standard else {}
     listeners = subprocess.run(['ss', '-lntH'], capture_output=True, text=True, check=True, timeout=10).stdout
     found = set()
     for line in listeners.splitlines():
@@ -72,16 +77,18 @@ def verify_prometheus_stack():
         if len(fields) < 4:
             continue
         address, _, port = fields[3].rpartition(':')
-        if port in expected:
-            assert address == expected[port], 'Monitoring listener must not bind a public or wildcard address'
-            found.add(port)
+        if port in expected or port in optional:
+            assert address == (expected | optional)[port], 'Monitoring listener must not bind a public or wildcard address'
+            if port in expected:
+                found.add(port)
     assert found == set(expected), 'A private monitoring listener is missing'
     # Run from the actual unprivileged website container. This proves the
     # Docker gateway relay works without exposing a host/Docker socket.
     script = '''
       const base=process.env.MONITOR_PROMETHEUS_URL;
       if(process.env.MONITOR_DATA_BACKEND!=="prometheus" || !base) process.exit(1);
-      for(const metric of ["server_monitor_host_collected_at_seconds","server_monitor_checks_collected_at_seconds"]){
+      const checks=process.env.MONITOR_EXPORTER_MODE==="standard"?"server_monitor_custom_collected_at_seconds":"server_monitor_checks_collected_at_seconds";
+      for(const metric of ["server_monitor_host_collected_at_seconds",checks]){
         const u=new URL("/api/v1/query",base);u.searchParams.set("query",metric+'{host_id="cloud-primary"}');
         const r=await fetch(u,{signal:AbortSignal.timeout(5000)});const d=await r.json();
         const points=d.data?.result;const age=Date.now()/1000-Number(points?.[0]?.value?.[1]);

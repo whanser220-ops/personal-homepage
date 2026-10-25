@@ -6,6 +6,7 @@ readers or stops the legacy collector. No credential is printed.
 """
 from datetime import datetime, timezone
 import hashlib
+import importlib.util
 import ipaddress
 import json
 import os
@@ -28,6 +29,7 @@ ROOT = Path('/opt/personal-homepage-prometheus')
 ARCHIVE = ROOT / f'downloads/prometheus-{VERSION}.linux-amd64.tar.gz'
 RELEASE = ROOT / f'releases/{VERSION}'
 CONFIG = Path('/etc/personal-homepage-prometheus/prometheus.yml')
+RULES = Path('/etc/personal-homepage-prometheus/node-host.rules.yml')
 STATE = Path('/var/lib/personal-homepage-prometheus')
 BACKUP = Path('/var/lib/personal-homepage-prometheus-deployment')
 WEB_ENV = Path('/etc/personal-homepage-monitor/web.env')
@@ -36,9 +38,8 @@ EXPORTER = 'personal-homepage-monitor-exporter.service'
 PROMETHEUS = 'personal-homepage-prometheus.service'
 SOCKET = 'personal-homepage-prometheus-proxy.socket'
 PROXY = 'personal-homepage-prometheus-proxy.service'
-UNITS = [EXPORTER, PROMETHEUS, SOCKET, PROXY]
-TARGETS = [WEB_ENV, CONFIG, Path('/opt/personal-homepage-monitor/collector.py'),
-           Path('/opt/personal-homepage-monitor/exporter.py'),
+UNITS = [PROMETHEUS, SOCKET, PROXY]
+TARGETS = [WEB_ENV, CONFIG, RULES,
            *[Path('/etc/systemd/system') / name for name in UNITS]]
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -64,6 +65,14 @@ def write(path, value, mode=0o644):
 def read_env(path):
     return dict(line.split('=', 1) for line in path.read_text().splitlines()
                 if line and not line.startswith('#') and '=' in line) if path.exists() else {}
+
+
+def standard_exporters():
+    spec = importlib.util.spec_from_file_location('monitor_standard_exporters_install',
+                                                  Path(__file__).with_name('install-monitor-exporters.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def unit_state(unit):
@@ -146,20 +155,13 @@ def install_runtime():
     except KeyError:
         run('useradd', '--system', '--user-group', '--no-create-home', '--shell', '/usr/sbin/nologin', 'prometheus-monitor')
         user = pwd.getpwnam('prometheus-monitor')
-    # Existing monitor installation normally creates this account. shadow
-    # can also run before the first website deployment.
-    try:
-        pwd.getpwnam('server-monitor')
-    except KeyError:
-        run('useradd', '--system', '--user-group', '--no-create-home', '--shell', '/usr/sbin/nologin', 'server-monitor')
     STATE.mkdir(mode=0o700, exist_ok=True)
     STATE.chmod(0o700)
     os.chown(STATE, user.pw_uid, user.pw_gid)
+    standard = standard_exporters()
     sources = {
-        CONFIG: (REPO / 'services/server-monitor/prometheus.yml').read_bytes(),
-        Path('/opt/personal-homepage-monitor/collector.py'): (REPO / 'services/server-monitor/collector.py').read_bytes(),
-        Path('/opt/personal-homepage-monitor/exporter.py'): (REPO / 'services/server-monitor/exporter.py').read_bytes(),
-        Path('/etc/systemd/system') / EXPORTER: (REPO / 'services/server-monitor' / EXPORTER).read_bytes(),
+        CONFIG: standard.render_prometheus().encode(),
+        RULES: standard.render_rules().encode(),
         Path('/etc/systemd/system') / PROMETHEUS: (REPO / 'services/server-monitor' / PROMETHEUS).read_bytes(),
     }
     gateway = network_gateway()
@@ -175,17 +177,16 @@ def install_runtime():
     for path in changed:
         write(path, sources[path])
     run(str(RELEASE / 'promtool'), 'check', 'config', str(CONFIG))
+    run(str(RELEASE / 'promtool'), 'check', 'rules', str(RULES))
     run('systemctl', 'daemon-reload')
     unit_dir = Path('/etc/systemd/system')
     if any(path in changed for path in (unit_dir / SOCKET, unit_dir / PROXY)):
         run('systemctl', 'stop', PROXY, SOCKET, check=False)
-    for unit in (EXPORTER, PROMETHEUS, SOCKET):
+    for unit in (PROMETHEUS, SOCKET):
         run('systemctl', 'enable', unit)
         content_changed = unit_dir / unit in changed
-        if unit == EXPORTER:
-            content_changed |= any(path in changed for path in (Path('/opt/personal-homepage-monitor/collector.py'), Path('/opt/personal-homepage-monitor/exporter.py')))
         if unit == PROMETHEUS:
-            content_changed |= CONFIG in changed
+            content_changed |= CONFIG in changed or RULES in changed
         # A website-only deployment must not interrupt ongoing collection.
         run('systemctl', 'restart' if content_changed else 'start', unit)
 
@@ -199,34 +200,16 @@ def query(expression, base='http://127.0.0.1:19090'):
 
 
 def verify():
-    last_error = None
-    for attempt in range(14):
-        try:
-            with OPENER.open('http://127.0.0.1:19090/-/ready', timeout=5) as response:
-                if response.status != 200:
-                    raise RuntimeError('Prometheus is not ready')
-            for job in ('server-monitor-host', 'server-monitor-checks'):
-                result = query(f'up{{job="{job}"}}')
-                if len(result) != 1 or float(result[0]['value'][1]) != 1:
-                    raise RuntimeError('Prometheus scrape target is not healthy')
-            # The exporter sets independent sample timestamps; successful HTTP
-            # scrapes alone cannot establish that its sampling workers run.
-            for metric in ('server_monitor_host_collected_at_seconds', 'server_monitor_checks_collected_at_seconds'):
-                result = query(metric + '{host_id="cloud-primary"}')
-                if len(result) != 1 or not -5 <= time.time() - float(result[0]['value'][1]) <= 45:
-                    raise RuntimeError('Exporter snapshots are stale')
-            base = f'http://{network_gateway()}:19091'
-            if not query('up{job="server-monitor-host"}', base):
-                raise RuntimeError('Private website relay has no fresh metrics')
-            return
-        except (OSError, ValueError, RuntimeError) as error:
-            last_error = error
-            if attempt != 13:
-                time.sleep(3)
-    raise RuntimeError('Prometheus shadow validation failed') from last_error
+    standard_exporters().verify('http://127.0.0.1:19090', relay=False)
+    base = f'http://{network_gateway()}:19091'
+    if not query('up{job="server-monitor-node"}', base):
+        raise RuntimeError('Private website relay has no fresh metrics')
 
 
 def prepare():
+    # A manual prepare must satisfy the same isolated readiness prerequisite
+    # as Jenkins, before a production file or service state is changed.
+    standard_exporters().verify()
     snapshot()
     try:
         install_runtime()
@@ -244,7 +227,7 @@ def cutover():
     if not values.get('MONITOR_GOOGLE_CLIENT_ID'):
         raise RuntimeError('Preserve and configure existing Google login before cutover')
     previous_backend = values.get('MONITOR_DATA_BACKEND', 'postgres')
-    values.update({'MONITOR_DATA_BACKEND': 'prometheus',
+    values.update({'MONITOR_DATA_BACKEND': 'prometheus', 'MONITOR_EXPORTER_MODE': 'standard',
                    'MONITOR_PROMETHEUS_URL': f'http://{network_gateway()}:19091'})
     if previous_backend != 'prometheus' or not values.get('MONITOR_PROMETHEUS_CUTOVER_AT'):
         values['MONITOR_PROMETHEUS_CUTOVER_AT'] = datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
@@ -291,8 +274,11 @@ def main():
         raise RuntimeError('Run as root')
     action = sys.argv[1] if len(sys.argv) == 2 else ''
     if action == 'shadow':
-        prepare()
-        commit()
+        # Backward-compatible entry point: validate through a separate
+        # Prometheus instead of changing the running production configuration.
+        standard = standard_exporters()
+        standard.prepare()
+        standard.commit()
     elif action == 'prepare':
         prepare()
     elif action == 'verify':

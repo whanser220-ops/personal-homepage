@@ -1,21 +1,72 @@
-# 宿主机服务监控与 Prometheus exporter
+# 宿主机服务监控采集组件
 
-当前生产方案使用同机独立的 Prometheus 3.13.5 保存 7 天指标，定时拉取 Python 3 标准库 exporter：`/metrics/host` 每 3 秒、`/metrics/checks` 每 15 秒。exporter 只监听 `127.0.0.1:19100`，Prometheus 只监听 `127.0.0.1:19090`；网站通过 Docker 私网 gateway 的 `19091` relay 查询，保留 Google 登录和玻璃 UI，不挂载 Docker socket。所有探测均为服务器本机视角。
+标准模式使用同机独立的 Prometheus 3.13.5 保存 7 天指标，保留 Google 登录和玻璃 UI。Prometheus 监听 `127.0.0.1:19090`；网站通过 Docker 私网 gateway 的 `19091` relay 查询，网站容器不挂载 Docker socket。全部服务探测均为服务器本机视角，不承诺服务器整体失联时的外部告警。
 
-`exporter.py` 复用 `collector.py` 的固定采样函数，Prometheus 控制定时任务；主机与慢检查独立锁定，不运行 SQLite、推送凭据或旧采集器主循环。缺失指标省略，首帧差分不填零。安装由 `deploy/install-prometheus.py` 负责，先 `shadow` 并行验证，再通过 Jenkins 事务切换；验证通过才停用旧 `personal-homepage-monitor.service`。普通网站发布在监控配置与程序未变时不会重启 exporter 或 Prometheus。
+| 组件 | 回环端口 | Prometheus 节拍 | 当前职责 |
+| --- | --- | --- | --- |
+| node_exporter 1.12.1 | 19101 | 3 秒 | 主机 CPU、负载、内存、Swap、根盘、默认出口网络与运行时间。 |
+| cAdvisor 0.60.6 | 19102 | 15 秒 | 3 个固定生产容器的 CPU 累计计数、内存 working set、有效内存上限和 last_seen。 |
+| blackbox_exporter 0.29.1 | 19103 | 15 秒 | 网站、白板、Jenkins、Study Agent 的 HTTP；Perforce 1666、远程运行 4321 的 TCP。 |
+| Python custom | 19104 | 15 秒 | Docker ID/镜像/状态/健康/重启次数，4 项 systemd 与 PostgreSQL 就绪检查。 |
+
+Prometheus 决定抓取频率；页面当前值每 3 秒刷新，历史每 30 秒查询。node 的 recording rules 每 3 秒生成原有 `server_monitor_host_*` 指标，保留 `job=server-monitor-host`、`instance=127.0.0.1:19100` 与 `host_id=cloud-primary`，继续使用原 TSDB 和历史查询。兼容标签中的 19100 不代表旧 Python 端口还需开放。规则检查真实 node 抓取时间、`up` 和同帧指标，不以规则求值时间刷新旧数据。
+
+node unit 允许 netdev 所需的 `AF_NETLINK`；安装器从真实 MAJ:MIN/sysfs 发现根设备，清除 diskstats 默认分区排除并只纳入该设备，再渲染规则。默认出口同样按宿主机路由发现。不能只看 node `up=1`，还需验证 collector 成功及磁盘/网络速度都有效，避免权限或默认过滤让数据长期缺失。
+
+容器按完整 64 位 ID 连接 custom 元数据与 cAdvisor 资源，重建后不混用旧 ID。CPU 按真实抓取帧间的累计 CPU 秒差分计算，首帧、计数回退或中间失败保留未知；多核可超过 100%。cAdvisor 的 `container_last_seen` 为导出时的容器存活信息，不是 housekeeping 精确时间，不能用于 CPU 分母；15 秒 housekeeping 的缓存仍可能影响逐帧变化。未限制的 cgroup 内存上限 0 映射实际主机内存。抓取设置 `honor_timestamps: false`，以便与 `up` 同帧匹配；缺失或过期 last_seen 不伪造资源。
+
+blackbox HTTP 不跟随重定向、响应体限 64 KB，仅保存成功标志、状态码与耗时。2xx 表示 HTTP 检查通过；3xx/401/403 只表示认证或跳转入口可达，Study Agent 303 不判为故障。TCP 成功只证明连接可达；systemd active 只证明进程运行；pg_isready 只说明 PostgreSQL 接受连接。来源失败或缺失显示未知/断点，最旧或缺失检查超过 45 秒标为过期，不用零或前值填补。
 
 完整部署、Google 登录配置、文件权限、事务回退及发布验收见[服务监控运维说明](../../docs/server-monitor-operations.md)。
 
-## 当前 Prometheus 服务
+## Python custom 的边界与指标
 
-安装入口为 `deploy/install-prometheus.py`，首次发行包与校验值见运维说明。先从同版本部署目录运行 `shadow`，并行验证新服务而不切换网站；正式切换、健康检查及停用旧推送采集器由 Jenkins 事务部署执行。
+当前 `exporter.py` 是独立的 Python 标准库程序，不导入旧 `collector.py`，不采集主机资源、不运行 Docker stats、HTTP/TCP、SQLite 或推送。`/health` 仅检查程序可响应，`/metrics/custom` 才执行受限采集；旧 `/metrics/host`、`/metrics/checks` 已移除。
+
+一次采样最多并行运行 3 个固定命令任务，每个最长 3 秒：
+
+- `docker inspect --format <固定模板>`：只针对网站、白板、PostgreSQL，读取 ID、名称、镜像、状态、健康状态和重启次数。Health 字段不存在时安全返回 unknown，不读取环境或完整健康日志。
+- 一次 `systemctl show`：只读取 Study Agent、远程运行、Nginx、Docker 四个固定单元的 Id、LoadState、ActiveState。
+- 容器内固定 `pg_isready -q`：只在容器内引用非敏感用户/数据库名称，不提供或取回密码，不把命令输出存入指标。
+
+采集锁禁止重叠，最多 3 个持久 probe worker、4 个 HTTP 请求 worker；14 秒单调时钟缓存去重并为正常 15 秒节拍保留抖动余量。缓存返回原 bytes 与原采集时间，不使旧结果变新。缺失的数字不导出；不可用容器 ID 不生成标签。
+
+| 指标 | 标签与含义 |
+| --- | --- |
+| `server_monitor_custom_collected_at_seconds` | `host_id`；实际批次开始时间，不是响应或查询时间。 |
+| `server_monitor_custom_container_info` | `host_id,name,container_id,image,state,health`；值 1，完整 ID 缺失时省略该标签。 |
+| `server_monitor_custom_container_restart_count` | `host_id,name,container_id`；计数未知时省略指标。 |
+| `server_monitor_custom_service_info` | `host_id,id,name,kind,status,detail`；仅 5 项 process 检查，值 1。 |
+
+## 部署、影子验证与登录
+
+`personal-homepage-node-exporter.service`、`personal-homepage-cadvisor.service`、`personal-homepage-blackbox-exporter.service`、`personal-homepage-monitor-custom.service` 均独立部署。当前 custom 安装到 `/opt/personal-homepage-monitor/custom/exporter.py`，新 unit 使用 `--port=19104`；旧统一 Python 的 19100 路径和 unit 在验证期间保留，不用当前 custom 文件覆盖它。
+
+安装入口为 `deploy/install-monitor-exporters.py`；官方发行包及固定 SHA-256 见安装器和运维说明。`shadow` 启动新的 exporter、独立 Prometheus `19094` 与 Docker 私网 relay `19095`，使用独立配置/TSDB，不改生产 Prometheus `19090`、网站环境或旧 19100 文件。Jenkins 验证编译后网站接口、真实数据与权限后才切换生产配置；正式 `MONITOR_EXPORTER_MODE=standard`，保持 `MONITOR_DATA_BACKEND=prometheus` 和生产 URL。验证后停用旧统一 Python 与影子 Prometheus/relay，新 exporter 继续服务。正常网站发布不应因配置未变而重启生产采集。
+
+Google OIDC 和 24 小时数据库会话仍由网站/PostgreSQL 负责，owner 仍为 `whanser220@gmail.com`。首次 PostgreSQL→Prometheus 的 `MONITOR_PROMETHEUS_CUTOVER_AT` 保持原值，边界前旧数据库与边界后生产 TSDB 按样本数拼接；本次 exporter 替换不重置边界，不把影子 TSDB 复制进生产。
 
 ```sh
-sudo python3 deploy/install-prometheus.py shadow
-sudo systemctl status personal-homepage-prometheus.service personal-homepage-monitor-exporter.service personal-homepage-prometheus-proxy.socket
-sudo journalctl -u personal-homepage-prometheus.service -u personal-homepage-monitor-exporter.service --since '10 min ago'
+sudo python3 deploy/install-monitor-exporters.py shadow
+sudo systemctl status personal-homepage-prometheus.service personal-homepage-node-exporter.service personal-homepage-cadvisor.service personal-homepage-blackbox-exporter.service personal-homepage-monitor-custom.service
+sudo journalctl -u personal-homepage-prometheus.service -u personal-homepage-monitor-custom.service --since '10 min ago'
 curl --fail --silent http://127.0.0.1:19090/-/ready
 ```
+
+网站或数据库短暂不可用不会中断其他指标的采集，但登录和看板仍依赖网站与数据库。Prometheus 停止期间没有采样，无法依靠 SQLite 补回；整台服务器失联也无法通过同机组件告警。回退、目录权限、资源限制、私网边界和真实验收步骤以[运维说明](../../docs/server-monitor-operations.md)为准。
+
+## 当前离线验证
+
+```sh
+python3 -m unittest discover -s services/server-monitor -p 'test_exporter.py' -v
+node --test tests/monitorPrometheus.test.mjs tests/monitorStandardChecks.test.mjs
+```
+
+custom 测试包含真实 CLI 子进程、HTTP 路径、systemd ExecStart 参数解析、固定 Docker 字段与缺失 Health、受限命令、未知值、去重缓存和非重叠行为。标准来源适配测试包含完整 ID、原始帧、缺失和故障语义；规则数值测试由安装器使用 `promtool` 在渲染后的固定夹具上执行。离线通过不能替代真实云端指标、编译后镜像、Jenkins 目标提交、真实 Google 登录和页面布局验收。
+
+## 旧统一 Python exporter（仅回退）
+
+已部署的旧程序 `/opt/personal-homepage-monitor/exporter.py`、其 `collector.py` 依赖和 `personal-homepage-monitor-exporter.service`（19100）仅为回退保留；本仓库当前 `exporter.py` 已改为 custom，不能直接覆盖旧路径。回退必须使用匹配版本程序、旧 Prometheus 抓取配置和 `MONITOR_EXPORTER_MODE=legacy`，保留生产 TSDB 和原历史边界。成功 commit 后不能用事务 `rollback` 任意恢复历史版本。
 
 ## 旧推送采集器（仅回退）
 

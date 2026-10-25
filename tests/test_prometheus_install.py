@@ -36,9 +36,11 @@ class PrometheusInstallTests(unittest.TestCase):
         (installer.BACKUP / 'metadata.json').write_text('{}')
 
     def test_shadow_never_changes_web_reader_or_stops_legacy_collector(self):
+        standard = types.SimpleNamespace(prepare=lambda: None, commit=lambda: None)
         with patch.object(installer.sys, 'argv', ['install-prometheus.py', 'shadow']), \
                 patch.object(installer.os, 'geteuid', return_value=0, create=True), \
-                patch.object(installer, 'prepare') as prepare, patch.object(installer, 'commit') as commit, \
+                patch.object(installer, 'standard_exporters', return_value=standard), \
+                patch.object(standard, 'prepare') as prepare, patch.object(standard, 'commit') as commit, \
                 patch.object(installer, 'cutover') as cutover, patch.object(installer, 'finalize') as finalize:
             installer.main()
             prepare.assert_called_once_with()
@@ -48,6 +50,7 @@ class PrometheusInstallTests(unittest.TestCase):
 
     def test_prepare_verification_failure_restores_transaction(self):
         with patch.object(installer, 'snapshot') as snapshot, \
+                patch.object(installer, 'standard_exporters', return_value=types.SimpleNamespace(verify=lambda: None)), \
                 patch.object(installer, 'install_runtime') as runtime, \
                 patch.object(installer, 'verify', side_effect=RuntimeError('stale')), \
                 patch.object(installer, 'rollback') as rollback:
@@ -56,6 +59,16 @@ class PrometheusInstallTests(unittest.TestCase):
             snapshot.assert_called_once_with()
             runtime.assert_called_once_with()
             rollback.assert_called_once_with()
+
+    def test_unhealthy_shadow_never_snapshots_or_restarts_production(self):
+        def unavailable():
+            raise RuntimeError('shadow incomplete')
+        with patch.object(installer, 'standard_exporters', return_value=types.SimpleNamespace(verify=unavailable)), \
+                patch.object(installer, 'snapshot') as snapshot, patch.object(installer, 'rollback') as rollback:
+            with self.assertRaisesRegex(RuntimeError, 'shadow incomplete'):
+                installer.prepare()
+            snapshot.assert_not_called()
+            rollback.assert_not_called()
 
     def test_cutover_preserves_oauth_and_records_first_switch_once(self):
         self.prepared()
@@ -67,10 +80,18 @@ class PrometheusInstallTests(unittest.TestCase):
             second = installer.read_env(installer.WEB_ENV)
         self.assertEqual(first, second)
         self.assertEqual(first['MONITOR_DATA_BACKEND'], 'prometheus')
+        self.assertEqual(first['MONITOR_EXPORTER_MODE'], 'standard')
         self.assertEqual(first['MONITOR_PROMETHEUS_URL'], 'http://172.20.0.1:19091')
         self.assertEqual(first['MONITOR_GOOGLE_CLIENT_SECRET'], 'private')
         self.assertEqual(first['MONITOR_INGEST_TOKEN'], 'rollback-token')
         self.assertTrue(first['MONITOR_PROMETHEUS_CUTOVER_AT'].endswith('Z'))
+
+    def test_production_transaction_does_not_rewrite_legacy_python_exporter(self):
+        paths = {path.as_posix() for path in installer.TARGETS}
+        self.assertNotIn('/opt/personal-homepage-monitor/exporter.py', paths)
+        self.assertNotIn('/opt/personal-homepage-monitor/collector.py', paths)
+        self.assertNotIn('/etc/systemd/system/personal-homepage-monitor-exporter.service', paths)
+        self.assertNotIn(installer.EXPORTER, installer.UNITS)
 
     def test_cutover_requires_prepared_transaction(self):
         with self.assertRaisesRegex(RuntimeError, 'prepared'):

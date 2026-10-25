@@ -1,0 +1,19 @@
+modules:
+  http_local:
+    prober: http
+    timeout: 3s
+    http:
+      method: GET
+      follow_redirects: false
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      proxy_from_environment: false
+      enable_http2: false
+      body_size_limit: 64KB
+      valid_status_codes: [__VALID_HTTP_STATUS_CODES__]
+  tcp_local:
+    prober: tcp
+    timeout: 3s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false

@@ -61,6 +61,22 @@ class CompiledRuntimeGateTests(unittest.TestCase):
                 runtime.verify_runtime('registry/site:broken')
         self.assertEqual(self.commands[-1], ('rm', '--force', 'monitor-runtime-probe-' + self.identity[:12]))
 
+    def test_standard_candidate_reads_only_explicit_shadow_source_with_same_isolation(self):
+        with patch.object(runtime, 'docker', side_effect=self.docker), patch('builtins.print'):
+            runtime.verify_runtime('registry/site:target', exporter_mode='standard', prometheus_port=19095)
+        arguments = next(args for args in self.commands if args[0] == 'run')
+        self.assertIn('MONITOR_PROMETHEUS_URL=http://172.20.0.1:19095', arguments)
+        self.assertIn('MONITOR_EXPORTER_MODE=standard', arguments)
+        self.assertNotIn('--publish', arguments)
+        self.assertNotIn('--env-file', arguments)
+
+    def test_invalid_source_is_rejected_before_docker_or_any_container(self):
+        with patch.object(runtime, 'docker') as docker:
+            for settings in ({'exporter_mode': 'unknown'}, {'prometheus_port': 19092}, {'prometheus_port': 8080}):
+                with self.assertRaisesRegex(RuntimeError, 'invalid_source'):
+                    runtime.verify_runtime('registry/site:target', **settings)
+            docker.assert_not_called()
+
     def test_cleanup_refuses_container_with_different_identity(self):
         with patch.object(runtime, 'docker', return_value=self.response(stdout=json.dumps({runtime.LABEL: 'another-task'}))) as docker:
             with self.assertRaisesRegex(RuntimeError, 'cleanup_identity_mismatch'):
@@ -74,12 +90,14 @@ class CompiledRuntimeGateTests(unittest.TestCase):
 
     def test_gate_is_after_shadow_readiness_and_before_cutover(self):
         script = (REPO / 'deploy/deploy-from-image.sh').read_text(encoding='utf-8')
-        prepare = script.index('sudo python3 deploy/install-prometheus.py prepare')
+        shadow = script.index('sudo python3 deploy/install-monitor-exporters.py prepare')
         probe = script.index('sudo python3 deploy/verify-monitor-runtime.py --image')
+        prepare = script.index('sudo python3 deploy/install-prometheus.py prepare')
         cutover = script.index('sudo python3 deploy/install-prometheus.py cutover')
         recreate = script.index('compose_cli -f "$COMPOSE_FILE" up -d --no-build --force-recreate "$COMPOSE_SERVICE"', cutover)
-        self.assertLess(prepare, probe)
-        self.assertLess(probe, cutover)
+        self.assertLess(shadow, probe)
+        self.assertLess(probe, prepare)
+        self.assertLess(prepare, cutover)
         self.assertLess(cutover, recreate)
 
 

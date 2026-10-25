@@ -148,7 +148,7 @@ test("exporter outage restores a whole last snapshot at its original time, prese
     calls.push(params);
     if (calls.length === 1) return matrix(snapshot().filter((entry) => /^server_monitor_(checks_|service_|container_)/.test(entry.metric.__name__)));
     if (calls.length === 2) return vector([{ metric: { host_id: HOST, monitor_group: "host" }, value: [NOW / 1000, String(capture / 1000)] }]);
-    assert.equal(Number(params.time), capture / 1000 + 0.001);
+    assert.equal(Number(params.time), (capture + 10_000) / 1000);
     return matrix(snapshot(capture).filter((entry) => entry.metric.__name__.startsWith("server_monitor_host_")), capture);
   } });
   assert.equal(calls.length, 3);
@@ -191,6 +191,32 @@ test("historical outage fallback also excludes labels and gauges outside its ori
   assert.equal(current.sample.containers.length, 1);
   assert.equal(current.sample.containers[0].image, "website:abc123");
   assert.equal(current.sample.containers[0].cpuPercent, null);
+});
+
+test("fallback includes a normalized host frame recorded after its real node capture", async () => {
+  const capture = NOW - 90_000, recorded = capture + 3000;
+  const current = await readPrometheusCurrent(NOW, { env, request: async (_settings, _path, params) => {
+    if (params.query.includes("last_over_time")) return vector(["host", "checks"].map((group) => ({ metric: { host_id: HOST, monitor_group: group }, value: [NOW / 1000, String(capture / 1000)] })));
+    if (Number(params.time) === NOW / 1000) return matrix([]);
+    assert.equal(Number(params.time), (capture + 10_000) / 1000);
+    const host = params.query.includes("server_monitor_host_.+");
+    return matrix(snapshot(capture, capture).filter((entry) => host ? entry.metric.__name__.startsWith("server_monitor_host_") : /^server_monitor_(checks_|service_|container_)/.test(entry.metric.__name__)), host ? recorded : capture - 1);
+  } });
+  assert.equal(current.sample.collectedAt, new Date(capture).toISOString());
+  assert.equal(current.sample.host.cpu.percent, 31.4);
+  assert.equal(current.stale, true);
+  assert.equal(current.sample.checksCollectedAt, new Date(capture).toISOString());
+});
+
+test("historical fallback never substitutes an older capture for the discovered latest capture", async () => {
+  const capture = NOW - 90_000;
+  const current = await readPrometheusCurrent(NOW, { env, request: async (_settings, _path, params) => {
+    if (params.query.includes("last_over_time")) return vector([{ metric: { host_id: HOST, monitor_group: "host" }, value: [NOW / 1000, String(capture / 1000)] }]);
+    if (Number(params.time) === NOW / 1000) return matrix([]);
+    return matrix(snapshot(capture - 3000).filter((entry) => entry.metric.__name__.startsWith("server_monitor_host_")), capture - 3001);
+  } });
+  assert.equal(current.sample, null);
+  assert.equal(current.stale, true);
 });
 
 test("no retained capture returns no sample, not fabricated fresh data", async () => {
