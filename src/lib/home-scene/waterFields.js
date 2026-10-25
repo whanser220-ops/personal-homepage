@@ -1,9 +1,13 @@
 import * as THREE from "three";
 
+// Keep deterministic CPU data across scene instances. Each instance owns its
+// textures and byte copies, so disposing or changing one cannot affect another.
+const fieldDataCache = new Map();
+
 // Numeric simulation fields, generated locally. No borrowed artwork or textures.
 // Compact directional wave packets are accumulated into a tileable height grid;
 // its derivatives drive the per-pixel normals at several spatial resolutions.
-export function createWaterFields(size = 192) {
+function generateFieldData(size) {
   let seed = 713;
   const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const particles = Array.from({ length: 34 }, () => {
@@ -60,10 +64,6 @@ export function createWaterFields(size = 192) {
       );
       bytes[i + 3] = 255;
     }
-  const waves = new THREE.DataTexture(bytes, size, size);
-  waves.wrapS = waves.wrapT = THREE.RepeatWrapping;
-  waves.minFilter = waves.magFilter = THREE.LinearFilter;
-  waves.needsUpdate = true;
   const flowSize = 64,
     flowBytes = new Uint8Array(flowSize * flowSize * 4);
   for (let y = 0; y < flowSize; y++)
@@ -79,9 +79,6 @@ export function createWaterFields(size = 192) {
       );
       flowBytes[i + 3] = 255;
     }
-  const flow = new THREE.DataTexture(flowBytes, flowSize, flowSize);
-  flow.minFilter = flow.magFilter = THREE.LinearFilter;
-  flow.needsUpdate = true;
   const lutBytes = new Uint8Array(128 * 4);
   for (let i = 0; i < 128; i++) {
     const depth = (i / 127) * 6;
@@ -91,7 +88,23 @@ export function createWaterFields(size = 192) {
     );
     lutBytes[i * 4 + 3] = 255;
   }
-  const absorption = new THREE.DataTexture(lutBytes, 128, 1);
+  return { bytes, flowBytes, lutBytes };
+}
+
+export function createWaterFields(size = 192) {
+  let data = fieldDataCache.get(size);
+  if (!data) {
+    data = generateFieldData(size);
+    fieldDataCache.set(size, data);
+  }
+  const waves = new THREE.DataTexture(data.bytes.slice(), size, size);
+  waves.wrapS = waves.wrapT = THREE.RepeatWrapping;
+  waves.minFilter = waves.magFilter = THREE.LinearFilter;
+  waves.needsUpdate = true;
+  const flow = new THREE.DataTexture(data.flowBytes.slice(), 64, 64);
+  flow.minFilter = flow.magFilter = THREE.LinearFilter;
+  flow.needsUpdate = true;
+  const absorption = new THREE.DataTexture(data.lutBytes.slice(), 128, 1);
   absorption.minFilter = absorption.magFilter = THREE.LinearFilter;
   absorption.needsUpdate = true;
   return {

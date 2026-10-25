@@ -20,12 +20,40 @@
   width: 100%;
   height: 100%;
 }
-.scene {
-  opacity: 0;
-  transition: opacity 1.2s ease;
+.scenePoster,
+.sceneRenderer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
-.scene[data-ready="true"] {
+
+.scenePoster {
+  display: block;
   opacity: 1;
+  pointer-events: none;
+}
+
+.scenePoster img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sceneRenderer {
+  opacity: 0;
+}
+
+.scene[data-scene-ready="true"] .sceneRenderer {
+  opacity: 1;
+  transition: opacity 250ms ease;
+}
+
+.scene[data-scene-ready="true"] .scenePoster {
+  /* Keep the preview opaque until the full-resolution frame has faded in. */
+  opacity: 0;
+  transition: opacity 0s linear 250ms;
 }
 .scene canvas {
   display: block;

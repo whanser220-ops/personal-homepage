@@ -1,11 +1,12 @@
 # Afternoon room — inset water basin
 
-The homepage uses a Blender-built cafe rendered by Three.js. The character is an alpha illustration inside a volumetric environment. Loading uses the page's plain background; no static illustration is displayed on refresh.
+The homepage uses a Blender-built cafe rendered by Three.js. The character is an alpha illustration inside a volumetric environment. The server-rendered page displays a static preview of the same scene while the 3D code, model and first complete frame load. Desktop and portrait previews use the corresponding camera framing. The full-resolution canvas fades in over 250 ms before the preview is hidden; failed loading or a lost WebGL context keeps or restores the preview. This handoff does not change the final canvas pixel ratio or rendering quality. The model request is preloaded with anonymous CORS, matching the loader's default credentials mode.
 
 ## Model
 
 - `afternoon-room.blend`: editable source; texture images live in `textures/`.
 - `../../public/assets/home-scene/afternoon-room.glb`: runtime model with the original four embedded WebP textures (character, warm paper atlas, brick and whitewashed wood).
+- `../../public/assets/home-scene/afternoon-room-desktop.webp` and `afternoon-room-mobile.webp`: static previews of the current scene at 2200 × 1000 and 780 × 2400; the portrait image is selected when the viewport aspect ratio is at most 1:1. The extra horizontal/vertical coverage keeps the camera framing aligned across desktop and narrow phone sizes.
 - `../../scripts/build-home-scene.py`: complete deterministic scene builder.
 - `../../scripts/build-inset-counter.py`: replaces the old counter and raised fruit tank with a real opening, four stone slab segments, a porcelain basin and a recessed glass observation window. No fruit geometry remains.
 - `../../scripts/update-inset-counter-mcp.py`: incrementally updates the saved scene through Blender MCP without rebuilding the wall and foliage.

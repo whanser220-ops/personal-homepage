@@ -9,7 +9,7 @@ import { observeNavigationActivity } from "./navigationActivity.js";
 
 // A restrained illustrated palette: world-space light creates the same diagonal
 // afternoon sun across every surface, with real shadow maps for local occlusion.
-function illustratedMaterial(source, character) {
+export function illustratedMaterial(source, character) {
   const surface = source.name.includes("Whitewashed")
     ? "cabinet"
     : source.name.includes("Paper drawings")
@@ -17,6 +17,7 @@ function illustratedMaterial(source, character) {
       : source.name.includes("Painted brick")
         ? "wall"
         : "other";
+  const woven = source.name.includes("Music woven grille");
   const material = new THREE.MeshStandardMaterial({
     map: source.map,
     color: source.color,
@@ -56,7 +57,7 @@ function illustratedMaterial(source, character) {
             vec3 pigment = diffuseColor.rgb;
       ${surface === "cabinet" ? "float luminance = dot(pigment,vec3(.2126,.7152,.0722)); pigment=mix(vec3(luminance)*vec3(.43,.62,.60),pigment*vec3(.55,.78,.88),.3);" : ""}
       ${surface === "wall" ? "pigment *= vec3(.86,.95,1.11);" : ""}
-      ${source.name.includes("Music woven grille") ? "float weave=step(.48,fract(vCafePosition.x*95.))*step(.48,fract(vCafePosition.y*95.)); pigment*=.78+.22*weave;" : ""}
+      ${woven ? "float weave=step(.48,fract(vCafePosition.x*95.))*step(.48,fract(vCafePosition.y*95.)); pigment*=.78+.22*weave;" : ""}
       // Keep the painted palette, with a restrained contribution from actual
       // hemisphere light and the room's prefiltered environment illumination.
       vec3 bounce = clamp(reflectedLight.indirectDiffuse / max(diffuseColor.rgb, vec3(.01)), vec3(0.), vec3(2.));
@@ -67,8 +68,10 @@ function illustratedMaterial(source, character) {
       #include <opaque_fragment>`,
     );
   };
+  // Material colors and maps are uniforms; unrelated object names must not
+  // recompile identical shaders. Three still keys its own map/light defines.
   material.customProgramCacheKey = () =>
-    character ? "cafe-character-v7" : "cafe-environment-v7-" + surface + source.name;
+    `cafe-v8-${character ? "character" : "room"}-${surface}-${woven ? "woven" : "plain"}`;
   return material;
 }
 
@@ -93,7 +96,20 @@ function disposeTree(root) {
   geometries.forEach((geometry) => geometry.dispose());
 }
 
+function createRoomEnvironment(renderer) {
+  const room = new RoomEnvironment();
+  const generator = new THREE.PMREMGenerator(renderer);
+  try {
+    return generator.fromScene(room, 0.04);
+  } finally {
+    room.dispose();
+    generator.dispose();
+  }
+}
+
 export function createCafeScene(host, onPlayerPosition, onReady) {
+  const startedAt = performance.now();
+  host.dataset.sceneState = "initializing";
   let disposed = false,
     frame = 0,
     loaded = false,
@@ -107,6 +123,9 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     alpha: false,
     powerPreference: "low-power",
   });
+  // Start I/O before the synchronous environment/effect setup. The homepage
+  // also preloads this URL so a cold visit overlaps it with the renderer chunk.
+  const modelLoad = new GLTFLoader().loadAsync("/assets/home-scene/afternoon-room.glb");
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
   renderer.shadowMap.enabled = true;
@@ -116,12 +135,8 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
   host.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color("#d5bba0");
-  const environmentRoom = new RoomEnvironment();
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const environment = pmrem.fromScene(environmentRoom, 0.04);
+  let environment = createRoomEnvironment(renderer);
   scene.environment = environment.texture;
-  environmentRoom.dispose();
-  pmrem.dispose();
   const camera = new THREE.OrthographicCamera(-10, 10, 12.71, 0, 0.1, 70);
   const target = new THREE.Vector3(0, 6.355, 0);
   const sun = new THREE.DirectionalLight(0xffffff, 1);
@@ -212,7 +227,12 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
       updateDiagnostics();
       lastDiagnostics = time;
     }
-    if (host.dataset.ready !== "true") { host.dataset.ready = "true"; onReady?.(); }
+    if (host.dataset.ready !== "true") {
+      host.dataset.ready = "true";
+      host.dataset.sceneState = "ready";
+      host.dataset.sceneFirstFrameMs ??= String(Math.round(performance.now() - startedAt));
+      onReady?.(true);
+    }
     if (!reduced.matches) schedule();
   }
   function schedule() {
@@ -267,13 +287,26 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     event.preventDefault();
     contextLost = true;
     delete host.dataset.ready;
+    host.dataset.sceneState = "context-lost";
+    onReady?.(false);
     cancelAnimationFrame(frame);
     frame = 0;
   }
   function onContextRestored() {
-    contextLost = false;
-    renderer.shadowMap.needsUpdate = true;
-    refresh();
+    try {
+      // Render-target pixels have no CPU source to re-upload after context loss.
+      // Rebuild the environment before replacing the static preview with 3D.
+      const restored = createRoomEnvironment(renderer);
+      environment.dispose();
+      environment = restored;
+      scene.environment = environment.texture;
+      contextLost = false;
+      renderer.shadowMap.needsUpdate = true;
+      refresh();
+    } catch (error) {
+      host.dataset.sceneState = "error";
+      console.error("Cafe environment could not be restored.", error);
+    }
   }
   const sizeObserver = new ResizeObserver(resize);
   sizeObserver.observe(host);
@@ -306,8 +339,8 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     },
   );
   resize();
-  new GLTFLoader()
-    .loadAsync("/assets/home-scene/afternoon-room.glb")
+  host.dataset.sceneState = "loading-model";
+  modelLoad
     .then((gltf) => {
       if (disposed) {
         disposeTree(gltf.scene);
@@ -336,11 +369,16 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
       scene.add(root);
       renderer.shadowMap.needsUpdate = true;
       loaded = true;
+      host.dataset.sceneState = "rendering";
+      host.dataset.sceneModelMs = String(Math.round(performance.now() - startedAt));
       schedule();
     })
     .catch((error) => {
-      if (!disposed)
+      if (!disposed) {
+        host.dataset.sceneState = "error";
+        onReady?.(false);
         console.error("Cafe scene unavailable.", error);
+      }
     });
   return () => {
     disposed = true;
@@ -358,6 +396,9 @@ export function createCafeScene(host, onPlayerPosition, onReady) {
     delete host.dataset.sceneAOUpdates;
     delete host.dataset.scenePixelRatio;
     delete host.dataset.sceneNavigationPaused;
+    delete host.dataset.sceneState;
+    delete host.dataset.sceneModelMs;
+    delete host.dataset.sceneFirstFrameMs;
     tank.dispose();
     coffee.dispose();
     ao.dispose();
