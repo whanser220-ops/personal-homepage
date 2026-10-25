@@ -1,74 +1,85 @@
 # 服务监控运维
 
-入口为 `https://warmhanser.com/server-monitor`，仅监控 `cloud-primary` 一台宿主机。本文说明配置、部署、回退与验收方式。
+入口为 `https://warmhanser.com/server-monitor`，仅监控 `cloud-primary` 一台宿主机。Google 登录和玻璃看板沿用现有网站，指标采集与历史存储由同机独立运行的 Prometheus 负责。未部署 Grafana，不发送外部通知。
 
-## 数据流与状态含义
+## 数据流与采样
 
-`宿主机 Python/systemd 采集器 → 127.0.0.1:3000/api/monitor/ingest → Next.js → 现有 PostgreSQL → 授权后的浏览器看板`。
+`Prometheus → 回环 Python exporter → 宿主机 /proc、固定 Docker 字段与服务探测`；查询链路为 `浏览器 → Google 会话校验后的 Next.js → Docker 私网 relay → Prometheus HTTP API`。
 
-采集器每 3 秒采集宿主机资源，每 15 秒启动一次 Docker 与服务检查；慢检查和 HTTP 投递在有界后台任务中执行，不阻塞主机采样。所有样本先写本机 SQLite，再按批投递；失败保留最多 1 小时，恢复后补传，以 `hostId + collectedAt` 去重。慢快照仅在完成后的下一条样本中携带一次，以 `checksCollectedAt` 保存检查开始时间，其余样本只存主机资源。PostgreSQL 的 `monitor_samples` 保存 7 天，按小时清理；`monitor_sessions`、`monitor_oauth_transactions` 和 `monitor_housekeeping` 分别保存会话、短期登录事务和清理协调状态。网站容器不挂载 Docker socket。
+Prometheus 控制采样节拍：`server-monitor-host` 每 3 秒抓取 `/metrics/host`，超时 2 秒；`server-monitor-checks` 每 15 秒抓取 `/metrics/checks`，超时 12 秒。exporter 复用现有 `collector.py` 的固定只读采样函数，按抓取请求采样，不运行其主循环、SQLite、Bearer 投递或环境文件读取。主机与慢检查使用独立锁；慢检查沿用固定四 worker 池、命令和探测超时，同类采样不重叠。缺失值不导出，不能用 0 替代。采集器重启后的差分首帧保留缺口。
 
-指标来自宿主机 `/proc`、根文件系统和指定 Docker 容器。HTTP 检查、进程检查、TCP 可达分别展示；3xx/401/403 只说明 HTTP 端点可达，不能证明业务健康。所有检查均为服务器本机视角，不能独立证明公网可用性。首帧和计数回退的差分指标为 `null`，历史曲线保留缺口。主机采样与检查快照分别判断 45 秒过期，主机更新不会刷新检查时间。页面实时值每 3 秒请求，历史每 30 秒请求；切换范围立即加载。1 小时曲线按 3 秒聚合，24 小时按 5 分钟、7 天按 30 分钟聚合。
+页面当前值每 3 秒请求，历史每 30 秒请求，切换范围立即加载；1 小时按 3 秒、24 小时按 5 分钟、7 天按 30 分钟聚合。后端检查指标自身的 `server_monitor_host_collected_at_seconds` 和 `server_monitor_checks_collected_at_seconds`，分别超过 45 秒时标记过期；抓取成功不等于采样时间新鲜。
 
-## Google 登录与私有访问
+Prometheus 使用独立本机时序数据库，保留 7 天，并设置 1 GB 保留大小上限：达到任一限制后删除较旧 block，故大小上限可能缩短实际历史。大小保留不是整个目录的硬配额，WAL/head 等仍需要额外磁盘余量。不要把运行中的 TSDB 目录作为普通文件直接复制；当前没有远端长期存储或独立服务器告警。
 
-复用 `/etc/study-agent/auth/google-oauth.json` 对应的现有 Google Web OAuth 应用。Google Console 中保留 Study Agent 的全部原有回调地址，只新增 `https://warmhanser.com/api/monitor/auth/google/callback`。部署器读取现有配置并生成网站专用环境文件，不改写 Study Agent 的 OAuth 文件。
+## 指标、服务与故障语义
 
-`openid-client` 执行授权码流程，使用 state、S256 PKCE、nonce，并验证 Google ID Token。登录事务与浏览器的短期 Cookie 绑定、10 分钟过期、回调单次使用。仅接受 `email_verified === true` 且邮箱等于 `MONITOR_OWNER_EMAIL` 的身份，默认是 `whanser220@gmail.com`，以 Google `sub` 保存用户身份。
+CPU 来自 `/proc/stat` 差分，负载、内存、Swap、网络来自 `/proc`，根盘容量来自 `statvfs('/')`，吞吐量只对根设备计数，避免重复累加。网络只取默认出口，避免重复计算 Docker/veth。Docker 仅读取网站、白板和 PostgreSQL 三个固定生产容器；旧云端 Jenkins 容器不作为当前容器，Jenkins 健康经现有回环转发探测本机 WSL 控制器。
 
-会话有效期 24 小时，数据库只存会话令牌的 SHA-256 摘要。Cookie `__Host-server-monitor-session` 设置 `Secure; HttpOnly; SameSite=Lax; Path=/`；退出使用同源 POST，删除数据库会话并清除会话及 OAuth Cookie。匿名、过期会话读取 current/history 返回 401，响应禁止缓存。公网 HTTP/HTTPS Nginx 均拒绝采集接口；采集器使用独立 Bearer 凭据从回环地址投递。
+HTTP 检查、进程检查与 TCP 可达明确区分。HTTP 不跟随重定向，不读取响应体；3xx/401/403 仅说明端点可达。Study Agent 的认证跳转不直接判故障。systemd 查询固定服务状态；PostgreSQL 使用固定 `pg_isready`；Perforce 与远程运行 TCP 只证明端口可达。全部探测注明服务器本机视角。
 
-OAuth 出网经过 `personal-homepage-monitor-proxy.socket`：监听 `personal-homepage-net` 的 IPv4 gateway 上的 17891，转发到现有回环代理 `127.0.0.1:17890`。gateway 由安装器实时读取，不能写死为 `172.18.0.1`；监听地址不使用公网 IP 或 `0.0.0.0`。仅 OAuth 请求使用 `MONITOR_OAUTH_PROXY_URL`，未设置全局 HTTP 代理；请求目标限于代码中的 Google HTTPS 端点。
+网站或 PostgreSQL 暂停时，Prometheus 继续抓取并保存指标，网站查询和登录会暂时不可用；恢复后直接查询保留的数据，不再依赖 SQLite 补传。Prometheus 或 exporter 停止时，相应历史出现真实缺口。整台服务器失联时，同机监控也停止，不能把本机探测当作外部可用性保证。
 
-## 文件与凭据
+## 独立部署与访问边界
 
-| 路径 | 内容与权限 |
+| 组件 | 安装与访问 |
 | --- | --- |
-| `/etc/personal-homepage/app.env` | 现有网站环境，包含 `DATABASE_URL`；沿用原有权限，不能输出内容或放入 Git。 |
-| `/etc/personal-homepage-monitor/web.env` | root:root、0600；父目录 0700。键名：`MONITOR_INGEST_TOKEN`、`MONITOR_GOOGLE_CLIENT_ID`、`MONITOR_GOOGLE_CLIENT_SECRET`、`MONITOR_OWNER_EMAIL`、`MONITOR_PUBLIC_URL`、`MONITOR_OAUTH_PROXY_URL`。 |
-| `/etc/personal-homepage-monitor.env` | root:root、0600。键名：`MONITOR_INGEST_TOKEN`、`MONITOR_INGEST_URL`、`MONITOR_HOST_ID`、`MONITOR_STATE_DIR`；可选 `MONITOR_NETWORK_INTERFACE`。采集器固定为主机 3 秒、慢检查 15 秒；旧的 `MONITOR_INTERVAL_SECONDS` 不生效。 |
-| `/opt/personal-homepage-monitor/collector.py` | root 拥有、0644，不能允许采集器账号修改。 |
-| `/var/lib/personal-homepage-monitor/` | `server-monitor` 拥有、0700；新版使用 `queue-v2.sqlite3` 和原有进程锁，SQLite 为 0600。启动时只读导入旧 `queue.sqlite3` 中仍在保留期内的数据；旧文件不修改，供旧版回退使用。 |
-| `/var/lib/personal-homepage-monitor-deployment/` | 当前安装事务备份，0700；备份文件和 `metadata.json` 为 0600，成功 commit 后移除。 |
+| Prometheus | 官方 Linux amd64 `3.13.5`，二进制位于 `/opt/personal-homepage-prometheus/releases/3.13.5/`；`personal-homepage-prometheus.service` 使用独立 `prometheus-monitor` 用户，无 Docker 权限。 |
+| 配置与 TSDB | `/etc/personal-homepage-prometheus/prometheus.yml`，root 拥有、0644；`/var/lib/personal-homepage-prometheus/`，服务用户拥有、0700。 |
+| Prometheus HTTP | 只监听 `127.0.0.1:19090`，不启用 admin API 或生命周期写入 API。 |
+| exporter | `/opt/personal-homepage-monitor/exporter.py` 与 `collector.py`，root 拥有、0644；`personal-homepage-monitor-exporter.service` 使用 `server-monitor`，只监听 `127.0.0.1:19100`，仅允许回环网络访问。 |
+| 网站查询 relay | `personal-homepage-prometheus-proxy.socket` 仅监听当前 `personal-homepage-net` IPv4 gateway 的 `19091`，由 `systemd-socket-proxyd` 转发到回环 `19090`。不使用公网 IP 或 `0.0.0.0`；仅信任网站所在 Docker 网络。 |
+| 网站容器 | 不挂载 Docker socket、不增加宿主机权限；通过 `MONITOR_PROMETHEUS_URL=http://<gateway>:19091` 查询固定指标。Prometheus UI 不增加公网路由。 |
 
-服务用户 `server-monitor` 通过 `docker` 补充组执行固定检查；Docker socket 仍具有宿主机管理能力，必须保护采集器程序、单元和环境文件。不要把完整环境、OAuth code、Cookie、令牌或 SQL 连接串写进诊断记录。
+Prometheus 设置 `GOMEMLIMIT=256MiB`、`MemoryHigh=256M`、`MemoryMax=512M`、`CPUQuota=80%`，即最多使用 0.8 个 CPU 核心，在当前双核主机上相当于整机 CPU 的 40%；exporter 沿用 `MemoryMax=128M`、`CPUQuota=20%`。这些是保护上限，不代表实际资源开销；需查看 cgroup 与 RSS 实测，OOM 时会留下缺口。`server-monitor` 的 Docker 补充组仍有宿主机管理能力，必须保护脚本与 unit 写权限，不授予网站该权限，不向 exporter 提供 OAuth 或数据库密钥。
 
-## 部署与失败恢复
+## Google 登录与旧数据
 
-优先使用现有 Jenkins `personal-homepage-deploy` 和 `deploy/deploy-from-image.sh`，让同一版本的镜像、采集器、部署清单一起发布，不要把下面的阶段当成未经核对的一键手工命令。
+复用 `/etc/study-agent/auth/google-oauth.json`，保留 Study Agent 原有回调，网站回调为 `https://warmhanser.com/api/monitor/auth/google/callback`。沿用 `openid-client` 的 state、PKCE、nonce、Google ID Token 与 `email_verified` 校验；仅允许 `whanser220@gmail.com`，用 Google `sub` 标识用户。会话仍在 PostgreSQL，默认 24 小时，Cookie 为 Secure、HttpOnly、SameSite=Lax；退出立即删除会话，所有读取接口禁止缓存。
 
-1. `install-server-monitor.py prepare` 备份文件与 systemd 状态，原子生成权限受限的环境文件并安装采集器及代理单元。已有未完成事务时拒绝覆盖；prepare 自身失败会恢复已有文件。
-2. 部署脚本切换网站及白板镜像、检查健康；备份现有 HTTP 配置、`study-agent-https.conf` 和两个 snippet，安装监控路由并执行 `nginx -t` 后 reload。HTTPS 只插入专用 include，保留 Study Agent、白板原有配置。
-3. `activate` 重新应用私网代理 socket 并启用、重启采集器。`verify-server-monitor.py` 检查匿名读 401、HTTP/HTTPS 公网 GET/POST 采集入口 404、登录已配置、页面可达，并有限重试等待新鲜样本；首次建表延迟或数据库短暂超时不会立即触发回退。
-4. 自动检查通过后 `commit` 删除安装备份，再清理旧镜像。脚本捕获 prepare 后的失败，恢复安装文件、systemd 状态、Nginx 配置与先前运行镜像；Nginx 恢复不完整时保留备份路径供人工处理。脚本不会删除 SQLite 状态或 PostgreSQL 监控历史。
+`/etc/personal-homepage-monitor/web.env` 为 root:root、0600，父目录 0700。保留原 OAuth、owner、public URL、ingest token，并增加：
 
-出现遗留事务时，先查看 Jenkins 失败阶段、服务状态和备份 metadata，确认备份属于哪次发布，再按同一版本安装器处理 rollback。不要直接删除备份目录来解除阻塞。只读诊断可用 `systemctl status personal-homepage-monitor.service personal-homepage-monitor-proxy.socket`、`journalctl -u personal-homepage-monitor.service --since '10 min ago'` 和 `nginx -t`；不要打印完整环境或原始 OAuth 响应。
+- `MONITOR_DATA_BACKEND=prometheus`：选用独立时序存储。
+- `MONITOR_PROMETHEUS_URL=http://<gateway>:19091`：只允许固定私网数值地址与端口。
+- `MONITOR_PROMETHEUS_CUTOVER_AT=<UTC ISO timestamp>`：首次切换边界，后续发布保留原值，不能每次重置。
 
-已完成发布后的版本回退，应先记录当前站点和白板的镜像标签、目标提交以及服务状态，选定已知良好的前一站点镜像和匹配的部署代码，再通过该版本的部署流程执行。明确指定正确的 `APP_IMAGE`，并将 `WHITEBOARD_IMAGE` 固定为已确认的白板镜像，避免默认按站点旧标签意外回退白板。使用现有事务部署比单独替换容器更完整；成功 commit 后的安装备份已经移除，不能把 `rollback` 当作任意历史版本恢复功能。
+7 天历史按切换时间拼接：边界之前读取旧 PostgreSQL `monitor_samples`，边界及之后读取 Prometheus，跨边界桶按样本数量合并均值，不重复计算影子运行数据，不伪造迁移前曲线。PostgreSQL 继续负责登录事务、会话、现有应用数据和旧监控历史到期清理。公网 HTTP/HTTPS 仍拒绝旧 `/api/monitor/ingest`，Prometheus 模式停用内部投递；旧凭据只保留供回退。
 
-若目标版本早于监控功能，先停止采集器，保留启停前状态，再按旧版本部署流程恢复站点；当前监控发布检查不适用于该旧镜像，不应强行绕过检查。只停采集器可以使用 `sudo systemctl stop personal-homepage-monitor.service`，不要删除状态目录、SQLite、数据库表或持久卷。恢复监控时发布匹配版本并重新启用采集器；仍在 1 小时窗口内的队列按正常规则补传。Nginx 变更继续通过原有备份、`nginx -t` 和 reload 流程完成，不覆盖整份 HTTPS 文件或移除 Study Agent、白板路由。
+Google 出网继续通过原 `personal-homepage-monitor-proxy.socket` 的私网 `17891 → 127.0.0.1:17890`；只对 OAuth 请求使用代理。Prometheus relay 使用独立 `19091`，不能覆盖 OAuth socket 或 Study Agent、白板、HTTPS 配置。
 
-## 发布验收
+## 影子验证、切换与事务回退
 
-- 核对 Jenkins 检出的目标提交、实际网站容器镜像标签与镜像 ID；页面 200 或 `/api/health` 的 `ok` 不能证明部署版本，该健康接口不返回提交 SHA。
-- 使用真实 Google 账号完成正式域名登录，确认指定账号能访问；无权限账号、匿名、过期会话、伪造回调均不能读指标。退出后刷新仍为未登录；本地测试 Cookie 只能验证本地 UI，不能计作 Google 登录成功。
-- 等待连续采样，与宿主机命令核对 CPU、内存、磁盘、网络及容器状态；检查 1h/24h/7d 范围、超过 45 秒的数据过期提示、缺口以及手机布局。首次没有七天历史是正常的，不能填充虚假曲线。
-- 在受控窗口验证网站或数据库短暂不可用、采集器重启后的队列补传与去重，并检查清理周期；同时确认网站、白板、Study Agent、Jenkins 与已有构建指标仍正常。外部通知和整机失联告警不在当前版本范围内。
+始终通过任务 worktree、提交和现有 Jenkins `personal-homepage-deploy` 发布。同一版本的镜像、部署脚本和监控配置通过 Jenkins manifest 携带；网站发布不构建或启动另一个 Prometheus 容器。Prometheus 是独立宿主机服务，配置和脚本内容没有变化时，普通网站部署不会重启抓取服务。
 
-## 采集器资源占用对照
+首次准备[Prometheus 官方 3.13.5 发行包](https://github.com/prometheus/prometheus/releases/tag/v3.13.5)：将 `prometheus-3.13.5.linux-amd64.tar.gz` 放到 `/opt/personal-homepage-prometheus/downloads/`，目录由 root 管理。安装器重新校验以下固定 SHA-256，可对照同一官方发行页的 `sha256sums.txt`：
 
-采集器使用按线程复用的 HTTP-only opener、一个持久的四 worker 线程池，以及一次固定字段的 systemd 批量查询。它们减少了重复的 TLS/CA 初始化、handler 和线程创建、systemctl 子进程启动；具体减少多少常驻内存需要实测，不能把 SQLite 的 20 MiB 文件上限或线程的虚拟地址空间直接当成实际 RAM 占用。SQLite 保留原有单连接、持久化、容量、过期和补传规则，systemd 内存上限也不因本次优化调整。
+`0388822ace519c5a3a8ef556a541ce1b536e21d872f82deded465bd27a5a0699`
 
-发布前后各在相近服务负载下连续记录至少 10 分钟，区分启动阶段与稳定阶段，记录版本、服务启动时间和每次观测时间。只读快照可使用：
+仅从该归档提取两个已知普通文件 `prometheus` 和 `promtool`；拒绝符号链接或异常成员，不允许从任意 URL 静默获取运行文件。升级版本必须同时更新固定版本、校验值和 unit，重新执行验证。
+
+可先使用同版本部署目录执行 `sudo python3 deploy/install-prometheus.py shadow`。该动作事务化安装、启动并验证新服务，保留旧采集器、网站环境和读数据源；成功后只提交新服务安装，尚未切换网站。失败恢复已备份文件及原启停状态。影子验证应包含真实指标、容器和服务检查、约 3 秒 / 15 秒节拍、缺失语义与资源占用。
+
+Jenkins 正式发布按以下顺序执行：
+
+1. `install-server-monitor.py prepare` 备份 OAuth/旧采集器文件与状态，保留已有后端配置；`install-prometheus.py prepare` 独立备份新栈和网站环境，安装并用 `promtool check config` 校验，等待两个 scrape job 成功、两类采样时间新鲜、私网 relay 可查询。
+2. `cutover` 仅在验证成功后设置网站环境和首次切换时间；随后按原流程更新网站、白板、HTTP/HTTPS snippet，执行健康检查与 `nginx -t`，保留 Study Agent 和原代理。
+3. `verify-server-monitor.py` 验证页面、Google 配置、匿名读取 401、公网采集 404、新鲜 Prometheus 数据、监听地址，并从真实网站容器查询私网指标。
+4. `finalize` 再次确认新鲜数据后，停止并禁用 `personal-homepage-monitor.service` 旧推送采集器。最后对两个安装事务 `commit`，完成后清理安装备份。不会删除旧 SQLite、PostgreSQL 表、TSDB 或历史发行二进制。
+
+部署失败时先回退 Prometheus 事务，再回退旧监控/OAuth事务、Nginx 和上一个网站/白板镜像。Prometheus 事务位于 `/var/lib/personal-homepage-prometheus-deployment/`，旧事务位于 `/var/lib/personal-homepage-monitor-deployment/`，均为 0700，备份文件 0600。存在未结束事务时拒绝覆盖；应先核对失败构建和 metadata，再使用匹配版本 `rollback`，不能直接删除目录解除阻塞。
+
+成功 commit 后不能用 `rollback` 任意恢复历史版本。恢复 PostgreSQL 后端时，固定已知良好的网站和白板镜像，使用匹配部署代码恢复原网站环境（或明确设置 `MONITOR_DATA_BACKEND=postgres`），重启旧采集器，再核对当前样本与原数据库；保留新 TSDB 以便恢复。旧 SQLite 的新旧队列均保留，只有仍在原 1 小时窗口内的数据可正常补传；Prometheus 期间没有生成的 PostgreSQL 样本不能凭空补回。
+
+## 只读诊断与验收
 
 ```sh
-systemctl show personal-homepage-monitor.service \
-  -p MainPID -p ActiveEnterTimestamp -p MemoryCurrent -p MemoryPeak -p TasksCurrent
-collector_pid="$(systemctl show personal-homepage-monitor.service -p MainPID --value)"
-grep -E '^(VmRSS|RssAnon|RssFile|Threads):' "/proc/$collector_pid/status"
-collector_cgroup="$(systemctl show personal-homepage-monitor.service -p ControlGroup --value)"
-grep -E '^(anon|file|kernel|slab) ' "/sys/fs/cgroup$collector_cgroup/memory.stat"
-cat "/sys/fs/cgroup$collector_cgroup/memory.events"
+systemctl status personal-homepage-prometheus.service personal-homepage-monitor-exporter.service personal-homepage-prometheus-proxy.socket
+journalctl -u personal-homepage-prometheus.service -u personal-homepage-monitor-exporter.service --since '10 min ago'
+curl --fail --silent http://127.0.0.1:19090/-/ready
+ss -lnt
+systemctl show personal-homepage-prometheus.service personal-homepage-monitor-exporter.service -p MainPID -p MemoryCurrent -p MemoryPeak -p TasksCurrent
 ```
 
-`MemoryCurrent` 包含服务 cgroup 内的子进程和文件缓存等，不能与 Python 主进程 RSS 混为一个口径；`MemoryPeak` 是该 cgroup 的历史峰值，要结合启动时间理解。对照期间同时确认主机采样约 3 秒一次、慢检查约 15 秒一次、没有跨轮重叠或连续追赶、两类数据分别未超过 45 秒，以及失败后队列仍能恢复投递。检查 `queue-v2.sqlite3` 的待投递数量；旧 `queue.sqlite3` 仅保留用于回退，不代表新队列状态。记录 OOM 相关计数是否增长，不通过每轮强制 GC、修改全局分配器或降低内存上限来代替验证。
+不要输出完整环境、OAuth 响应、Cookie、SQL 连接串或指标原始标签全集。固定 exporter 不读取容器环境或完整健康日志，不添加动态 URL、请求 ID 等高基数标签。
+
+验收必须区分：本地测试、Jenkins 目标提交成功、容器实际版本、真实 Google 登录、授权接口数据与桌面/手机布局。对照宿主机资源命令与 Docker 指定字段，确认 3 秒 / 15 秒连续采样、三档曲线与迁移边界拼接；确认 exporter/Prometheus 中断出现断点和超过 45 秒过期、重启恢复后不填虚假数据，网站或数据库暂时停止时 Prometheus 仍采集。确认公网 IP 的 19090/19091/19100 不可连接，旧 ingest HTTP/HTTPS 404，并核对网站、白板、Study Agent、Jenkins、Perforce 和构建指标正常。7 天 retention 配置可即时检查，真实 7 天到期行为需经过对应运行时间验证。

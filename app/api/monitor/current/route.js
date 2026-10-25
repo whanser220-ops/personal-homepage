@@ -1,5 +1,5 @@
 import { readMonitorSession } from "../../../../src/server/monitorAuth.js";
-import { readCurrentMonitorSample } from "../../../../src/server/monitorDb.js";
+import { readCurrentMonitorSample } from "../../../../src/server/monitorData.js";
 import { monitorJson } from "../../../../src/server/monitorHttp.js";
 
 export const runtime = "nodejs";

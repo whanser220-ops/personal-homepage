@@ -182,6 +182,19 @@ test("monitor real PostgreSQL integration (explicit disposable database only)", 
       });
     }
 
+    await t.test("Prometheus cutover filters raw PostgreSQL rows strictly before its boundary and retains per-field counts", async () => {
+      await db.monitorPool().query("truncate monitor_samples");
+      const end = Math.floor(Date.now() / 3000) * 3000, now = end + 3000, bucket = end - 3000, cutoff = bucket + 1000;
+      await db.writeMonitorSamples(normalizeMonitorBatch({ samples: [hostOnly(bucket + 500, 10), hostOnly(cutoff, 90), hostOnly(bucket + 1500, 50)] }, now));
+      const rows = await db.readMonitorHistoryRows("1h", now, { before: cutoff });
+      assert.equal(rows.length, 1);
+      assert.equal(new Date(rows[0].collectedAt).getTime(), bucket);
+      assert.equal(Number(rows[0].cpuPercent), 10);
+      assert.equal(Number(rows[0].cpuPercentCount), 1);
+      assert.equal(Number(rows[0].rxBytesPerSecondCount), 0);
+      assert.equal((await db.readMonitorHistory("1h", now)).points.find((point) => Date.parse(point.collectedAt) === bucket).cpuPercent, 50);
+    });
+
     await t.test("seven-day housekeeping removes old samples and expired auth rows only", async () => {
       await db.monitorPool().query("truncate monitor_samples, monitor_sessions, monitor_oauth_transactions");
       const old = sample(Date.now() - 8 * 86400_000);

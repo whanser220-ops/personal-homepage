@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Release checks without manufacturing a browser session or logging secrets."""
 import json
+import importlib.util
 from pathlib import Path
 import subprocess
 import time
@@ -57,6 +58,41 @@ def wait_for_fresh_sample():
         time.sleep(5)
 
 
+def verify_prometheus_stack():
+    spec = importlib.util.spec_from_file_location('monitor_prometheus_install',
+                                                  Path(__file__).with_name('install-prometheus.py'))
+    installer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(installer)
+    installer.verify()
+    expected = {'19090': '127.0.0.1', '19100': '127.0.0.1', '19091': installer.network_gateway()}
+    listeners = subprocess.run(['ss', '-lntH'], capture_output=True, text=True, check=True, timeout=10).stdout
+    found = set()
+    for line in listeners.splitlines():
+        fields = line.split()
+        if len(fields) < 4:
+            continue
+        address, _, port = fields[3].rpartition(':')
+        if port in expected:
+            assert address == expected[port], 'Monitoring listener must not bind a public or wildcard address'
+            found.add(port)
+    assert found == set(expected), 'A private monitoring listener is missing'
+    # Run from the actual unprivileged website container. This proves the
+    # Docker gateway relay works without exposing a host/Docker socket.
+    script = '''
+      const base=process.env.MONITOR_PROMETHEUS_URL;
+      if(process.env.MONITOR_DATA_BACKEND!=="prometheus" || !base) process.exit(1);
+      for(const metric of ["server_monitor_host_collected_at_seconds","server_monitor_checks_collected_at_seconds"]){
+        const u=new URL("/api/v1/query",base);u.searchParams.set("query",metric+'{host_id="cloud-primary"}');
+        const r=await fetch(u,{signal:AbortSignal.timeout(5000)});const d=await r.json();
+        const points=d.data?.result;const age=Date.now()/1000-Number(points?.[0]?.value?.[1]);
+        if(!r.ok||d.status!=="success"||points?.length!==1||!Number.isFinite(age)||age < -5||age>45)process.exit(1);
+      }
+      console.log("Website private Prometheus queries passed");
+    '''
+    subprocess.run(['docker', 'exec', 'personal-homepage', 'node', '--input-type=module', '-e', script],
+                   capture_output=True, text=True, timeout=15, check=True)
+
+
 def main():
     for base in ['http://127.0.0.1:3000', 'https://warmhanser.com']:
         for path in ['/api/monitor/current', '/api/monitor/history?range=1h']:
@@ -68,8 +104,13 @@ def main():
     status, body = get('https://warmhanser.com/api/monitor/auth/session')
     assert status == 200 and json.loads(body)['configured'], 'Google login configuration is missing'
     assert get('https://warmhanser.com/server-monitor')[0] == 200, 'Monitor page is unavailable'
-    wait_for_fresh_sample()
-    print('Monitor release checks passed: private reads, closed ingestion and fresh host sampling')
+    values = dict(line.split('=', 1) for line in Path('/etc/personal-homepage-monitor/web.env').read_text().splitlines()
+                  if line and not line.startswith('#') and '=' in line)
+    if values.get('MONITOR_DATA_BACKEND') == 'prometheus':
+        verify_prometheus_stack()
+    else:
+        wait_for_fresh_sample()
+    print('Monitor release checks passed: private reads, closed ingestion and fresh host/checks sampling')
 
 
 if __name__ == '__main__':

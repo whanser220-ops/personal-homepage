@@ -2,6 +2,7 @@ import { isMonitorIngestAuthorized } from "../../../../src/server/monitorAuth.js
 import { writeMonitorSamples } from "../../../../src/server/monitorDb.js";
 import { monitorJson, readMonitorJsonBody } from "../../../../src/server/monitorHttp.js";
 import { MonitorValidationError, normalizeMonitorBatch } from "../../../../src/server/monitorValidation.js";
+import { monitorDataBackend } from "../../../../src/server/monitorData.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request) {
   if (!isMonitorIngestAuthorized(request)) return monitorJson({ error: "unauthorized" }, 401);
   try {
+    if (monitorDataBackend() === "prometheus") return monitorJson({ error: "ingest_retired" }, 410);
     const samples = normalizeMonitorBatch(await readMonitorJsonBody(request));
     return monitorJson({ ok: true, ...await writeMonitorSamples(samples) });
   } catch (error) {

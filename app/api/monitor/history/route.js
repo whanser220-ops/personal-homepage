@@ -1,5 +1,5 @@
 import { readMonitorSession } from "../../../../src/server/monitorAuth.js";
-import { readMonitorHistory } from "../../../../src/server/monitorDb.js";
+import { readMonitorHistory } from "../../../../src/server/monitorData.js";
 import { monitorJson } from "../../../../src/server/monitorHttp.js";
 import { MONITOR_HISTORY_RANGES } from "../../../../src/server/monitorValidation.js";
 

@@ -146,6 +146,7 @@ prune_old_app_images() {
 previous_image="$(docker_cli inspect --format '{{.Config.Image}}' "$CONTAINER_NAME" 2>/dev/null || true)"
 previous_whiteboard_image="$(docker_cli inspect --format '{{.Config.Image}}' learning-whiteboard 2>/dev/null || true)"
 monitor_prepared=0
+prometheus_prepared=0
 runtime_switched=0
 nginx_backup=""
 nginx_changed=0
@@ -161,6 +162,9 @@ deployment_exit() {
             else
                 echo "Nginx rollback could not finish; preserving backup at $nginx_backup" >&2
             fi
+        fi
+        if [ "$prometheus_prepared" -eq 1 ]; then
+            sudo python3 deploy/install-prometheus.py rollback
         fi
         sudo python3 deploy/install-server-monitor.py rollback
         if [ "$runtime_switched" -eq 1 ] && [ -n "$previous_image" ]; then
@@ -247,6 +251,11 @@ docker_cli pull "$APP_IMAGE"
 docker_cli pull "$WHITEBOARD_IMAGE"
 sudo python3 deploy/install-server-monitor.py prepare
 monitor_prepared=1
+# The independent stack must already produce real samples before the new
+# website starts reading it. Its transaction also preserves legacy unit state.
+sudo python3 deploy/install-prometheus.py prepare
+prometheus_prepared=1
+sudo python3 deploy/install-prometheus.py cutover
 compose_cli -f "$COMPOSE_FILE" config >/dev/null
 
 # Bring the persistent data service up first, before the website switches readers.
@@ -352,6 +361,11 @@ curl --fail --silent --show-error "$HEALTH_URL" >/dev/null
 curl --fail --silent --show-error "$METRICS_URL" >/dev/null
 curl --fail --silent --show-error https://warmhanser.com/whiteboard/health >/dev/null
 sudo python3 deploy/verify-server-monitor.py
+# Only retire the push collector after the website, login configuration,
+# private reads and Prometheus samples have all passed release verification.
+sudo python3 deploy/install-prometheus.py finalize
+sudo python3 deploy/install-prometheus.py commit
+prometheus_prepared=0
 sudo python3 deploy/install-server-monitor.py commit
 monitor_prepared=0
 sudo rm -rf "$nginx_backup"

@@ -94,16 +94,22 @@ def install_runtime():
         raise RuntimeError('Existing Google OAuth application is not configured')
     network = json.loads(run('docker', 'network', 'inspect', 'personal-homepage-net').stdout)[0]
     gateway = next(item['Gateway'] for item in network['IPAM']['Config'] if '.' in item.get('Gateway', ''))
-    token = read_env(WEB_ENV).get('MONITOR_INGEST_TOKEN') or secrets.token_urlsafe(48)
-    values = {'MONITOR_INGEST_TOKEN': token, 'MONITOR_GOOGLE_CLIENT_ID': google['clientId'],
+    previous_values = read_env(WEB_ENV)
+    token = previous_values.get('MONITOR_INGEST_TOKEN') or secrets.token_urlsafe(48)
+    # Preserve the independent metrics backend across normal website releases.
+    # The Prometheus installer changes these only after shadow verification.
+    values = {key: value for key, value in previous_values.items() if key in (
+        'MONITOR_DATA_BACKEND', 'MONITOR_PROMETHEUS_URL', 'MONITOR_PROMETHEUS_CUTOVER_AT')}
+    values.update({'MONITOR_INGEST_TOKEN': token, 'MONITOR_GOOGLE_CLIENT_ID': google['clientId'],
               'MONITOR_GOOGLE_CLIENT_SECRET': google['clientSecret'], 'MONITOR_OWNER_EMAIL': 'whanser220@gmail.com',
-              'MONITOR_PUBLIC_URL': 'https://warmhanser.com', 'MONITOR_OAUTH_PROXY_URL': f'http://{gateway}:17891'}
+              'MONITOR_PUBLIC_URL': 'https://warmhanser.com', 'MONITOR_OAUTH_PROXY_URL': f'http://{gateway}:17891'})
     if any('\n' in value or '\r' in value for value in values.values()):
         raise RuntimeError('Invalid multiline credential')
     write(WEB_ENV, ''.join(f'{key}={value}\n' for key, value in values.items()))
     write(COLLECTOR_ENV, f'MONITOR_INGEST_TOKEN={token}\nMONITOR_INGEST_URL=http://127.0.0.1:3000/api/monitor/ingest\nMONITOR_HOST_ID=cloud-primary\nMONITOR_STATE_DIR={STATE}\n')
-    write(Path('/opt/personal-homepage-monitor/collector.py'), (REPO / 'services/server-monitor/collector.py').read_text(), 0o644)
-    write(Path('/etc/systemd/system/personal-homepage-monitor.service'), (REPO / 'services/server-monitor/personal-homepage-monitor.service').read_text(), 0o644)
+    if values.get('MONITOR_DATA_BACKEND') != 'prometheus':
+        write(Path('/opt/personal-homepage-monitor/collector.py'), (REPO / 'services/server-monitor/collector.py').read_text(), 0o644)
+        write(Path('/etc/systemd/system/personal-homepage-monitor.service'), (REPO / 'services/server-monitor/personal-homepage-monitor.service').read_text(), 0o644)
     write(Path('/etc/systemd/system/personal-homepage-monitor-proxy.socket'), f'[Unit]\nDescription=Private OAuth proxy relay for the website\nRequires=docker.service\nAfter=docker.service\n\n[Socket]\nListenStream={gateway}:17891\nAccept=no\n\n[Install]\nWantedBy=sockets.target\n', 0o644)
     write(Path('/etc/systemd/system/personal-homepage-monitor-proxy.service'), '[Unit]\nDescription=Forward website OAuth traffic to the existing loopback proxy\nRequires=personal-homepage-monitor-proxy.socket\nAfter=personal-homepage-monitor-proxy.socket\n\n[Service]\nExecStart=/usr/lib/systemd/systemd-socket-proxyd --connections-max=32 127.0.0.1:17890\nDynamicUser=yes\nNoNewPrivileges=yes\nProtectSystem=strict\nProtectHome=yes\nPrivateTmp=yes\n', 0o644)
     run('systemctl', 'daemon-reload')
@@ -115,8 +121,9 @@ def activate():
     # An already-active socket retains its old listener after daemon-reload.
     run('systemctl', 'stop', 'personal-homepage-monitor-proxy.service', 'personal-homepage-monitor-proxy.socket')
     run('systemctl', 'enable', '--now', 'personal-homepage-monitor-proxy.socket')
-    run('systemctl', 'enable', 'personal-homepage-monitor.service')
-    run('systemctl', 'restart', 'personal-homepage-monitor.service')
+    if read_env(WEB_ENV).get('MONITOR_DATA_BACKEND') != 'prometheus':
+        run('systemctl', 'enable', 'personal-homepage-monitor.service')
+        run('systemctl', 'restart', 'personal-homepage-monitor.service')
 
 
 def rollback():

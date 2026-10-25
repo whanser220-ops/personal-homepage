@@ -85,7 +85,7 @@ printf 'SOURCE_COMMIT_SHA=%s\n' "$(git rev-parse --short HEAD)" > .ci/source.env
                 // Deployment runs on a fresh ephemeral agent, so carry the
                 // runtime manifest explicitly instead of relying on stale
                 // server-side copies.
-                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf,deploy/nginx-learning-whiteboard.conf,deploy/install-whiteboard-nginx.py,deploy/nginx-server-monitor.conf,deploy/install-monitor-nginx.py,deploy/install-server-monitor.py,deploy/verify-server-monitor.py,services/server-monitor/**'
+                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf,deploy/nginx-learning-whiteboard.conf,deploy/install-whiteboard-nginx.py,deploy/nginx-server-monitor.conf,deploy/install-monitor-nginx.py,deploy/install-server-monitor.py,deploy/install-prometheus.py,deploy/verify-server-monitor.py,services/server-monitor/**'
             }
         }
 
@@ -212,9 +212,14 @@ deploy_files=(
     deploy/nginx-server-monitor.conf
     deploy/install-monitor-nginx.py
     deploy/install-server-monitor.py
+    deploy/install-prometheus.py
     deploy/verify-server-monitor.py
     services/server-monitor/collector.py
+    services/server-monitor/exporter.py
     services/server-monitor/personal-homepage-monitor.service
+    services/server-monitor/personal-homepage-monitor-exporter.service
+    services/server-monitor/personal-homepage-prometheus.service
+    services/server-monitor/prometheus.yml
 )
 for deploy_file in "${deploy_files[@]}"; do
     if [ ! -f "$deploy_file" ]; then

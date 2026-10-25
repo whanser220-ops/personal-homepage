@@ -7,6 +7,7 @@ import { GET as startLogin } from "../app/api/monitor/auth/google/start/route.js
 import { GET as callbackLogin } from "../app/api/monitor/auth/google/callback/route.js";
 import { GET as current } from "../app/api/monitor/current/route.js";
 import { GET as history } from "../app/api/monitor/history/route.js";
+import { POST as ingest } from "../app/api/monitor/ingest/route.js";
 import { GET as sessionStatus } from "../app/api/monitor/auth/session/route.js";
 import { POST as logout } from "../app/api/monitor/auth/logout/route.js";
 
@@ -16,11 +17,11 @@ const baseUrl = "https://warmhanser.com";
 const cookie = (name, value) => `${name}=${value}`;
 
 function harness(t, options = {}) {
-  const backup = Object.fromEntries(["DATABASE_URL", "MONITOR_GOOGLE_CLIENT_ID", "MONITOR_GOOGLE_CLIENT_SECRET", "MONITOR_PUBLIC_URL", "MONITOR_OWNER_EMAIL", "MONITOR_OAUTH_PROXY_URL"]
+  const backup = Object.fromEntries(["DATABASE_URL", "MONITOR_GOOGLE_CLIENT_ID", "MONITOR_GOOGLE_CLIENT_SECRET", "MONITOR_PUBLIC_URL", "MONITOR_OWNER_EMAIL", "MONITOR_OAUTH_PROXY_URL", "MONITOR_DATA_BACKEND", "MONITOR_PROMETHEUS_URL", "MONITOR_PROMETHEUS_CUTOVER_AT", "MONITOR_INGEST_TOKEN"]
     .map((key) => [key, process.env[key]]));
   Object.assign(process.env, { DATABASE_URL: "postgresql://test.invalid/monitor", MONITOR_GOOGLE_CLIENT_ID: "monitor-client",
     MONITOR_GOOGLE_CLIENT_SECRET: "test-only-client-secret", MONITOR_PUBLIC_URL: baseUrl,
-    MONITOR_OWNER_EMAIL: "whanser220@gmail.com", MONITOR_OAUTH_PROXY_URL: "" });
+    MONITOR_OWNER_EMAIL: "whanser220@gmail.com", MONITOR_OAUTH_PROXY_URL: "", MONITOR_DATA_BACKEND: "postgres" });
   const previousDb = globalThis.__personalHomepageMonitorDb;
   const previousGoogle = globalThis.__personalHomepageMonitorGoogle;
   const previousFetch = globalThis.fetch;
@@ -206,4 +207,38 @@ test("unauthenticated and expired sessions cannot read current or history; all r
       assert.deepEqual(await response.json(), { error: "unauthorized" });
     }
   }
+});
+
+test("Prometheus backend preserves owner-only session checks and never falls back on backend failure", async (t) => {
+  const api = harness(t);
+  process.env.MONITOR_DATA_BACKEND = "prometheus";
+  process.env.MONITOR_PROMETHEUS_URL = "http://8.8.8.8:19090"; // Invalid config fails before any network request.
+  process.env.MONITOR_PROMETHEUS_CUTOVER_AT = new Date(Date.now() - 1000).toISOString();
+  const expired = "e".repeat(43), wrongOwner = "w".repeat(43), owner = "o".repeat(43);
+  api.sessions.set(hashMonitorToken(expired), { subject: "owner", email: "whanser220@gmail.com", expires_at: new Date(Date.now() - 1) });
+  api.sessions.set(hashMonitorToken(wrongOwner), { subject: "other", email: "other@gmail.com", expires_at: new Date(Date.now() + 60_000) });
+  api.sessions.set(hashMonitorToken(owner), { subject: "owner", email: "whanser220@gmail.com", expires_at: new Date(Date.now() + 60_000) });
+  for (const route of [current, history]) {
+    for (const token of ["", "forged", expired, wrongOwner]) {
+      const response = await route(new Request(`${baseUrl}/api/monitor/current`, { headers: { cookie: cookie(MONITOR_SESSION_COOKIE, token) } }));
+      assert.equal(response.status, 401);
+      assert.match(response.headers.get("cache-control"), /no-store/);
+    }
+    const response = await route(new Request(`${baseUrl}/api/monitor/current`, { headers: { cookie: cookie(MONITOR_SESSION_COOKIE, owner) } }));
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: "monitor_unavailable" });
+    assert.match(response.headers.get("cache-control"), /no-store/);
+  }
+});
+
+test("Prometheus cutover retires authenticated ingestion without reading a body or writing PostgreSQL", async (t) => {
+  harness(t);
+  process.env.MONITOR_DATA_BACKEND = "prometheus";
+  process.env.MONITOR_INGEST_TOKEN = "a".repeat(48);
+  const request = new Request("http://127.0.0.1:3000/api/monitor/ingest", { method: "POST", headers: { host: "127.0.0.1:3000", authorization: `Bearer ${process.env.MONITOR_INGEST_TOKEN}` }, body: "not json" });
+  const response = await ingest(request);
+  assert.equal(response.status, 410);
+  assert.deepEqual(await response.json(), { error: "ingest_retired" });
+  assert.match(response.headers.get("cache-control"), /no-store/);
+  assert.equal((await ingest(new Request("http://127.0.0.1:3000/api/monitor/ingest", { method: "POST" }))).status, 401);
 });

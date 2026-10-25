@@ -1,0 +1,38 @@
+[Unit]
+Description=Personal homepage loopback Prometheus exporter
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=server-monitor
+Group=server-monitor
+SupplementaryGroups=docker
+Environment=PYTHONDONTWRITEBYTECODE=1
+WorkingDirectory=/opt/personal-homepage-monitor
+ExecStart=/usr/bin/python3 /opt/personal-homepage-monitor/exporter.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=localhost
+LockPersonality=true
+CapabilityBoundingSet=
+MemoryMax=128M
+CPUQuota=20%
+TasksMax=48
+
+[Install]
+WantedBy=multi-user.target

@@ -112,7 +112,7 @@ export async function readCurrentMonitorSample(now = Date.now()) {
     serverTime: new Date(now).toISOString() };
 }
 
-export async function readMonitorHistory(range, now = Date.now()) {
+export async function readMonitorHistoryRows(range, now = Date.now(), { before = null } = {}) {
   const definition = MONITOR_HISTORY_RANGES[range];
   if (!definition) throw new Error("invalid_range");
   await ensureMonitorSchema();
@@ -127,8 +127,21 @@ export async function readMonitorHistory(range, now = Date.now()) {
     avg((sample #>> '{host,disk,readBytesPerSecond}')::double precision) as "diskReadBytesPerSecond",
     avg((sample #>> '{host,disk,writeBytesPerSecond}')::double precision) as "diskWriteBytesPerSecond",
     avg((sample #>> '{host,network,rxBytesPerSecond}')::double precision) as "rxBytesPerSecond",
-    avg((sample #>> '{host,network,txBytesPerSecond}')::double precision) as "txBytesPerSecond"
+    avg((sample #>> '{host,network,txBytesPerSecond}')::double precision) as "txBytesPerSecond",
+    count(sample #>> '{host,cpu,percent}') as "cpuPercentCount",
+    count(sample #>> '{host,memory,usedPercent}') as "memoryPercentCount",
+    count(sample #>> '{host,swap,usedPercent}') as "swapPercentCount",
+    count(sample #>> '{host,disk,usedPercent}') as "diskPercentCount",
+    count(sample #>> '{host,disk,readBytesPerSecond}') as "diskReadBytesPerSecondCount",
+    count(sample #>> '{host,disk,writeBytesPerSecond}') as "diskWriteBytesPerSecondCount",
+    count(sample #>> '{host,network,rxBytesPerSecond}') as "rxBytesPerSecondCount",
+    count(sample #>> '{host,network,txBytesPerSecond}') as "txBytesPerSecondCount"
     from monitor_samples where host_id = $1 and collected_at >= $3 and collected_at <= $4
-    group by 1 order by 1`, [MONITOR_HOST_ID, step, new Date(start), new Date(now)]);
-  return buildMonitorHistoryPoints(result.rows, range, now);
+    and ($5::timestamptz is null or collected_at < $5::timestamptz)
+    group by 1 order by 1`, [MONITOR_HOST_ID, step, new Date(start), new Date(now), before === null ? null : new Date(before)]);
+  return result.rows;
+}
+
+export async function readMonitorHistory(range, now = Date.now()) {
+  return buildMonitorHistoryPoints(await readMonitorHistoryRows(range, now), range, now);
 }

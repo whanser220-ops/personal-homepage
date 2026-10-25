@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 12s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: server-monitor-host
+    scrape_interval: 3s
+    scrape_timeout: 2s
+    metrics_path: /metrics/host
+    sample_limit: 256
+    label_limit: 16
+    static_configs:
+      - targets: ['127.0.0.1:19100']
+  - job_name: server-monitor-checks
+    scrape_interval: 15s
+    scrape_timeout: 12s
+    metrics_path: /metrics/checks
+    sample_limit: 1024
+    label_limit: 16
+    static_configs:
+      - targets: ['127.0.0.1:19100']
