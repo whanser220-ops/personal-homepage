@@ -30,6 +30,7 @@ ARCHIVE = ROOT / f'downloads/prometheus-{VERSION}.linux-amd64.tar.gz'
 RELEASE = ROOT / f'releases/{VERSION}'
 CONFIG = Path('/etc/personal-homepage-prometheus/prometheus.yml')
 RULES = Path('/etc/personal-homepage-prometheus/node-host.rules.yml')
+HTTP_RULES = Path('/etc/personal-homepage-prometheus/http-sre.rules.yml')
 STATE = Path('/var/lib/personal-homepage-prometheus')
 BACKUP = Path('/var/lib/personal-homepage-prometheus-deployment')
 WEB_ENV = Path('/etc/personal-homepage-monitor/web.env')
@@ -39,7 +40,7 @@ PROMETHEUS = 'personal-homepage-prometheus.service'
 SOCKET = 'personal-homepage-prometheus-proxy.socket'
 PROXY = 'personal-homepage-prometheus-proxy.service'
 UNITS = [PROMETHEUS, SOCKET, PROXY]
-TARGETS = [WEB_ENV, CONFIG, RULES,
+TARGETS = [WEB_ENV, CONFIG, RULES, HTTP_RULES,
            *[Path('/etc/systemd/system') / name for name in UNITS]]
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -162,6 +163,7 @@ def install_runtime():
     sources = {
         CONFIG: standard.render_prometheus().encode(),
         RULES: standard.render_rules().encode(),
+        HTTP_RULES: (REPO / 'services/server-monitor/http-sre.rules.yml').read_bytes(),
         Path('/etc/systemd/system') / PROMETHEUS: (REPO / 'services/server-monitor' / PROMETHEUS).read_bytes(),
     }
     gateway = network_gateway()
@@ -178,6 +180,7 @@ def install_runtime():
         write(path, sources[path])
     run(str(RELEASE / 'promtool'), 'check', 'config', str(CONFIG))
     run(str(RELEASE / 'promtool'), 'check', 'rules', str(RULES))
+    run(str(RELEASE / 'promtool'), 'check', 'rules', str(HTTP_RULES))
     run('systemctl', 'daemon-reload')
     unit_dir = Path('/etc/systemd/system')
     if any(path in changed for path in (unit_dir / SOCKET, unit_dir / PROXY)):

@@ -7,7 +7,7 @@ Type=simple
 User=monitor-node
 Group=monitor-node
 Environment=GOMEMLIMIT=48MiB
-ExecStart=/opt/personal-homepage-prometheus/exporters/node_exporter-1.12.1/node_exporter --web.listen-address=127.0.0.1:19101 --collector.disable-defaults --collector.cpu --collector.diskstats --collector.diskstats.device-include=^__ROOT_DEVICE__$ --collector.diskstats.device-exclude= --collector.filesystem --collector.loadavg --collector.meminfo --collector.netdev --collector.stat --collector.time --collector.uname
+ExecStart=/opt/personal-homepage-prometheus/exporters/node_exporter-1.12.1/node_exporter --web.listen-address=127.0.0.1:19101 --collector.disable-defaults --collector.cpu --collector.diskstats --collector.diskstats.device-include=^__ROOT_DEVICE__$ --collector.diskstats.device-exclude= --collector.filesystem --collector.loadavg --collector.meminfo --collector.netdev --collector.pressure --collector.stat --collector.time --collector.uname
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=15

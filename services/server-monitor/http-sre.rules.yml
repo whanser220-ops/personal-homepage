@@ -1,0 +1,19 @@
+# Observed requests, not an availability SLO. Missing samples are not healthy zeroes.
+# Gate each counter by its own raw scrape frame before aggregation: an exporter
+# restart can leave old status labelsets visible in Prometheus lookback.
+groups:
+  - name: server-monitor-http-sre
+    interval: 3s
+    rules:
+      - record: server_monitor:http_requests:rate1m
+        expr: 'sum by (service, status) ((rate(server_monitor_http_requests_total{job="server-monitor-http"}[1m]) and (timestamp(server_monitor_http_requests_total{job="server-monitor-http"}) == on (host_id) group_left max by (host_id) (timestamp(up{job="server-monitor-http"})))) and on (host_id) (up{job="server-monitor-http"} == 1) and on (host_id) (timestamp(up{job="server-monitor-http"}) > time() - 9))'
+      - record: server_monitor:http_response_bytes:rate1m
+        expr: 'sum by (service, status) ((rate(server_monitor_http_response_bytes_total{job="server-monitor-http"}[1m]) and (timestamp(server_monitor_http_response_bytes_total{job="server-monitor-http"}) == on (host_id) group_left max by (host_id) (timestamp(up{job="server-monitor-http"})))) and on (host_id) (up{job="server-monitor-http"} == 1) and on (host_id) (timestamp(up{job="server-monitor-http"}) > time() - 9))'
+      - record: server_monitor:http_success_duration_seconds_bucket:rate5m
+        expr: 'sum by (service, le) ((rate(server_monitor_http_request_duration_seconds_bucket{job="server-monitor-http",status=~"[23].."}[5m]) and (timestamp(server_monitor_http_request_duration_seconds_bucket{job="server-monitor-http",status=~"[23].."}) == on (host_id) group_left max by (host_id) (timestamp(up{job="server-monitor-http"})))) and on (host_id) (up{job="server-monitor-http"} == 1) and on (host_id) (timestamp(up{job="server-monitor-http"}) > time() - 9))'
+      - record: server_monitor:http_server_error_duration_seconds_bucket:rate5m
+        expr: 'sum by (service, le) ((rate(server_monitor_http_request_duration_seconds_bucket{job="server-monitor-http",status=~"5.."}[5m]) and (timestamp(server_monitor_http_request_duration_seconds_bucket{job="server-monitor-http",status=~"5.."}) == on (host_id) group_left max by (host_id) (timestamp(up{job="server-monitor-http"})))) and on (host_id) (up{job="server-monitor-http"} == 1) and on (host_id) (timestamp(up{job="server-monitor-http"}) > time() - 9))'
+      # LAST: all aliases above share this exact raw rule-evaluation frame.
+      # Keep the real source capture as its value, not the evaluation clock.
+      - record: server_monitor_http_recorded_at_seconds
+        expr: '(timestamp(up{job="server-monitor-http"}) and (up{job="server-monitor-http"} == 1)) > time() - 9'

@@ -148,6 +148,9 @@ previous_whiteboard_image="$(docker_cli inspect --format '{{.Config.Image}}' lea
 monitor_prepared=0
 prometheus_prepared=0
 exporters_prepared=0
+grafana_prepared=0
+grafana_history_prepared=0
+http_metrics_prepared=0
 runtime_switched=0
 nginx_backup=""
 nginx_changed=0
@@ -166,6 +169,15 @@ deployment_exit() {
         fi
         if [ "$prometheus_prepared" -eq 1 ]; then
             sudo python3 deploy/install-prometheus.py rollback
+        fi
+        if [ "$http_metrics_prepared" -eq 1 ]; then
+            sudo python3 deploy/install-http-metrics.py rollback
+        fi
+        if [ "$grafana_prepared" -eq 1 ]; then
+            sudo python3 deploy/install-grafana.py rollback
+        fi
+        if [ "$grafana_history_prepared" -eq 1 ]; then
+            sudo python3 deploy/install-grafana-history.py rollback
         fi
         if [ "$exporters_prepared" -eq 1 ]; then
             sudo python3 deploy/install-monitor-exporters.py rollback
@@ -255,6 +267,15 @@ docker_cli pull "$APP_IMAGE"
 docker_cli pull "$WHITEBOARD_IMAGE"
 sudo python3 deploy/install-server-monitor.py prepare
 monitor_prepared=1
+# Prepare the independent private dashboard and its bounded metric log before
+# the HTTP exporter starts. No public Grafana route is enabled at this stage.
+sudo python3 deploy/install-grafana-history.py prepare
+grafana_history_prepared=1
+sudo python3 deploy/install-grafana.py prepare
+grafana_prepared=1
+sudo python3 deploy/verify-grafana-proxy.py
+sudo python3 deploy/install-http-metrics.py prepare
+http_metrics_prepared=1
 # New exporters and a separate Prometheus validate the replacement while the
 # existing production Prometheus and full Python exporter keep serving users.
 sudo python3 deploy/install-monitor-exporters.py prepare
@@ -332,6 +353,11 @@ sudo cp "$NGINX_CONF_TARGET" "$nginx_backup/http.conf"
 sudo cp /etc/nginx/conf.d/study-agent-https.conf "$nginx_backup/https.conf"
 had_whiteboard_snippet=0
 had_monitor_snippet=0
+had_monitor_http=0
+if sudo test -f /etc/nginx/conf.d/00-server-monitor-http.conf; then
+    had_monitor_http=1
+    sudo cp /etc/nginx/conf.d/00-server-monitor-http.conf "$nginx_backup/monitor-http.conf"
+fi
 if sudo test -f /etc/nginx/snippets/server-monitor.conf; then
     had_monitor_snippet=1
     sudo cp /etc/nginx/snippets/server-monitor.conf "$nginx_backup/monitor.conf"
@@ -343,6 +369,11 @@ fi
 restore_nginx() {
     sudo cp "$nginx_backup/http.conf" "$NGINX_CONF_TARGET" || return 1
     sudo cp "$nginx_backup/https.conf" /etc/nginx/conf.d/study-agent-https.conf || return 1
+    if [ "$had_monitor_http" -eq 1 ]; then
+        sudo cp "$nginx_backup/monitor-http.conf" /etc/nginx/conf.d/00-server-monitor-http.conf || return 1
+    else
+        sudo rm -f /etc/nginx/conf.d/00-server-monitor-http.conf || return 1
+    fi
     if [ "$had_whiteboard_snippet" -eq 1 ]; then
         sudo cp "$nginx_backup/whiteboard.conf" /etc/nginx/snippets/learning-whiteboard.conf || return 1
     else
@@ -358,6 +389,7 @@ restore_nginx() {
 }
 nginx_changed=1
 if ! { sudo install -D -m 0644 "$NGINX_CONF_SOURCE" "$NGINX_CONF_TARGET" &&
+    sudo install -D -m 0644 deploy/nginx-monitor-http.conf /etc/nginx/conf.d/00-server-monitor-http.conf &&
     sudo install -D -m 0644 deploy/nginx-learning-whiteboard.conf /etc/nginx/snippets/learning-whiteboard.conf &&
     sudo install -D -m 0644 deploy/nginx-server-monitor.conf /etc/nginx/snippets/server-monitor.conf &&
     sudo python3 deploy/install-whiteboard-nginx.py &&
@@ -372,12 +404,19 @@ curl --fail --silent --show-error "$HEALTH_URL" >/dev/null
 curl --fail --silent --show-error "$METRICS_URL" >/dev/null
 curl --fail --silent --show-error https://warmhanser.com/whiteboard/health >/dev/null
 sudo python3 deploy/verify-server-monitor.py
+sudo python3 deploy/verify-grafana.py
 # Only retire the push collector after the website, login configuration,
 # private reads and Prometheus samples have all passed release verification.
 sudo python3 deploy/install-prometheus.py finalize
 sudo python3 deploy/install-monitor-exporters.py finalize
 sudo python3 deploy/install-monitor-exporters.py commit
 exporters_prepared=0
+sudo python3 deploy/install-http-metrics.py commit
+http_metrics_prepared=0
+sudo python3 deploy/install-grafana.py commit
+grafana_prepared=0
+sudo python3 deploy/install-grafana-history.py commit
+grafana_history_prepared=0
 sudo python3 deploy/install-prometheus.py commit
 prometheus_prepared=0
 sudo python3 deploy/install-server-monitor.py commit

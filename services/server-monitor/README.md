@@ -1,6 +1,6 @@
 # 宿主机服务监控采集组件
 
-标准模式使用同机独立的 Prometheus 3.13.5 保存 7 天指标，保留 Google 登录和玻璃 UI。Prometheus 监听 `127.0.0.1:19090`；网站通过 Docker 私网 gateway 的 `19091` relay 查询，网站容器不挂载 Docker socket。全部服务探测均为服务器本机视角，不承诺服务器整体失联时的外部告警。
+标准模式使用同机独立的 Prometheus 3.13.5 保存 7 天指标；主看板已改为 [Grafana 13.2.4](grafana/README.md)，保留原 Google 登录和网站导航，以四个黄金信号组织实时概览、趋势与基础设施三块原生看板。Grafana 仅监听 `127.0.0.1:19110`，Nginx 每次请求校验原会话并固定 Viewer 权限。真实 HTTP 指标 exporter 监听 19111，见 [HTTP 指标说明](HTTP_METRICS.md)。Prometheus 监听 `127.0.0.1:19090`；原 Next.js 兼容接口继续通过 Docker 私网 gateway 的 `19091` relay 查询，网站容器不挂载 Docker socket。全部服务探测均为服务器本机视角，不承诺服务器整体失联时的外部告警。
 
 | 组件 | 回环端口 | Prometheus 节拍 | 当前职责 |
 | --- | --- | --- | --- |

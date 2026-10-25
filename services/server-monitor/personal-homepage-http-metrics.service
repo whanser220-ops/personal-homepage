@@ -1,0 +1,36 @@
+[Unit]
+Description=Private real-request metrics from minimal Nginx logs
+After=network.target nginx.service
+
+[Service]
+Type=simple
+User=monitor-http
+Group=monitor-http
+SupplementaryGroups=www-data
+Environment=GOMEMLIMIT=48MiB
+ExecStart=/opt/personal-homepage-prometheus/exporters/nginxlog_exporter-1.11.0/prometheus-nginxlog-exporter -config-file /etc/personal-homepage-prometheus/http-log-exporter.yml -log-level warn
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=localhost
+LockPersonality=true
+CapabilityBoundingSet=
+MemoryMax=96M
+CPUQuota=10%
+TasksMax=32
+ReadOnlyPaths=/var/log/personal-homepage-monitor
+
+[Install]
+WantedBy=multi-user.target

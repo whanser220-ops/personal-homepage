@@ -1,0 +1,18 @@
+listen:
+  address: '127.0.0.1'
+  port: 19111
+  metrics_endpoint: /metrics
+namespaces:
+  - name: server_monitor_ingress
+    parser: json
+    # Only these four fields exist in the dedicated Nginx privacy log.
+    # The Go exporter recognizes request_time and body_bytes_sent by name.
+    format: '$service $status $request_time $body_bytes_sent'
+    source:
+      files: ['/var/log/personal-homepage-monitor/traffic.jsonl']
+    print_log: false
+    histogram_buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+    relabel_configs:
+      - target_label: service
+        from: service
+        whitelist: [website, whiteboard, study-agent]

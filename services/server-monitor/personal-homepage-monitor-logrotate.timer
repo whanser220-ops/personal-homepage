@@ -1,0 +1,11 @@
+[Unit]
+Description=Check monitoring request log retention every five minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Unit=personal-homepage-monitor-logrotate.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=Rotate the private bounded monitoring request log
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/logrotate --state /var/lib/personal-homepage-monitor-logrotate/status /etc/personal-homepage-grafana/traffic.logrotate
+StateDirectory=personal-homepage-monitor-logrotate
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/personal-homepage-monitor
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER

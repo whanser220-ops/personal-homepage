@@ -1,0 +1,1274 @@
+{
+  "uid": "monitor-sre-overview",
+  "title": "服务表现 · 四个黄金信号",
+  "description": "服务表现优先，资源压力用于定位。真实入口 HTTP 与本机探测分开解释；缺失值保留为空，不补造接入前的数据。",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "timezone": "Asia/Shanghai",
+  "refresh": "3s",
+  "tags": [
+    "server-monitor",
+    "sre",
+    "provisioned"
+  ],
+  "links": [
+    {
+      "title": "Google SRE · 监控分布式系统",
+      "url": "https://sre.google/sre-book/monitoring-distributed-systems/",
+      "targetBlank": true,
+      "type": "link"
+    }
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "3s",
+      "15s",
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "入口服务",
+        "type": "custom",
+        "query": "个人网站 : website,学习白板 : whiteboard,Study Agent : study-agent",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "hide": 0
+      },
+      {
+        "name": "resolution",
+        "type": "custom",
+        "query": "3s,5m,30m",
+        "current": {
+          "selected": true,
+          "text": "3s",
+          "value": "3s"
+        },
+        "options": [],
+        "hide": 2,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "先看服务表现，再看资源压力",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**延迟 · 流量 · 错误 · 饱和度**　成功和失败请求分开观察，优先定位实际症状。\n\n入口指标来自本站 Nginx 的真实离散 HTTP 请求，排除监控自身、健康探测和长连接。这里只展示观测结果，尚未定义业务 SLO，也未配置外部通知。"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "延迟 · 成功请求 P95",
+      "description": "过去5分钟2xx/3xx请求的P95；跨服务先合并直方图桶，再计算分位数。没有请求或采集失败时不显示0ms。",
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 6,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "(1000 * histogram_quantile(0.95, sum by (le) ((server_monitor:http_success_duration_seconds_bucket:rate5m{service=~\"$service\"} and (timestamp(server_monitor:http_success_duration_seconds_bucket:rate5m{service=~\"$service\"}) == scalar(max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})))) and on () (max(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"}) > time() - 9) and on () (max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})) > time() - 9))))) and on () ((max(up{job=\"server-monitor-http\",host_id=\"cloud-primary\"}) == 1) and (time() - max(timestamp(up{job=\"server-monitor-http\",host_id=\"cloud-primary\"})) < 45))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "流量 · 每秒请求",
+      "description": "近1分钟平均真实入口请求速率。零流量只是没有观察到请求，不等于服务健康。",
+      "gridPos": {
+        "x": 6,
+        "y": 3,
+        "w": 6,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "(sum((server_monitor:http_requests:rate1m{service=~\"$service\"} and (timestamp(server_monitor:http_requests:rate1m{service=~\"$service\"}) == scalar(max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})))) and on () (max(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"}) > time() - 9) and on () (max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})) > time() - 9)))) and on () ((max(up{job=\"server-monitor-http\",host_id=\"cloud-primary\"}) == 1) and (time() - max(timestamp(up{job=\"server-monitor-http\",host_id=\"cloud-primary\"})) < 45))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "错误 · 服务端 5xx",
+      "description": "近1分钟5xx请求占比；4xx单独用于诊断。分母为0时无样本，不判为0%健康。",
+      "gridPos": {
+        "x": 12,
+        "y": 3,
+        "w": 6,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "(100 * (sum((server_monitor:http_requests:rate1m{service=~\"$service\",status=~\"5..\"} and (timestamp(server_monitor:http_requests:rate1m{service=~\"$service\",status=~\"5..\"}) == scalar(max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})))) and on () (max(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"}) > time() - 9) and on () (max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})) > time() - 9))) or (sum((server_monitor:http_requests:rate1m{service=~\"$service\"} and (timestamp(server_monitor:http_requests:rate1m{service=~\"$service\"}) == scalar(max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})))) and on () (max(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"}) > time() - 9) and on () (max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})) > time() - 9))) * 0)) / (sum((server_monitor:http_requests:rate1m{service=~\"$service\"} and (timestamp(server_monitor:http_requests:rate1m{service=~\"$service\"}) == scalar(max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})))) and on () (max(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"}) > time() - 9) and on () (max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})) > time() - 9))) > 0)) and on () ((max(up{job=\"server-monitor-http\",host_id=\"cloud-primary\"}) == 1) and (time() - max(timestamp(up{job=\"server-monitor-http\",host_id=\"cloud-primary\"})) < 45))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "饱和度 · 负载 / 核",
+      "description": "共享宿主机1分钟负载除以CPU核心数，是CPU/IO需求压力的代理指标；不是某个入口服务的专属负载，也不是SLO。",
+      "gridPos": {
+        "x": 18,
+        "y": 3,
+        "w": 6,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "(server_monitor_host_load1{host_id=\"cloud-primary\"} and (timestamp(server_monitor_host_load1{host_id=\"cloud-primary\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}))) and on (host_id) (server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"} > time() - 45)) / on (host_id) (server_monitor_host_cpu_cores{host_id=\"cloud-primary\"} and (timestamp(server_monitor_host_cpu_cores{host_id=\"cloud-primary\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}))) and on (host_id) (server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"} > time() - 45))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "成功请求 P99",
+      "description": "5分钟成功请求尾延迟，避免均值掩盖少数慢请求。",
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "(1000 * histogram_quantile(0.99, sum by (le) ((server_monitor:http_success_duration_seconds_bucket:rate5m{service=~\"$service\"} and (timestamp(server_monitor:http_success_duration_seconds_bucket:rate5m{service=~\"$service\"}) == scalar(max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})))) and on () (max(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"}) > time() - 9) and on () (max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})) > time() - 9))))) and on () ((max(up{job=\"server-monitor-http\",host_id=\"cloud-primary\"}) == 1) and (time() - max(timestamp(up{job=\"server-monitor-http\",host_id=\"cloud-primary\"})) < 45))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "失败请求 P95",
+      "description": "仅5xx请求的延迟；没有5xx样本时留空，不与成功请求混合。",
+      "gridPos": {
+        "x": 6,
+        "y": 9,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "(1000 * histogram_quantile(0.95, sum by (le) ((server_monitor:http_server_error_duration_seconds_bucket:rate5m{service=~\"$service\"} and (timestamp(server_monitor:http_server_error_duration_seconds_bucket:rate5m{service=~\"$service\"}) == scalar(max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})))) and on () (max(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"}) > time() - 9) and on () (max(timestamp(server_monitor_http_recorded_at_seconds{host_id=\"cloud-primary\"})) > time() - 9))))) and on () ((max(up{job=\"server-monitor-http\",host_id=\"cloud-primary\"}) == 1) and (time() - max(timestamp(up{job=\"server-monitor-http\",host_id=\"cloud-primary\"})) < 45))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "内存可用",
+      "description": "",
+      "gridPos": {
+        "x": 12,
+        "y": 9,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "server_monitor_host_memory_available_bytes{host_id=\"cloud-primary\"} and (timestamp(server_monitor_host_memory_available_bytes{host_id=\"cloud-primary\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}))) and on (host_id) (server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"} > time() - 45)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "根磁盘可用",
+      "description": "",
+      "gridPos": {
+        "x": 18,
+        "y": 9,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "server_monitor_host_disk_available_bytes{host_id=\"cloud-primary\"} and (timestamp(server_monitor_host_disk_available_bytes{host_id=\"cloud-primary\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}))) and on (host_id) (server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"} > time() - 45)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "HTTP 端点 · 本机探测",
+      "description": "2xx仅证明固定探测URL通过；3xx/401/403证明入口可达。未验证完整业务流程或内容正确性。",
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 12,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "probe_http_status_code{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\",kind=\"http\"} and (timestamp(probe_http_status_code{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\",kind=\"http\"}) == on (host_id,id) group_left max by (host_id,id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\"}))) and on (host_id,id) (up{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\"} == 1) and on (host_id,id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\"}) > time() - 45)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "未响应",
+                  "color": "red"
+                },
+                "200": {
+                  "text": "200 · 检查通过",
+                  "color": "green"
+                },
+                "303": {
+                  "text": "303 · 认证跳转",
+                  "color": "blue"
+                },
+                "401": {
+                  "text": "401 · 认证入口可达",
+                  "color": "blue"
+                },
+                "403": {
+                  "text": "403 · 认证入口可达",
+                  "color": "blue"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 201,
+                "to": 299,
+                "result": {
+                  "text": "2xx · 检查通过",
+                  "color": "green"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 300,
+                "to": 399,
+                "result": {
+                  "text": "3xx · 入口可达",
+                  "color": "blue"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 400,
+                "to": 599,
+                "result": {
+                  "text": "HTTP 错误",
+                  "color": "red"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.labels.name}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "进程 / PostgreSQL 就绪",
+      "description": "进程存活与就绪检查分别提供线索，不能代替HTTP业务验证。",
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 12,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "max by (id,name) ((((server_monitor_custom_service_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\",status=\"healthy\"} and (timestamp(server_monitor_custom_service_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\",status=\"healthy\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45)) * 1) or (((server_monitor_custom_service_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\",status=\"unhealthy\"} and (timestamp(server_monitor_custom_service_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\",status=\"unhealthy\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45)) * 0) or (((server_monitor_custom_service_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\",status=\"unknown\"} and (timestamp(server_monitor_custom_service_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\",status=\"unknown\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45)) * -1))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "进程异常",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "进程运行",
+                  "color": "green"
+                },
+                "-1": {
+                  "text": "未知",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.labels.name}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "TCP 端口 · 本机探测",
+      "description": "只确认Perforce和远程运行端口能建立连接，不推断业务健康。",
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "probe_success{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\",kind=\"tcp\"} and (timestamp(probe_success{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\",kind=\"tcp\"}) == on (host_id,id) group_left max by (host_id,id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\"}))) and on (host_id,id) (up{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\"} == 1) and on (host_id,id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\"}) > time() - 45)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "连接失败",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "端口可达",
+                  "color": "blue"
+                },
+                "-1": {
+                  "text": "未知",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.labels.name}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "入口指标采集器",
+      "description": "只表示采集端是否可抓取，不表示业务健康。",
+      "gridPos": {
+        "x": 8,
+        "y": 19,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "up{job=\"server-monitor-http\",host_id=\"cloud-primary\"}",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "采集失败",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "可抓取",
+                  "color": "blue"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "HTTP 日志解析错误 · 5 分钟",
+      "description": "解析错误会影响入口统计完整性，应检查固定日志格式；不展示日志原文。",
+      "gridPos": {
+        "x": 16,
+        "y": 19,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "(sum(increase(server_monitor_http_parse_errors_total[5m]))) and on () ((max(up{job=\"server-monitor-http\",host_id=\"cloud-primary\"}) == 1) and (time() - max(timestamp(up{job=\"server-monitor-http\",host_id=\"cloud-primary\"})) < 45))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 15,
+      "type": "text",
+      "title": "覆盖范围与数据含义",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 24,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "入口服务：个人网站、学习白板、Study Agent。Jenkins、PostgreSQL、Perforce 等通过下方诊断与本机探测观察，未把端口存活当成真实业务请求。\n\n请求指标从本次接入开始积累；采集器重启会重置计数，停采期间的请求不回放为新流量。没有样本、指标缺失和故障分别解释。"
+      }
+    }
+  ]
+}

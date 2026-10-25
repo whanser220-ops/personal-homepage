@@ -1,0 +1,114 @@
+rule_files: [http-sre.rules.yml]
+evaluation_interval: 3s
+tests:
+  - interval: 3s
+    input_series:
+      - series: 'up{job="server-monitor-http"}'
+        values: '1+0x120'
+      - series: 'server_monitor_http_requests_total{job="server-monitor-http",service="website",status="200"}'
+        values: '0+3x120'
+      - series: 'server_monitor_http_requests_total{job="server-monitor-http",service="website",status="404"}'
+        values: '0+30x120'
+      - series: 'server_monitor_http_requests_total{job="server-monitor-http",service="website",status="500"}'
+        values: '0+3x120'
+      - series: 'server_monitor_http_response_bytes_total{job="server-monitor-http",service="website",status="200"}'
+        values: '0+300x120'
+      - series: 'server_monitor_http_request_duration_seconds_bucket{job="server-monitor-http",service="website",status="200",le="0.25"}'
+        values: '0+3x120'
+      - series: 'server_monitor_http_request_duration_seconds_bucket{job="server-monitor-http",service="website",status="303",le="0.25"}'
+        values: '0+1.5x120'
+      - series: 'server_monitor_http_request_duration_seconds_bucket{job="server-monitor-http",service="website",status="404",le="0.25"}'
+        values: '0+30x120'
+      - series: 'server_monitor_http_request_duration_seconds_bucket{job="server-monitor-http",service="website",status="500",le="0.25"}'
+        values: '0+3x120'
+    promql_expr_test:
+      - expr: 'server_monitor:http_requests:rate1m'
+        eval_time: 6m
+        exp_samples:
+          - labels: 'server_monitor:http_requests:rate1m{service="website",status="200"}'
+            value: 1
+          - labels: 'server_monitor:http_requests:rate1m{service="website",status="404"}'
+            value: 10
+          - labels: 'server_monitor:http_requests:rate1m{service="website",status="500"}'
+            value: 1
+      - expr: 'server_monitor:http_response_bytes:rate1m'
+        eval_time: 6m
+        exp_samples:
+          - labels: 'server_monitor:http_response_bytes:rate1m{service="website",status="200"}'
+            value: 100
+      - expr: 'server_monitor:http_success_duration_seconds_bucket:rate5m'
+        eval_time: 6m
+        exp_samples:
+          - labels: 'server_monitor:http_success_duration_seconds_bucket:rate5m{service="website",le="0.25"}'
+            value: 1.5
+      - expr: 'server_monitor:http_server_error_duration_seconds_bucket:rate5m'
+        eval_time: 6m
+        exp_samples:
+          - labels: 'server_monitor:http_server_error_duration_seconds_bucket:rate5m{service="website",le="0.25"}'
+            value: 1
+      - expr: 'server_monitor_http_recorded_at_seconds'
+        eval_time: 6m
+        exp_samples:
+          - labels: 'server_monitor_http_recorded_at_seconds{job="server-monitor-http"}'
+            value: 360
+  - interval: 3s
+    input_series:
+      - series: 'up{job="server-monitor-http"}'
+        values: '0+0x120'
+      - series: 'server_monitor_http_requests_total{job="server-monitor-http",service="website",status="200"}'
+        values: '0+3x120'
+    promql_expr_test:
+      - expr: 'server_monitor:http_requests:rate1m'
+        eval_time: 6m
+        exp_samples: []
+      - expr: 'server_monitor_http_recorded_at_seconds'
+        eval_time: 6m
+        exp_samples: []
+  - interval: 3s
+    input_series:
+      - series: 'up{job="server-monitor-http"}'
+        values: '1+0x120'
+    promql_expr_test:
+      - expr: 'server_monitor:http_requests:rate1m'
+        eval_time: 6m
+        exp_samples: []
+      - expr: 'server_monitor:http_success_duration_seconds_bucket:rate5m'
+        eval_time: 6m
+        exp_samples: []
+  - interval: 3s
+    input_series:
+      - series: 'up{job="server-monitor-http",host_id="cloud-primary"}'
+        values: '1+0x40'
+      - series: 'server_monitor_http_requests_total{job="server-monitor-http",host_id="cloud-primary",service="website",status="200"}'
+        values: '0+3x40'
+      # No stale marker: old status metadata/counters survive lookback after a
+      # restart, while the new exporter has observed only successful requests.
+      - series: 'server_monitor_http_requests_total{job="server-monitor-http",host_id="cloud-primary",service="website",status="500"}'
+        values: '0+3x15 _x25'
+      - series: 'server_monitor_http_response_bytes_total{job="server-monitor-http",host_id="cloud-primary",service="website",status="500"}'
+        values: '0+300x15 _x25'
+      - series: 'server_monitor_http_request_duration_seconds_bucket{job="server-monitor-http",host_id="cloud-primary",service="website",status="500",le="+Inf"}'
+        values: '0+3x15 _x25'
+    promql_expr_test:
+      - expr: 'server_monitor:http_requests:rate1m'
+        eval_time: 1m
+        exp_samples:
+          - labels: 'server_monitor:http_requests:rate1m{service="website",status="200"}'
+            value: 1
+      - expr: 'server_monitor:http_response_bytes:rate1m'
+        eval_time: 1m
+        exp_samples: []
+      - expr: 'server_monitor:http_server_error_duration_seconds_bucket:rate5m'
+        eval_time: 1m
+        exp_samples: []
+  - interval: 15s
+    input_series:
+      - series: 'up{job="server-monitor-http",host_id="cloud-primary"}'
+        values: '1+0x4'
+    promql_expr_test:
+      # Recording evaluation at 63s must retain the actual 60s source scrape.
+      - expr: 'server_monitor_http_recorded_at_seconds'
+        eval_time: 1m3s
+        exp_samples:
+          - labels: 'server_monitor_http_recorded_at_seconds{job="server-monitor-http",host_id="cloud-primary"}'
+            value: 60

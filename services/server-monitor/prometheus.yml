@@ -5,6 +5,7 @@ global:
 
 rule_files:
   - /etc/personal-homepage-prometheus/node-host.rules.yml
+  - /etc/personal-homepage-prometheus/http-sre.rules.yml
 
 scrape_configs:
   - job_name: server-monitor-node
@@ -18,7 +19,7 @@ scrape_configs:
           host_id: cloud-primary
     metric_relabel_configs:
       - source_labels: [__name__]
-        regex: 'node_(cpu_seconds_total|load1|load5|load15|memory_(MemTotal|MemAvailable|SwapTotal|SwapFree)_bytes|filesystem_(size|avail|free)_bytes|disk_(read|written)_bytes_total|network_(receive|transmit)_bytes_total|boot_time_seconds|time_seconds|uname_info|exporter_build_info|scrape_collector_success)'
+        regex: 'node_(cpu_seconds_total|load1|load5|load15|memory_(MemTotal|MemAvailable|SwapTotal|SwapFree)_bytes|filesystem_(size|avail|free)_bytes|disk_(read|written)_bytes_total|network_(receive|transmit)_bytes_total|pressure_(cpu|memory|io)_(waiting|stalled)_seconds_total|boot_time_seconds|time_seconds|uname_info|exporter_build_info|scrape_collector_success)'
         action: keep
       - source_labels: [__name__, mountpoint]
         regex: 'node_filesystem_.+;/.+'
@@ -93,3 +94,41 @@ scrape_configs:
       - targets: ['127.0.0.1:19104']
         labels:
           host_id: cloud-primary
+  - job_name: server-monitor-http
+    scrape_interval: 3s
+    scrape_timeout: 2s
+    sample_limit: 4096
+    label_limit: 8
+    static_configs:
+      - targets: ['127.0.0.1:19111']
+        labels:
+          host_id: cloud-primary
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'server_monitor_ingress_(http_response_count_total|http_response_size_bytes|http_response_time_seconds_hist_(bucket|sum|count)|parse_errors_total)'
+        action: keep
+      - source_labels: [__name__, service]
+        regex: 'server_monitor_ingress_http_.+;(website|whiteboard|study-agent)'
+        target_label: monitor_valid_service
+        replacement: 'yes'
+      - source_labels: [__name__, monitor_valid_service]
+        regex: 'server_monitor_ingress_http_.+;'
+        action: drop
+      - source_labels: [__name__]
+        regex: 'server_monitor_ingress_http_response_count_total'
+        target_label: __name__
+        replacement: server_monitor_http_requests_total
+      - source_labels: [__name__]
+        regex: 'server_monitor_ingress_http_response_size_bytes'
+        target_label: __name__
+        replacement: server_monitor_http_response_bytes_total
+      - source_labels: [__name__]
+        regex: 'server_monitor_ingress_http_response_time_seconds_hist_(bucket|sum|count)'
+        target_label: __name__
+        replacement: 'server_monitor_http_request_duration_seconds_${1}'
+      - source_labels: [__name__]
+        regex: 'server_monitor_ingress_parse_errors_total'
+        target_label: __name__
+        replacement: server_monitor_http_parse_errors_total
+      - regex: 'method|monitor_valid_service'
+        action: labeldrop

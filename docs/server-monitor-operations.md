@@ -1,10 +1,12 @@
 # 服务监控运维
 
-入口为 `https://warmhanser.com/server-monitor`，仅监控 `cloud-primary` 一台宿主机。Google 登录和玻璃看板沿用现有网站；同机独立运行 Prometheus、node_exporter、cAdvisor、blackbox_exporter，以及只负责项目特定检查的 Python exporter。未部署 Grafana，不发送外部通知。
+入口为 `https://warmhanser.com/server-monitor`，仅监控 `cloud-primary` 一台宿主机。网站保留导航与原 Google 登录，主体改为原生 Grafana 的四个黄金信号看板；同机独立运行 Prometheus、Grafana、node_exporter、cAdvisor、blackbox_exporter、真实 HTTP 日志指标 exporter，以及只负责项目特定检查的 Python exporter。不发送外部通知。
+
+Grafana 13.2.4 仅监听 `127.0.0.1:19110`，Nginx 在 `/server-monitor/grafana/` 的每次请求上校验原数据库会话，再覆盖身份为唯一允许的 Google 账号与固定 Viewer 权限。没有独立 Grafana 登录；退出网站后无法继续通过 Grafana Cookie 读取指标。实时概览每 3 秒刷新；趋势与基础设施看板每 30 秒刷新。安装版本、私有身份代理、受限旧 PostgreSQL 历史数据源、隐私日志与新增事务的完整操作说明见 [Grafana 运维说明](../services/server-monitor/grafana/README.md)；真实请求指标语义见 [HTTP 指标说明](../services/server-monitor/HTTP_METRICS.md)。
 
 ## 数据流与采样
 
-采集链路为 `Prometheus → 各回环 exporter → 宿主机 / Docker / 固定服务`；查询链路为 `浏览器 → Google 会话校验后的 Next.js → Docker 私网 relay → Prometheus HTTP API`。浏览器不能直接访问 exporter、Docker socket 或 Prometheus。
+采集链路为 `Prometheus → 各回环 exporter → 宿主机 / Docker / 固定服务 / 四字段隐私访问日志`；主看板查询链路为 `浏览器 → Nginx → Next.js Google 会话授权 → Grafana → 本机 Prometheus / 受限 PostgreSQL 历史视图`。原 Next.js current/history 接口继续通过 Docker 私网 relay 读取指标，保留兼容能力。浏览器不能直接访问 exporter、Docker socket、数据库或 Prometheus。
 
 | Prometheus job | 来源 | 节拍 / 抓取超时 | 职责 |
 | --- | --- | --- | --- |
@@ -12,12 +14,13 @@
 | `server-monitor-cadvisor` | cAdvisor，`127.0.0.1:19102` | 15 秒 / 5 秒 | 固定生产容器的 CPU 累计计数、内存 working set、内存上限和 `container_last_seen`。 |
 | `server-monitor-blackbox` | blackbox_exporter，`127.0.0.1:19103/probe` | 15 秒 / 4 秒 | 4 个固定 HTTP 入口和 2 个 TCP 端口；每项探测最长 3 秒。 |
 | `server-monitor-custom` | Python，`127.0.0.1:19104/metrics/custom` | 15 秒 / 8 秒 | Docker 指定元数据、4 个 systemd 进程和 PostgreSQL 就绪检查。 |
+| `server-monitor-http` | nginxlog exporter，`127.0.0.1:19111` | 3 秒 / 2 秒 | 真实网站、白板、Study Agent 的请求计数、耗时分布、响应字节和解析错误；监控/健康/流式连接除外。 |
 
 `node-host.rules.yml` 每 3 秒把原生 node 指标转换为原有 `server_monitor_host_*` 指标；保留 `host_id=cloud-primary`、`job=server-monitor-host`、`instance=127.0.0.1:19100` 的历史标签。这里的 `19100` 是兼容旧历史的标签，标准模式不需要该端口继续监听。规则只取与 node 时间指标同一抓取帧的数据，并检查 `up` 和实际样本时间；记录规则求值时间不能冒充新采样时间。规则输出沿用原名称与标签，因此继续查询原 Prometheus TSDB 就能显示迁移前后的主机历史，不重建或复制曲线。
 
 Python 不导入旧 `collector.py`，不再读取主机资源、运行 Docker stats 或 HTTP/TCP 探测，也不创建 SQLite、读取投递凭据或向网站推送。一次请求并行执行恰好 3 类固定命令：Docker inspect、批量 systemctl show、容器内 pg_isready；持久线程池最多 3 个 worker，每条命令最长 3 秒。采集锁禁止重叠；14 秒单调时钟缓存避免影子与生产 Prometheus 短暂并行时重复执行命令，并为 15 秒节拍保留 1 秒抖动余量。缓存返回原样本与原 `server_monitor_custom_collected_at_seconds`，不会刷新其年龄。
 
-页面当前值每 3 秒请求，历史每 30 秒请求，切换范围立即加载；1 小时按 3 秒、24 小时按 5 分钟、7 天按 30 分钟聚合。Next.js 读取原始采样矩阵，按各来源的实际抓取帧匹配数据，避免 Prometheus 重启后旧镜像或旧状态标签被 lookback 重新带入。主机时间来自记录指标内的真实 node 抓取时间；检查时间综合 custom 采集时间、cAdvisor 抓取与容器 last_seen、各 blackbox 来源，按最旧或缺失来源判断是否过期。超过 45 秒标记过期，缺失值保留 `null`，不能用 0 或前值补齐断点。
+保留的兼容读取接口中，当前值按 3 秒、历史按 30 秒请求，切换范围立即加载；1 小时按 3 秒、24 小时按 5 分钟、7 天按 30 分钟聚合。Next.js 读取原始采样矩阵，按各来源的实际抓取帧匹配数据，避免 Prometheus 重启后旧镜像或旧状态标签被 lookback 重新带入。主机时间来自记录指标内的真实 node 抓取时间；检查时间综合 custom 采集时间、cAdvisor 抓取与容器 last_seen、各 blackbox 来源，按最旧或缺失来源判断是否过期。超过 45 秒标记过期，缺失值保留 `null`，不能用 0 或前值补齐断点。
 
 Prometheus 使用独立本机时序数据库，保留 7 天，并设置 1 GB 保留大小上限：达到任一限制后删除较旧 block，故大小上限可能缩短实际历史。大小保留不是整个目录的硬配额，WAL/head 等仍需要额外磁盘余量。不要把运行中的 TSDB 目录作为普通文件直接复制；当前没有远端长期存储或独立服务器告警。
 
@@ -71,6 +74,8 @@ Google 出网继续通过原 `personal-homepage-monitor-proxy.socket` 的私网 
 
 ## 影子验证、切换与事务回退
 
+新增 Grafana 发布步骤：原 OAuth prepare 后，先 `install-grafana-history.py prepare` 准备独立只读角色/旧数值视图，再 `install-grafana.py prepare` 创建隐私日志并启动私有 Grafana，随后 `install-http-metrics.py prepare`。它们不启用公网路由；下述影子 Prometheus 现在包含第 10 个 HTTP 指标目标。候选编译运行时额外验证 Grafana 授权路由匿名/伪会话 401 与正确会话 204。网站切换后一起原子更新 HTTP、HTTPS 与 http-context 日志 map，`nginx -t` 通过才 reload；再执行 `verify-grafana.py` 核对伪造身份无效、内部授权路由不可访问、Viewer、三块原生看板及实际 Prometheus/只读 PostgreSQL 查询。部署失败先恢复 Nginx，再恢复 Prometheus、HTTP exporter、Grafana、只读历史角色、原 exporter/OAuth 与镜像；Grafana 回退早于其历史凭据回退。成功后才提交各事务。Grafana SQLite 单独在线备份，原业务数据与 OAuth 会话不变。
+
 始终通过任务 worktree、提交和现有 Jenkins `personal-homepage-deploy` 发布。同一版本的镜像、部署脚本、规则和监控配置通过 Jenkins manifest 携带；网站发布不构建或启动另一个 Prometheus 容器。Prometheus 和 exporter 均为独立宿主机服务，配置和程序内容没有变化时，普通网站发布不应重启生产抓取服务。
 
 首次准备[Prometheus 官方 3.13.5 发行包](https://github.com/prometheus/prometheus/releases/tag/v3.13.5)：将 `prometheus-3.13.5.linux-amd64.tar.gz` 放到 `/opt/personal-homepage-prometheus/downloads/`，目录由 root 管理。安装器重新校验以下固定 SHA-256，可对照同一官方发行页的 `sha256sums.txt`：
@@ -89,7 +94,7 @@ Google 出网继续通过原 `personal-homepage-monitor-proxy.socket` 的私网 
 
 只提取已知普通二进制文件，cAdvisor 还验证 ELF；安装器不从任意 URL 获取程序。升级必须同时维护固定校验值、unit、兼容指标及验收，不以版本号相同替代文件校验。
 
-本次标准 exporter 的并行验证入口是 `sudo python3 deploy/install-monitor-exporters.py shadow`。它只管理新 exporter、单独的影子 Prometheus `19094`、私网 relay `19095` 及其独立配置/TSDB，不修改生产 `19090` 配置、旧统一 Python `19100` 的文件或网站环境；旧服务状态纳入回退快照。成功仅提交这次并行安装，网站仍读取原生产数据源。失败恢复已备份文件及原启停状态。影子验收包括真实 3 秒 / 15 秒节拍、9 个抓取目标（node、cAdvisor、custom 各 1，blackbox 6）、完整 ID 连接、主机规则数值、服务语义、缺失处理和资源占用。
+本次标准 exporter 的并行验证入口是 `sudo python3 deploy/install-monitor-exporters.py shadow`。它只管理新 exporter、单独的影子 Prometheus `19094`、私网 relay `19095` 及其独立配置/TSDB，不修改生产 `19090` 配置、旧统一 Python `19100` 的文件或网站环境；旧服务状态纳入回退快照。成功仅提交这次并行安装，网站仍读取原生产数据源。失败恢复已备份文件及原启停状态。影子验收包括真实 3 秒 / 15 秒节拍、10 个抓取目标（node、cAdvisor、custom、HTTP 各 1，blackbox 6）、完整 ID 连接、主机规则数值、服务语义、缺失处理和资源占用。
 
 Jenkins 正式发布按以下顺序执行：
 
@@ -99,7 +104,7 @@ Jenkins 正式发布按以下顺序执行：
 4. `verify-server-monitor.py` 验证页面、Google 配置、匿名读取 401、公网采集 404、原生来源和主机记录数据新鲜、私有监听地址，并从真实网站容器查询私网指标。还需使用真实 Google 登录检查页面和授权接口，不能把测试会话当作真实登录证明。
 5. 验证通过才 `finalize`：停止并禁用旧统一 Python `personal-homepage-monitor-exporter.service`（19100）及更早的推送采集器；停止影子 Prometheus 19094 和其 19095 relay，新 node/cAdvisor/blackbox/custom 继续为生产服务。随后提交各安装事务并清理备份。旧脚本、SQLite、PostgreSQL 表、生产 TSDB 和旧发行二进制均保留。
 
-部署失败时先恢复本次变更的 Nginx，再依次回退生产 Prometheus 事务、新 exporter/影子事务、原监控/OAuth事务，最后重建匹配的网站/白板镜像。事务目录分别为 `/var/lib/personal-homepage-prometheus-deployment/`、`/var/lib/personal-homepage-exporters-deployment/`、`/var/lib/personal-homepage-monitor-deployment/`，均为 0700，备份文件 0600。恢复原文件与服务启停状态，保留 TSDB 和队列；存在未结束事务时拒绝覆盖，先核对失败构建和 metadata，再使用匹配版本 `rollback`，不能直接删除目录解除阻塞。
+部署失败时先恢复本次变更的 Nginx，再依次回退生产 Prometheus、HTTP exporter、Grafana、只读历史角色、新 exporter/影子事务、原监控/OAuth 事务，最后重建匹配的网站/白板镜像。新增 Grafana、历史角色与 HTTP 事务目录分别为 /var/lib/personal-homepage-grafana-deployment、/var/lib/personal-homepage-grafana-history-deployment、/var/lib/personal-homepage-http-metrics-deployment。事务目录分别为 `/var/lib/personal-homepage-prometheus-deployment/`、`/var/lib/personal-homepage-exporters-deployment/`、`/var/lib/personal-homepage-monitor-deployment/`，均为 0700，备份文件 0600。恢复原文件与服务启停状态，保留 TSDB 和队列；存在未结束事务时拒绝覆盖，先核对失败构建和 metadata，再使用匹配版本 `rollback`，不能直接删除目录解除阻塞。
 
 成功 commit 后不能用 `rollback` 任意恢复历史版本。回退到旧统一 Python 时，恢复匹配版本的 Prometheus 两个抓取 job、网站镜像与 `MONITOR_EXPORTER_MODE=legacy`，启用保留的 19100 服务；继续使用原生产 TSDB、`MONITOR_DATA_BACKEND=prometheus`、原私网 URL 和首次切换边界，验证后再退役新组件。旧运行文件位于 `/opt/personal-homepage-monitor/exporter.py`；不要把当前仅负责 custom 的源码覆盖到该旧路径。
 
@@ -119,4 +124,4 @@ systemctl show personal-homepage-prometheus.service personal-homepage-node-expor
 
 验收必须区分本地测试、Jenkins 目标提交成功、容器实际版本、真实 Google 登录、授权接口数据与桌面/手机布局。对照宿主机命令、Docker 固定字段和资源累计计数，确认 3 秒 / 15 秒连续采样、三档曲线、原 PostgreSQL 边界与既有 Prometheus 历史；核对 3 个容器、11 项服务和认证跳转语义。确认各来源中断产生缺失/过期，记录规则不把旧值重写成新采样；主机恢复、容器重建与 Prometheus 重启后不会混入旧 ID 或旧镜像。网站或数据库短暂停止时，Prometheus 仍应保存其余指标。
 
-生产 19090 和 19101–19104 只监听回环，19091 仅监听 Docker gateway，均不能通过公网 IP 连接；成功退役后 19100 和影子 19094/19095 应停止监听。旧 ingest HTTP/HTTPS 仍为 404；核对网站、白板、Study Agent、Jenkins、Perforce 和构建指标正常。7 天 retention 配置可立即检查，完整到期删除仍需经过对应运行时间；影子运行和短期测试不能证明完整 7 天稳定性。
+生产 19090、19101–19104、Grafana 19110 和 HTTP 指标 19111 只监听回环，19091 仅监听 Docker gateway，均不能通过公网 IP 连接；成功退役后 19100 和影子 19094/19095 应停止监听。旧 ingest HTTP/HTTPS 仍为 404；核对网站、白板、Study Agent、Jenkins、Perforce 和构建指标正常。7 天 retention 配置可立即检查，完整到期删除仍需经过对应运行时间；影子运行和短期测试不能证明完整 7 天稳定性。

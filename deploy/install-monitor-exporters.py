@@ -27,6 +27,7 @@ ROOT = Path('/opt/personal-homepage-prometheus')
 CONFIG_ROOT = Path('/etc/personal-homepage-prometheus')
 SHADOW_CONFIG = CONFIG_ROOT / 'shadow/prometheus.yml'
 SHADOW_RULES = CONFIG_ROOT / 'shadow/node-host.rules.yml'
+SHADOW_HTTP_RULES = CONFIG_ROOT / 'shadow/http-sre.rules.yml'
 BLACKBOX_CONFIG = CONFIG_ROOT / 'blackbox.yml'
 CUSTOM_PROGRAM = Path('/opt/personal-homepage-monitor/custom/exporter.py')
 STATE = Path('/var/lib/personal-homepage-prometheus-shadow')
@@ -42,7 +43,7 @@ SHADOW = 'personal-homepage-prometheus-shadow.service'
 SOCKET = 'personal-homepage-prometheus-shadow-proxy.socket'
 PROXY = 'personal-homepage-prometheus-shadow-proxy.service'
 UNITS = [NODE, CADVISOR, BLACKBOX, CUSTOM, SHADOW, SOCKET, PROXY]
-TARGETS = [SHADOW_CONFIG, SHADOW_RULES, BLACKBOX_CONFIG, CUSTOM_PROGRAM,
+TARGETS = [SHADOW_CONFIG, SHADOW_RULES, SHADOW_HTTP_RULES, BLACKBOX_CONFIG, CUSTOM_PROGRAM,
            *[Path('/etc/systemd/system') / unit for unit in UNITS]]
 ARTIFACTS = {
     'node_exporter': {'version': '1.12.1', 'filename': 'node_exporter-1.12.1.linux-amd64.tar.gz',
@@ -131,7 +132,10 @@ def render_rules():
 
 def render_prometheus(shadow=False):
     value = (REPO / 'services/server-monitor/prometheus.yml').read_text()
-    return value.replace((CONFIG_ROOT / 'node-host.rules.yml').as_posix(), SHADOW_RULES.as_posix()) if shadow else value
+    if shadow:
+        value = value.replace((CONFIG_ROOT / 'node-host.rules.yml').as_posix(), SHADOW_RULES.as_posix())
+        value = value.replace((CONFIG_ROOT / 'http-sre.rules.yml').as_posix(), SHADOW_HTTP_RULES.as_posix())
+    return value
 
 
 def render_unit(unit):
@@ -152,6 +156,10 @@ def validate_rule_fixture():
         (root / 'node-host.rules.yml').write_text(rules.replace('__ROOT_DEVICE__', 'vda1').replace('__NETWORK_INTERFACE__', 'eth0'))
         shutil.copyfile(REPO / 'tests/monitor-node-rules.test.yml', root / 'monitor-node-rules.test.yml')
         subprocess.run([str(PROMTOOL), 'test', 'rules', 'monitor-node-rules.test.yml'], cwd=root,
+                       check=True, capture_output=True, text=True, timeout=30)
+        shutil.copyfile(REPO / 'services/server-monitor/http-sre.rules.yml', root / 'http-sre.rules.yml')
+        shutil.copyfile(REPO / 'tests/monitor-http-sre-rules.test.yml', root / 'monitor-http-sre-rules.test.yml')
+        subprocess.run([str(PROMTOOL), 'test', 'rules', 'monitor-http-sre-rules.test.yml'], cwd=root,
                        check=True, capture_output=True, text=True, timeout=30)
 
 
@@ -225,6 +233,7 @@ def install_runtime():
     http_codes = ', '.join(str(code) for code in [*range(200, 400), 401, 403])
     sources = {
         SHADOW_CONFIG: render_prometheus(shadow=True), SHADOW_RULES: render_rules(),
+        SHADOW_HTTP_RULES: (REPO / 'services/server-monitor/http-sre.rules.yml').read_text(),
         BLACKBOX_CONFIG: (REPO / 'services/server-monitor/blackbox.yml').read_text().replace('__VALID_HTTP_STATUS_CODES__', http_codes),
         CUSTOM_PROGRAM: (REPO / 'services/server-monitor/exporter.py').read_text(),
     }
@@ -242,6 +251,7 @@ def install_runtime():
         write(path, sources[path])
     run(str(PROMTOOL), 'check', 'config', str(SHADOW_CONFIG))
     run(str(PROMTOOL), 'check', 'rules', str(SHADOW_RULES))
+    run(str(PROMTOOL), 'check', 'rules', str(SHADOW_HTTP_RULES))
     validate_rule_fixture()
     run('systemctl', 'daemon-reload')
     if any(unit_dir / unit in changed for unit in (SOCKET, PROXY)):
@@ -252,7 +262,7 @@ def install_runtime():
         modified = unit_dir / unit in changed or binary_units.get(unit) in binaries
         modified |= unit == BLACKBOX and BLACKBOX_CONFIG in changed
         modified |= unit == CUSTOM and CUSTOM_PROGRAM in changed
-        modified |= unit == SHADOW and (SHADOW_CONFIG in changed or SHADOW_RULES in changed)
+        modified |= unit == SHADOW and bool({SHADOW_CONFIG, SHADOW_RULES, SHADOW_HTTP_RULES} & changed)
         run('systemctl', 'restart' if modified else 'start', unit)
 
 
@@ -278,10 +288,13 @@ def verify(base='http://127.0.0.1:19094', *, relay=True):
     last_message = None
     for attempt in range(25):
         try:
-            for job, count in [('node', 1), ('cadvisor', 1), ('blackbox', 6), ('custom', 1)]:
+            for job, count in [('node', 1), ('cadvisor', 1), ('blackbox', 6), ('custom', 1), ('http', 1)]:
                 rows = query('up{job="server-monitor-' + job + '"}', base)
                 if len(rows) != count or any(float(row['value'][1]) != 1 for row in rows):
                     raise RuntimeError('Exporter scrape is not healthy: ' + job)
+            parsing = query(frame_expression('server_monitor_http_parse_errors_total', 'server-monitor-http'), base)
+            if len(parsing) != 1 or float(parsing[0]['value'][1]) != 0:
+                raise RuntimeError('HTTP privacy log parser is missing or has errors')
             for metric, maximum_age in [('server_monitor_host_collected_at_seconds', 12), ('server_monitor_custom_collected_at_seconds', 45)]:
                 rows = query(metric + '{host_id="cloud-primary"}', base)
                 if len(rows) != 1 or not -5 <= time.time() - float(rows[0]['value'][1]) <= maximum_age:

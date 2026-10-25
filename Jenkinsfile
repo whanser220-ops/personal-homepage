@@ -85,7 +85,7 @@ printf 'SOURCE_COMMIT_SHA=%s\n' "$(git rev-parse --short HEAD)" > .ci/source.env
                 // Deployment runs on a fresh ephemeral agent, so carry the
                 // runtime manifest explicitly instead of relying on stale
                 // server-side copies.
-                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf,deploy/nginx-learning-whiteboard.conf,deploy/install-whiteboard-nginx.py,deploy/nginx-server-monitor.conf,deploy/install-monitor-nginx.py,deploy/install-server-monitor.py,deploy/install-prometheus.py,deploy/install-monitor-exporters.py,deploy/verify-server-monitor.py,deploy/verify-monitor-runtime.py,deploy/monitor-runtime-fixture.mjs,deploy/monitor-runtime-probe.mjs,services/server-monitor/**,tests/monitor-node-rules.test.yml'
+                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf,deploy/nginx-learning-whiteboard.conf,deploy/install-whiteboard-nginx.py,deploy/nginx-server-monitor.conf,deploy/nginx-monitor-http.conf,deploy/install-monitor-nginx.py,deploy/install-server-monitor.py,deploy/install-prometheus.py,deploy/install-monitor-exporters.py,deploy/install-grafana.py,deploy/install-grafana-history.py,deploy/install-http-metrics.py,deploy/verify-grafana.py,deploy/verify-grafana-proxy.py,deploy/verify-server-monitor.py,deploy/verify-monitor-runtime.py,deploy/monitor-runtime-fixture.mjs,deploy/monitor-runtime-probe.mjs,services/server-monitor/**,tests/monitor-*-rules.test.yml,tests/verify_grafana_queries.py'
             }
         }
 
@@ -214,6 +214,12 @@ deploy_files=(
     deploy/install-server-monitor.py
     deploy/install-prometheus.py
     deploy/install-monitor-exporters.py
+    deploy/install-grafana.py
+    deploy/install-grafana-history.py
+    deploy/install-http-metrics.py
+    deploy/verify-grafana.py
+    deploy/verify-grafana-proxy.py
+    deploy/nginx-monitor-http.conf
     deploy/verify-server-monitor.py
     deploy/verify-monitor-runtime.py
     deploy/monitor-runtime-fixture.mjs
@@ -228,10 +234,26 @@ deploy_files=(
     services/server-monitor/personal-homepage-blackbox-exporter.service
     services/server-monitor/personal-homepage-monitor-custom.service
     services/server-monitor/personal-homepage-prometheus-shadow.service
+    services/server-monitor/personal-homepage-grafana.service
+    services/server-monitor/personal-homepage-monitor-logrotate.service
+    services/server-monitor/personal-homepage-monitor-logrotate.timer
+    services/server-monitor/personal-homepage-http-metrics.service
+    services/server-monitor/http-log-exporter.yml
+    services/server-monitor/http-sre.rules.yml
+    services/server-monitor/grafana/grafana.ini
+    services/server-monitor/grafana/traffic.logrotate
+    services/server-monitor/grafana/provisioning/datasources/prometheus.yml
+    services/server-monitor/grafana/provisioning/datasources/history.yml
+    services/server-monitor/grafana/provisioning/dashboards/monitor.yml
+    services/server-monitor/grafana/dashboards/overview.json
+    services/server-monitor/grafana/dashboards/trends.json
+    services/server-monitor/grafana/dashboards/infrastructure.json
     services/server-monitor/prometheus.yml
     services/server-monitor/node-host.rules.yml
     services/server-monitor/blackbox.yml
     tests/monitor-node-rules.test.yml
+    tests/monitor-http-sre-rules.test.yml
+    tests/verify_grafana_queries.py
 )
 for deploy_file in "${deploy_files[@]}"; do
     if [ ! -f "$deploy_file" ]; then

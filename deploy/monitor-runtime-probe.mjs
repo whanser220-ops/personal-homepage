@@ -29,6 +29,15 @@ try {
   const wrong = await request("/api/monitor/current", "__Host-server-monitor-session=" + "z".repeat(43));
   requireCondition(wrong.status === 401, "runtime_wrong_session_rejected");
   privateResponse(wrong);
+  for (const cookie of [undefined, "__Host-server-monitor-session=" + "z".repeat(43)]) {
+    const response = await request("/api/monitor/auth/grafana", cookie);
+    requireCondition(response.status === 401 && !response.headers.has("x-monitor-user"), "runtime_grafana_unauthorized");
+    privateResponse(response);
+  }
+  const grafanaOwner = await request("/api/monitor/auth/grafana", ownerCookie);
+  requireCondition(grafanaOwner.status === 204 && grafanaOwner.headers.get("x-monitor-user") === "whanser220@gmail.com",
+    "runtime_grafana_owner_identity_invalid");
+  privateResponse(grafanaOwner);
   let current;
   const standard = process.env.MONITOR_EXPORTER_MODE === "standard";
   const attempts = standard ? 40 : 7;
@@ -83,7 +92,7 @@ try {
     history[range] = { status: response.status, points: count, populated };
   }
   console.log(JSON.stringify({ test: "compiled-next-runtime", anonymous: 401, wrongSession: 401,
-    current: 200, exporterMode: standard ? "standard" : "legacy", containers: 3, services: 11, history }));
+    current: 200, grafanaAuthorization: 204, exporterMode: standard ? "standard" : "legacy", containers: 3, services: 11, history }));
 } catch (error) {
   console.error(/^runtime_[A-Za-z0-9_]+$/.test(error.message || "") ? error.message : "runtime_probe_failed_" + error.name);
   process.exitCode = 1;

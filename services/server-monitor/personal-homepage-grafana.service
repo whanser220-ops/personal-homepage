@@ -1,0 +1,40 @@
+[Unit]
+Description=Private provisioned server-monitor Grafana
+After=network-online.target personal-homepage-prometheus.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sre-grafana
+Group=sre-grafana
+WorkingDirectory=/opt/personal-homepage-grafana/releases/13.2.4
+Environment=GOMEMLIMIT=192MiB
+Environment=GOMAXPROCS=1
+EnvironmentFile=/etc/personal-homepage-grafana/secrets.env
+EnvironmentFile=-/etc/personal-homepage-grafana/history.env
+ExecStart=/opt/personal-homepage-grafana/releases/13.2.4/bin/grafana server --homepath=/opt/personal-homepage-grafana/releases/13.2.4 --config=/etc/personal-homepage-grafana/grafana.ini
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+StateDirectory=personal-homepage-grafana
+StateDirectoryMode=0750
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=localhost
+__HISTORY_ADDRESS_ALLOW__
+CapabilityBoundingSet=
+MemoryHigh=192M
+MemoryMax=320M
+CPUQuota=40%
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target

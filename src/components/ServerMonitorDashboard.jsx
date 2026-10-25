@@ -1,251 +1,236 @@
 "use client";
 
 import Link from "next/link";
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Activity, ArrowDown, ArrowRight, ArrowUp, Box, ChartNoAxesCombined, Check, ChevronRight, Cpu, Grid2X2, HardDrive, LoaderCircle, LockKeyhole, LogOut, MemoryStick, Moon, Network, RefreshCw, ShieldCheck, Sun, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Activity, ArrowRight, ArrowUpRight, ChartNoAxesCombined, Check, ChevronLeft, CircleAlert, LoaderCircle, LockKeyhole, LogOut, Moon, RefreshCw, Server, ShieldCheck, Sun } from "lucide-react";
+import { MONITOR_GRAFANA_RANGES, MONITOR_GRAFANA_VIEWS, monitorGrafanaHash, monitorGrafanaUrl, parseMonitorGrafanaHash } from "./monitorGrafanaView.js";
 import styles from "./ServerMonitorDashboard.module.css";
 
-const css = (...names) => names.filter(Boolean).map((name) => styles[name]).join(" ");
-const RANGES = [{ value: "1h", label: "1 小时", seconds: 3600 }, { value: "24h", label: "24 小时", seconds: 86400 }, { value: "7d", label: "7 天", seconds: 604800 }];
-const RESOURCE_SERIES = [{ key: "cpuPercent", label: "CPU", color: "var(--cyan)" }, { key: "memoryPercent", label: "内存", color: "var(--lilac)" }, { key: "swapPercent", label: "Swap", color: "var(--mint)" }, { key: "diskPercent", label: "磁盘", color: "var(--peach)" }];
-const NETWORK_SERIES = [{ key: "rxBytesPerSecond", label: "接收", color: "var(--cyan)" }, { key: "txBytesPerSecond", label: "发送", color: "var(--lilac)" }];
-const DISK_SERIES = [{ key: "diskReadBytesPerSecond", label: "读取", color: "var(--mint)" }, { key: "diskWriteBytesPerSecond", label: "写入", color: "var(--lilac)" }];
-const EMPTY_POINTS = [];
-const validNumber = (value) => typeof value === "number" && Number.isFinite(value);
-const percentage = (value) => validNumber(value) ? `${value.toFixed(1)}%` : "—";
-const plainNumber = (value, digits = 2) => validNumber(value) ? value.toFixed(digits) : "—";
-function byteParts(value, digits = 1) {
-  if (!validNumber(value) || value < 0) return { value: "—", unit: "" };
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-  const unit = value === 0 ? 0 : Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
-  return { value: (value / 1024 ** unit).toFixed(unit ? digits : 0), unit: units[unit] };
-}
-function bytes(value, digits = 1) { const result = byteParts(value, digits); return `${result.value}${result.unit ? ` ${result.unit}` : ""}`; }
-function rate(value) { return validNumber(value) && value >= 0 ? `${bytes(value)}/s` : "—"; }
-function dateLabel(value, withDate = true, withSeconds = withDate) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "—";
-  return date.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", month: withDate ? "2-digit" : undefined, day: withDate ? "2-digit" : undefined, hour: "2-digit", minute: "2-digit", second: withSeconds ? "2-digit" : undefined, hour12: false });
-}
-function uptime(seconds) { return !validNumber(seconds) ? "—" : `${Math.floor(seconds / 86400)} 天 ${Math.floor(seconds % 86400 / 3600)} 小时 ${Math.floor(seconds % 3600 / 60)} 分钟`; }
-function imageVersion(image) { if (!image) return "版本未知"; if (image.includes("@")) return image.split("@").at(-1); const last = image.split("/").at(-1); return last.includes(":") ? last.slice(last.lastIndexOf(":") + 1) : "未指定标签"; }
-function containerState(value) { return ({ running: "运行中", exited: "已退出", restarting: "重启中", paused: "已暂停", created: "已创建", dead: "已停止" })[value] || "未知"; }
-function containerHealth(value) { return ({ healthy: "健康", unhealthy: "不健康", starting: "启动检查中", none: "未配置" })[value] || "未配置 / 未知"; }
-function serviceState(service) {
-  if (service.status === "unhealthy") return { tone: "danger", label: "异常" };
-  if (service.status !== "healthy" && service.status !== "reachable") return { tone: "neutral", label: "未知" };
-  if (service.kind === "tcp") return { tone: "info", label: "端口可达" };
-  if (service.kind === "process") return { tone: "success", label: "进程运行" };
-  return service.status === "reachable" ? { tone: "info", label: "HTTP 可达" } : { tone: "success", label: "HTTP 健康" };
-}
-function checkKind(service) { return service.kind === "http" ? "HTTP 检查" : service.kind === "process" ? "进程 / 就绪检查" : "TCP 端口检查"; }
-async function requestJson(url, signal, options = {}) {
+const ICONS = { overview: Activity, trends: ChartNoAxesCombined, infrastructure: Server };
+const VIEW_STORAGE = "server-monitor-grafana-view";
+const THEME_STORAGE = "server-monitor-grafana-theme";
+async function request(url, signal, options = {}) {
   const response = await fetch(url, { cache: "no-store", credentials: "same-origin", signal, ...options });
-  if (!response.ok) { const error = new Error(response.status === 401 ? "登录已过期，请重新登录。" : `请求失败（HTTP ${response.status}），稍后将自动重试。`); error.status = response.status; throw error; }
-  return response.json();
-}
-function Background() {
-  const id = useId().replace(/:/g, "");
-  return <div className={styles.backdrop} aria-hidden="true"><svg className={styles["light-ribbons"]} viewBox="0 0 1600 1100" preserveAspectRatio="none"><defs><linearGradient id={`${id}-ribbon`} x1="0" y1="1" x2="1" y2="0"><stop stopColor="#79edd2" stopOpacity=".04" /><stop offset=".44" stopColor="#6cdbc6" stopOpacity=".7" /><stop offset="1" stopColor="#7fddf9" stopOpacity=".13" /></linearGradient><linearGradient id={`${id}-shadow`}><stop stopColor="#1e7387" stopOpacity=".05" /><stop offset=".5" stopColor="#2e969b" stopOpacity=".4" /><stop offset="1" stopColor="#65cbb6" stopOpacity=".1" /></linearGradient></defs><path d="M-150 1090C240 600 440 1050 890 840S1240 350 1700 450" fill="none" stroke={`url(#${id}-shadow)`} strokeWidth="310" /><path d="M-100 1070C280 680 450 1040 900 810S1250 380 1660 440" fill="none" stroke={`url(#${id}-ribbon)`} strokeWidth="170" /><path d="M-100 1070C280 680 450 1040 900 810S1250 380 1660 440" fill="none" stroke="#b8ffe3" strokeOpacity=".27" strokeWidth="15" /></svg><div className={styles["ambient-spot"]} /></div>;
-}
-function Status({ tone = "neutral", children, className = "" }) { return <span className={`${css("status", tone)} ${className}`}><i className={styles["tiny-dot"]} aria-hidden="true" />{children}</span>; }
-function Gauge({ title, icon: Icon, value, note, footer, extra, selected, onClick, metric }) {
-  const circumference = Math.PI * 140;
-  return <button id={`monitor-${metric}`} className={css("glass", "metric-card")} type="button" aria-pressed={selected} onClick={onClick} aria-label={`${title} ${percentage(value)}，聚焦历史曲线`}><span className={styles["card-top"]}><span className={styles["card-title"]}><Icon aria-hidden="true" />{title}</span><ChevronRight className={styles.chevron} aria-hidden="true" /></span><span className={styles.gauge}><svg viewBox="0 0 180 180" aria-hidden="true"><circle className={styles["gauge-track"]} cx="90" cy="90" r="70" /><circle className={styles["gauge-progress"]} cx="90" cy="90" r="70" style={{ strokeDashoffset: validNumber(value) ? circumference * (1 - Math.min(100, Math.max(0, value)) / 100) : circumference, opacity: validNumber(value) ? 1 : 0 }} /></svg><span className={styles["gauge-value"]}><span className={styles["gauge-number"]}><span>{plainNumber(value, 1)}</span>{validNumber(value) && <small>%</small>}</span><span className={styles["gauge-state"]}>{note}</span></span></span><span className={styles["metric-footer"]}>{footer}</span><span className={styles["metric-extra"]}>{extra}</span></button>;
-}
-
-const HistoryChart = memo(function HistoryChart({ title, series, points = EMPTY_POINTS, intervalSeconds, range, endTime, updatedAt, percent = false, loading, error, focus, onFocus, onRange, primary = false }) {
-  const plot = useRef(null); const [width, setWidth] = useState(480); const [hover, setHover] = useState(null); const id = useId().replace(/:/g, "");
-  useEffect(() => {
-    const element = plot.current, measure = () => setWidth(Math.max(100, Math.floor(element.getBoundingClientRect().width)));
-    measure();
-    if (!window.ResizeObserver) { window.addEventListener("resize", measure); return () => window.removeEventListener("resize", measure); }
-    const observer = new ResizeObserver(measure); observer.observe(element); return () => observer.disconnect();
-  }, []);
-  useEffect(() => { setHover(null); }, [range]);
-  const duration = RANGES.find((item) => item.value === range).seconds * 1000, end = Number.isFinite(endTime) ? endTime : Date.now(), start = end - duration;
-  const height = primary ? 194 : 162, left = percent ? 36 : 53, right = width - 7, top = 13, bottom = height - 27;
-  const visible = useMemo(() => points.map((point) => ({ ...point, time: Date.parse(point?.collectedAt) })).filter((point) => Number.isFinite(point.time) && point.time >= start && point.time <= end).sort((a, b) => a.time - b.time), [points, start, end]);
-  const values = visible.flatMap((point) => series.map((item) => point[item.key]).filter(validNumber));
-  const hasData = values.length > 0, ceiling = percent ? Math.max(100, ...values) : Math.max(1, ...values) * 1.12, maxGap = Math.max(3, intervalSeconds || 3) * 1600;
-  const x = (time) => left + (time - start) / duration * (right - left), y = (value) => bottom - Math.max(0, value) / ceiling * (bottom - top);
-  const paths = series.map((item) => {
-    const segments = []; let segment = [], previous = null;
-    for (const point of visible) {
-      const value = point[item.key];
-      if (!validNumber(value)) { if (segment.length) segments.push(segment); segment = []; previous = null; continue; }
-      if (previous !== null && point.time - previous > maxGap) { segments.push(segment); segment = []; }
-      segment.push({ x: x(point.time), y: y(value) }); previous = point.time;
-    }
-    if (segment.length) segments.push(segment);
-    return { ...item, segments };
-  });
-  const hovered = hover !== null ? visible[Math.max(0, Math.min(visible.length - 1, hover))] : null;
-  function pointerMove(event) {
-    if (!visible.length) return;
-    const rect = plot.current.getBoundingClientRect(), target = start + ((event.clientX - rect.left) / rect.width * width - left) / (right - left) * duration;
-    let nearest = 0; for (let index = 1; index < visible.length; index++) if (Math.abs(visible[index].time - target) < Math.abs(visible[nearest].time - target)) nearest = index;
-    setHover(nearest);
+  if (!response.ok) {
+    const error = new Error(response.status === 401 ? "登录已过期，请重新登录。" : `服务暂时不可用（HTTP ${response.status}），请稍后重试。`);
+    error.status = response.status;
+    throw error;
   }
-  function keyDown(event) {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End", "Escape"].includes(event.key)) return;
-    event.preventDefault(); if (event.key === "Escape") return setHover(null); if (!visible.length) return;
-    setHover((previous) => event.key === "Home" ? 0 : event.key === "End" ? visible.length - 1 : Math.max(0, Math.min(visible.length - 1, (previous ?? visible.length - 1) + (event.key === "ArrowLeft" ? -1 : 1))));
-  }
-  const describe = hovered ? `${dateLabel(hovered.collectedAt)}。${series.map((item) => `${item.label} ${percent ? percentage(hovered[item.key]) : rate(hovered[item.key])}`).join("，")}` : "";
-  return <section className={css("glass", primary ? "history-card" : "secondary-chart")} id={primary ? "monitor-history" : undefined} aria-label={`${title}，最近${RANGES.find((item) => item.value === range).label}`}>
-    <div className={styles["card-top"]}><h2 className={styles["card-title"]}><ChartNoAxesCombined aria-hidden="true" />{title}</h2>{primary ? <div className={styles["range-control"]} role="group" aria-label="历史时间范围">{RANGES.map((item) => <button key={item.value} type="button" data-range={item.value} aria-pressed={range === item.value} onClick={() => onRange(item.value)}>{item.label}</button>)}</div> : <span className={styles["sub-label"]}>{RANGES.find((item) => item.value === range).label}</span>}</div>
-    <div className={styles["chart-legend"]}>{series.map((item) => <button key={item.key} className={styles["legend-button"]} type="button" disabled={!onFocus} aria-pressed={onFocus ? focus === item.key : undefined} onClick={() => onFocus?.(item.key)}><i style={{ background: item.color }} />{item.label}</button>)}<span className={styles["chart-instruction"]}>{loading ? <LoaderCircle className={styles.spin} size={12} aria-label="正在更新" /> : "移入查看 · ← →"}</span></div>
-    {error && <p className={styles["inline-error"]} role="status">{error}</p>}
-    <div ref={plot} className={styles["chart-shell"]} tabIndex={hasData ? 0 : undefined} role="group" aria-label={`${title}。左右方向键查看采样点，缺失数据保留断点。`} onPointerMove={pointerMove} onPointerLeave={() => { if (document.activeElement !== plot.current) setHover(null); }} onFocus={() => { if (visible.length) setHover(visible.length - 1); }} onBlur={() => setHover(null)} onKeyDown={keyDown}>
-      {hasData ? <><svg className={styles["history-svg"]} viewBox={`0 0 ${width} ${height}`} aria-hidden="true"><defs>{series.map((item) => <linearGradient key={item.key} id={`${id}-${item.key}`} x1="0" x2="0" y1="0" y2="1"><stop stopColor={item.color} stopOpacity=".12" /><stop offset="1" stopColor={item.color} stopOpacity="0" /></linearGradient>)}</defs>
-        {[0, .5, 1].map((ratio) => <g key={ratio}><line x1={left} y1={y(ceiling * ratio)} x2={right} y2={y(ceiling * ratio)} className={styles["grid-line"]} /><text x={left - 8} y={y(ceiling * ratio) + 3} textAnchor="end">{percent ? `${Math.round(ceiling * ratio)}%` : bytes(ceiling * ratio, 0)}</text></g>)}
-        {paths.map((item) => <g key={item.key} opacity={focus && focus !== item.key ? .22 : 1}>{item.segments.map((segment, index) => { const path = segment.map((point, position) => `${position ? "L" : "M"}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" "); return <g key={index}>{segment.length > 1 && <path d={`${path} L${segment.at(-1).x},${bottom} L${segment[0].x},${bottom} Z`} fill={`url(#${id}-${item.key})`} />}<path d={path} fill="none" stroke={item.color} strokeWidth={focus === item.key ? 2.3 : 1.7} strokeLinecap="round" strokeLinejoin="round" />{segment.length === 1 && <circle cx={segment[0].x} cy={segment[0].y} r="2.5" fill={item.color} />}</g>; })}</g>)}
-        {hovered && <g><line x1={x(hovered.time)} y1={top} x2={x(hovered.time)} y2={bottom} className={styles["hover-guide"]} />{series.map((item) => validNumber(hovered[item.key]) && <circle key={item.key} cx={x(hovered.time)} cy={y(hovered[item.key])} r="3" fill={item.color} className={styles["hover-point"]} />)}</g>}
-        {[0, .5, 1].map((ratio) => <text key={ratio} x={left + ratio * (right - left)} y={height - 5} textAnchor={ratio === 0 ? "start" : ratio === 1 ? "end" : "middle"}>{dateLabel(start + duration * ratio, range === "7d", false)}</text>)}
-      </svg>{hovered && <div className={css("chart-tooltip", "visible")} style={{ left: Math.max(4, Math.min(x(hovered.time) - 77, width - 158)) }} aria-hidden="true"><time>{dateLabel(hovered.collectedAt, true, false)}</time>{series.map((item) => <div className={styles["tooltip-row"]} key={item.key}><span className={styles.key}><i style={{ background: item.color }} />{item.label}</span><strong>{percent ? percentage(hovered[item.key]) : rate(hovered[item.key])}</strong></div>)}</div>}</> : <div className={styles["chart-empty"]}>{loading ? <><LoaderCircle className={styles.spin} size={18} />正在读取历史采样…</> : error ? "历史数据暂不可用" : "这个时间段还没有采样数据"}<small>缺失采样保留断点</small></div>}
-      <span className={styles.sr} aria-live="polite">{describe}</span>
-    </div><div className={styles["chart-foot"]}><span className={styles["latest-label"]} title={updatedAt ? `历史读取于 ${dateLabel(updatedAt)}` : undefined}>30 秒刷新{updatedAt ? ` · ${dateLabel(updatedAt, false, true)}` : ""}</span><span className={styles.interval}>{intervalSeconds ? `${intervalSeconds} 秒 / 点` : "—"} · 北京时间</span></div>
-  </section>;
-});
-
-function NetworkBars({ points }) {
-  const recent = points.slice(-37), ceiling = Math.max(1, ...recent.flatMap((point) => [point?.rxBytesPerSecond, point?.txBytesPerSecond]).filter(validNumber)), step = 240 / Math.max(1, recent.length);
-  return <svg className={styles["network-bars"]} viewBox="0 0 240 58" preserveAspectRatio="none" role="img" aria-label="当前历史范围的网络接收和发送，缺失采样留空"><line x1="0" x2="240" y1="54" y2="54" className={styles["grid-line"]} />{recent.map((point, index) => <g key={point?.collectedAt || index}>{validNumber(point?.rxBytesPerSecond) && <rect x={index * step} y={54 - point.rxBytesPerSecond / ceiling * 47} width={Math.max(1, step * .56)} height={point.rxBytesPerSecond / ceiling * 47} rx="1.5" fill="var(--cyan)" opacity=".7" />}{validNumber(point?.txBytesPerSecond) && <rect x={index * step + step * .56} y={54 - point.txBytesPerSecond / ceiling * 47} width={Math.max(1, step * .27)} height={point.txBytesPerSecond / ceiling * 47} rx="1" fill="var(--lilac)" opacity=".6" />}</g>)}</svg>;
+  return response;
 }
-function DetailDialog({ detail, onClose, now }) {
-  const ref = useRef(null);
-  useEffect(() => { if (detail && !ref.current.open) ref.current.showModal(); else if (!detail && ref.current.open) ref.current.close(); }, [detail]);
-  const checked = Date.parse(detail?.snapshotAt), snapshotAge = Number.isFinite(checked) ? Math.max(0, (now - checked) / 1000) : null;
-  const snapshotStale = Boolean(detail && (detail.snapshotStale || snapshotAge === null || snapshotAge > 45));
-  return <dialog ref={ref} className={styles["detail-dialog"]} aria-labelledby="monitor-dialog-title" aria-describedby="monitor-dialog-copy" onClose={onClose} onClick={(event) => { if (event.target !== event.currentTarget) return; const box = event.currentTarget.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) event.currentTarget.close(); }}><p className={styles["dialog-eyebrow"]}>{detail?.eyebrow}</p><div className={styles["dialog-heading"]}><h2 id="monitor-dialog-title">{detail?.title}</h2><form method="dialog"><button className={styles["icon-button"]} aria-label="关闭详情"><X aria-hidden="true" /></button></form></div>{detail && <><div className={styles["dialog-status"]}><Status tone={snapshotStale ? "warning" : detail.tone}>{snapshotStale ? `检查已过期 · ${detail.status}` : detail.status}</Status></div><p id="monitor-dialog-copy" className={styles["dialog-copy"]}>{detail.copy}</p><div className={styles["dialog-detail"]}>{[...detail.rows, ["检查时间", dateLabel(detail.snapshotAt)], ["快照状态", snapshotStale ? `已过期${snapshotAge !== null ? ` · ${Math.floor(snapshotAge)} 秒前` : ""}` : `最近检查 · ${Math.floor(snapshotAge)} 秒前`]].map(([label, value]) => <div className={styles["detail-row"]} key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><p className={styles["dialog-footnote"]}>{detail.footnote}</p></>}</dialog>;
+const requestJson = async (url, signal, options) => (await request(url, signal, options)).json();
+function timeLabel(value) {
+  const time = new Date(value);
+  return Number.isFinite(time.getTime()) ? time.toLocaleTimeString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false }) : "等待采样";
+}
+function freshness(value, expired, now) {
+  const timestamp = Date.parse(value), age = Number.isFinite(timestamp) ? Math.max(0, Math.floor((now - timestamp) / 1000)) : null;
+  return { age, stale: expired || age === null || age > 45, text: age === null ? "等待采样" : age > 45 || expired ? "数据已过期" : `${age} 秒前更新` };
 }
 
 export function ServerMonitorDashboard() {
   const [session, setSession] = useState(null), [sessionError, setSessionError] = useState(""), [sessionAttempt, setSessionAttempt] = useState(0);
-  const [current, setCurrent] = useState(null), [currentLoaded, setCurrentLoaded] = useState(false), [history, setHistory] = useState(null);
-  const [range, setRange] = useState("1h"), [refresh, setRefresh] = useState(0), [currentLoading, setCurrentLoading] = useState(false), [historyLoading, setHistoryLoading] = useState(false), [historyUpdatedAt, setHistoryUpdatedAt] = useState(null);
-  const [currentError, setCurrentError] = useState(""), [historyError, setHistoryError] = useState(""), [logoutError, setLogoutError] = useState("");
-  const [loggingOut, setLoggingOut] = useState(false), [now, setNow] = useState(0), [clockOffset, setClockOffset] = useState(0), [loginError, setLoginError] = useState("");
-  const [scene, setScene] = useState("ocean"), [focus, setFocus] = useState(null), [detail, setDetail] = useState(null), [nav, setNav] = useState("monitor-overview");
-  const epoch = useRef(0), currentAbort = useRef(null), historyAbort = useRef(null), clockOffsetRef = useRef(0), historyRange = useRef("1h");
-  const loading = currentLoading || historyLoading;
+  const [loginError, setLoginError] = useState(""), [logoutError, setLogoutError] = useState(""), [loggingOut, setLoggingOut] = useState(false);
+  const [selection, setSelection] = useState({ view: "overview", range: "1h" }), [theme, setTheme] = useState("dark");
+  const [current, setCurrent] = useState(null), [currentError, setCurrentError] = useState(""), [currentAttempt, setCurrentAttempt] = useState(0);
+  const [now, setNow] = useState(0), [clockOffset, setClockOffset] = useState(0);
+  const [frameAllowed, setFrameAllowed] = useState(false), [accessAttempt, setAccessAttempt] = useState(0), [frameVersion, setFrameVersion] = useState(0);
+  const [frameState, setFrameState] = useState("checking"), [frameError, setFrameError] = useState("");
+  const epoch = useRef(0), currentAbort = useRef(null), accessAbort = useRef(null), frame = useRef(null), frameTimer = useRef(null), tabs = useRef([]);
+  const board = MONITOR_GRAFANA_VIEWS.find((item) => item.id === selection.view);
+  const frameUrl = useMemo(() => monitorGrafanaUrl(selection.view, selection.range, theme), [selection, theme]);
+  const fullUrl = useMemo(() => monitorGrafanaUrl(selection.view, selection.range, theme, false), [selection, theme]);
+
   useEffect(() => {
-    const error = new URLSearchParams(window.location.search).get("error");
-    if (error) setLoginError(["access_denied", "forbidden"].includes(error) ? "这个 Google 账号没有监控访问权限，请使用指定的已验证邮箱登录。" : "Google 登录未完成，请重新登录。若持续失败，请检查登录配置。");
-    try { if (localStorage.getItem("server-monitor-scene") === "morning") setScene("morning"); } catch {}
-    const syncHash = () => { const hash = window.location.hash.slice(1); setNav(["monitor-overview", "monitor-history", "monitor-services", "monitor-containers"].includes(hash) ? hash : "monitor-overview"); };
-    syncHash(); window.addEventListener("hashchange", syncHash); setNow(Date.now()); const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => { clearInterval(interval); window.removeEventListener("hashchange", syncHash); };
+    const syncSelection = () => setSelection(parseMonitorGrafanaHash(window.location.hash));
+    let remembered = "";
+    try { remembered = sessionStorage.getItem(VIEW_STORAGE) || ""; } catch {}
+    try { setTheme(localStorage.getItem(THEME_STORAGE) === "light" ? "light" : "dark"); } catch {}
+    setSelection(parseMonitorGrafanaHash(window.location.hash || remembered));
+    const reason = new URLSearchParams(window.location.search).get("error");
+    if (reason) setLoginError(["access_denied", "forbidden"].includes(reason) ? "这个 Google 账号没有访问权限，请使用已授权的账号。" : "Google 登录未完成，请重新登录。");
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    window.addEventListener("hashchange", syncSelection);
+    window.addEventListener("popstate", syncSelection);
+    return () => { clearInterval(timer); window.removeEventListener("hashchange", syncSelection); window.removeEventListener("popstate", syncSelection); };
   }, []);
+
   useEffect(() => {
-    const controller = new AbortController(); let stopped = false; const timeout = setTimeout(() => controller.abort(), 12000); setSessionError("");
-    requestJson("/api/monitor/auth/session", controller.signal).then((value) => { if (!stopped) setSession(value); }).catch((error) => { if (!stopped) setSessionError(controller.signal.aborted ? "登录状态读取超时，请重试。" : error.message); }).finally(() => clearTimeout(timeout));
-    return () => { stopped = true; clearTimeout(timeout); controller.abort(); };
+    const controller = new AbortController(); let stopped = false;
+    const timer = setTimeout(() => controller.abort(), 12000);
+    setSessionError("");
+    requestJson("/api/monitor/auth/session", controller.signal).then((value) => {
+      if (!stopped) { setSession(value); if (value.authenticated) setLoginError(""); }
+    }).catch((error) => { if (!stopped) setSessionError(error.name === "AbortError" ? "登录状态读取超时，请重试。" : error.message); }).finally(() => clearTimeout(timer));
+    return () => { stopped = true; clearTimeout(timer); controller.abort(); };
   }, [sessionAttempt]);
+
   const clearPrivateState = useCallback((message = "") => {
-    epoch.current++; currentAbort.current?.abort(); historyAbort.current?.abort(); setSession((previous) => ({ authenticated: false, configured: previous?.configured }));
-    setCurrent(null); setHistory(null); setHistoryUpdatedAt(null); setCurrentLoaded(false); setDetail(null); setCurrentLoading(false); setHistoryLoading(false); setCurrentError(""); setHistoryError(""); setLoginError(message);
+    epoch.current++;
+    currentAbort.current?.abort(); accessAbort.current?.abort();
+    setFrameAllowed(false); setCurrent(null); setCurrentError(""); setFrameError(""); setFrameState("checking");
+    setSession((previous) => ({ authenticated: false, configured: previous?.configured }));
+    setLoginError(message);
   }, []);
+
   useEffect(() => {
     if (!session?.authenticated) return;
-    let stopped = false, busy = false, controller, timeout; const generation = epoch.current;
+    const controller = new AbortController(), generation = epoch.current; let stopped = false;
+    accessAbort.current = controller;
+    const timer = setTimeout(() => controller.abort(), 10000);
+    setFrameAllowed(false); setFrameState("checking"); setFrameError("");
+    request("/api/monitor/auth/grafana", controller.signal).then((response) => {
+      if (response.status !== 204) throw new Error("看板权限校验未完成，请重试。");
+      if (!stopped && generation === epoch.current) { setFrameAllowed(true); setFrameState("loading"); }
+    }).catch((error) => {
+      if (stopped || generation !== epoch.current) return;
+      if (error.status === 401) clearPrivateState(error.message);
+      else { setFrameError(error.name === "AbortError" ? "看板权限校验超时，请重试。" : error.message); setFrameState("error"); }
+    }).finally(() => clearTimeout(timer));
+    return () => { stopped = true; clearTimeout(timer); controller.abort(); };
+  }, [session?.authenticated, accessAttempt, clearPrivateState]);
+
+  useEffect(() => {
+    if (!session?.authenticated) return;
+    let stopped = false, busy = false, controller, timer;
+    const generation = epoch.current;
     async function load() {
-      if (busy || stopped || generation !== epoch.current) return;
-      busy = true; controller = new AbortController(); currentAbort.current = controller; timeout = setTimeout(() => controller.abort(), 12000); setCurrentLoading(true);
+      if (busy || stopped || generation !== epoch.current || document.visibilityState === "hidden") return;
+      busy = true; controller = new AbortController(); currentAbort.current = controller;
+      timer = setTimeout(() => controller.abort(), 10000);
       try {
-        const value = await requestJson("/api/monitor/current", controller.signal), receivedAt = Date.now();
+        const value = await requestJson("/api/monitor/current", controller.signal), received = Date.now();
         if (stopped || generation !== epoch.current) return;
         const serverTime = Date.parse(value.serverTime);
-        if (Number.isFinite(serverTime)) { clockOffsetRef.current = serverTime - receivedAt; setClockOffset(clockOffsetRef.current); }
-        setCurrent(value); setCurrentError(""); setCurrentLoaded(true);
+        if (Number.isFinite(serverTime)) setClockOffset(serverTime - received);
+        setCurrent(value); setCurrentError("");
       } catch (error) {
         if (stopped || generation !== epoch.current) return;
-        if (error.status === 401) clearPrivateState("登录已过期，请重新登录。");
-        else setCurrentError(error.name === "AbortError" ? "实时数据读取超时，稍后将自动重试。" : error.message);
-      } finally {
-        clearTimeout(timeout); busy = false;
-        if (!stopped && generation === epoch.current) setCurrentLoading(false);
-      }
+        if (error.status === 401) clearPrivateState(error.message);
+        else setCurrentError(error.name === "AbortError" ? "采集状态读取超时，稍后自动重试。" : error.message);
+      } finally { clearTimeout(timer); busy = false; }
     }
     load(); const interval = setInterval(load, 3000);
-    return () => { stopped = true; clearInterval(interval); clearTimeout(timeout); controller?.abort(); };
-  }, [session?.authenticated, refresh, clearPrivateState]);
+    document.addEventListener("visibilitychange", load);
+    return () => { stopped = true; clearInterval(interval); clearTimeout(timer); controller?.abort(); document.removeEventListener("visibilitychange", load); };
+  }, [session?.authenticated, currentAttempt, clearPrivateState]);
+
   useEffect(() => {
-    if (!session?.authenticated) return;
-    let stopped = false, busy = false, controller, timeout; const generation = epoch.current;
-    if (historyRange.current !== range) { historyRange.current = range; setHistoryUpdatedAt(null); }
-    setHistory((previous) => previous?.range === range ? previous : null); setHistoryError("");
-    async function load() {
-      if (busy || stopped || generation !== epoch.current) return;
-      busy = true; controller = new AbortController(); historyAbort.current = controller; timeout = setTimeout(() => controller.abort(), 12000); setHistoryLoading(true);
-      try {
-        const value = await requestJson(`/api/monitor/history?range=${range}`, controller.signal), receivedAt = Date.now();
-        if (stopped || generation !== epoch.current) return;
-        setHistory(value); setHistoryUpdatedAt(receivedAt + clockOffsetRef.current); setHistoryError("");
-      } catch (error) {
-        if (stopped || generation !== epoch.current) return;
-        if (error.status === 401) clearPrivateState("登录已过期，请重新登录。");
-        else setHistoryError(error.name === "AbortError" ? "历史数据读取超时，稍后将自动重试。" : error.message);
-      } finally {
-        clearTimeout(timeout); busy = false;
-        if (!stopped && generation === epoch.current) setHistoryLoading(false);
+    if (!frameAllowed || !session?.authenticated || loggingOut) return;
+    setFrameState("loading"); setFrameError("");
+    frameTimer.current = setTimeout(() => {
+      setFrameError("看板加载时间较长，请重新载入或在新标签中打开。");
+      setFrameState("error");
+    }, 20000);
+    return () => clearTimeout(frameTimer.current);
+  }, [frameAllowed, frameUrl, frameVersion, session?.authenticated, loggingOut]);
+
+  function rememberSelection(value = selection) {
+    try { sessionStorage.setItem(VIEW_STORAGE, monitorGrafanaHash(value.view, value.range)); } catch {}
+  }
+  function navigate(view, range = selection.range) {
+    const next = { view, range };
+    setSelection(next); rememberSelection(next);
+    window.history.pushState(null, "", monitorGrafanaHash(view, range));
+  }
+  function tabKey(event, index) {
+    const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+    if (!keys.includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === "Home" ? 0 : event.key === "End" ? MONITOR_GRAFANA_VIEWS.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + MONITOR_GRAFANA_VIEWS.length) % MONITOR_GRAFANA_VIEWS.length;
+    navigate(MONITOR_GRAFANA_VIEWS[next].id); tabs.current[next]?.focus();
+  }
+  function toggleTheme() {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    try { localStorage.setItem(THEME_STORAGE, next); } catch {}
+  }
+  function refresh() {
+    setCurrentAttempt((value) => value + 1); setFrameVersion((value) => value + 1); setAccessAttempt((value) => value + 1);
+  }
+  async function frameLoaded() {
+    const generation = epoch.current;
+    try {
+      const document = frame.current?.contentDocument, location = frame.current?.contentWindow?.location;
+      if (!document || location?.href === "about:blank") return;
+      clearTimeout(frameTimer.current);
+      if (!location?.pathname.startsWith("/server-monitor/grafana/")) {
+        // Nginx can send an expired HTML navigation back to this login shell.
+        // Verify the database session before choosing a retry or login state.
+        await request("/api/monitor/auth/grafana", AbortSignal.timeout(8000));
+        throw new Error("看板入口暂时不可用，请重新载入。");
       }
+      const failedTitle = /bad gateway|service unavailable|gateway timeout|not found|^error|^[45]\d\d/i.test(document.title);
+      const failedBody = /Grafana has failed to load|Dashboard not found|Permission denied|^\s*Unauthorized\s*$/i.test(document.body?.textContent?.slice(0, 800) || "");
+      if (failedTitle || failedBody) throw new Error("看板暂时不可用，请重新载入。");
+      if (generation === epoch.current) setFrameState("ready");
+    } catch (error) {
+      if (generation !== epoch.current) return;
+      if (error.status === 401) clearPrivateState(error.message);
+      else { setFrameState("error"); setFrameError(error.name === "SecurityError" ? "看板连接未完成，请重新载入。" : error.message || "看板加载失败，请重试。"); }
     }
-    load(); const interval = setInterval(load, 30000);
-    return () => { stopped = true; clearInterval(interval); clearTimeout(timeout); controller?.abort(); };
-  }, [session?.authenticated, range, refresh, clearPrivateState]);
+  }
   async function logout() {
-    setLoggingOut(true); setLogoutError(""); const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 12000);
-    try { await requestJson("/api/monitor/auth/logout", controller.signal, { method: "POST" }); clearPrivateState(); } catch { setLogoutError("退出失败，请重试。"); }
-    finally { clearTimeout(timeout); setLoggingOut(false); }
-  }
-  function toggleScene() { setScene((previous) => { const next = previous === "ocean" ? "morning" : "ocean"; try { localStorage.setItem("server-monitor-scene", next); } catch {} return next; }); }
-  const toggleFocus = useCallback((key) => setFocus((previous) => previous === key ? null : key), []);
-  const sample = current?.sample, host = sample?.host, collected = Date.parse(sample?.collectedAt);
-  const age = Number.isFinite(collected) ? Math.max(0, (now + clockOffset - collected) / 1000) : null, stale = Boolean(sample && (current.stale || age === null || age > 45));
-  // Older collectors included checks in every sample; an explicit null means no check snapshot.
-  const checksCollectedAt = sample?.checksCollectedAt === undefined && Array.isArray(sample?.containers) && Array.isArray(sample?.services) ? sample.collectedAt : sample?.checksCollectedAt;
-  const checksCollected = Date.parse(checksCollectedAt), checksAge = Number.isFinite(checksCollected) ? Math.max(0, (now + clockOffset - checksCollected) / 1000) : null;
-  const checksStale = checksAge === null || Boolean(current?.checksStale) || checksAge > 45;
-  const checksLabel = checksAge === null ? "等待首条检查" : checksStale ? "检查已过期" : "检查已更新";
-  const checksTimeLabel = checksAge === null ? "等待 Docker 与服务检查快照" : `${dateLabel(checksCollectedAt)} · ${Math.floor(checksAge)} 秒前`;
-  const services = sample?.services || [], containers = sample?.containers || [], abnormal = services.filter((service) => service.status === "unhealthy").length, unknown = services.filter((service) => service.status === "unknown").length;
-  const points = history?.points || EMPTY_POINTS, lastBucket = Date.parse(points.at(-1)?.collectedAt);
-  const historyEnd = historyUpdatedAt !== null ? Math.max(historyUpdatedAt, Number.isFinite(lastBucket) ? lastBucket : historyUpdatedAt) : undefined;
-  const diskUsed = byteParts(host?.disk?.usedBytes), rx = byteParts(host?.network?.rxBytesPerSecond), diskTotal = host?.disk?.totalBytes;
-  const usedWidth = validNumber(diskTotal) && diskTotal > 0 && validNumber(host?.disk?.usedBytes) ? Math.min(100, host.disk.usedBytes / diskTotal * 100) : 0;
-  const freeWidth = validNumber(diskTotal) && diskTotal > 0 && validNumber(host?.disk?.availableBytes) ? Math.min(100 - usedWidth, host.disk.availableBytes / diskTotal * 100) : 0;
-  const sharedChart = { points, intervalSeconds: history?.intervalSeconds, range, endTime: historyEnd, updatedAt: historyUpdatedAt, loading: historyLoading, error: historyError };
-  function serviceDetail(service) {
-    const state = serviceState(service);
-    setDetail({ eyebrow: "服务检查", title: service.name, tone: state.tone, status: state.label, snapshotAt: checksCollectedAt, snapshotStale: checksStale, copy: service.detail || "暂时没有进一步检查说明。", rows: [["检查方式", checkKind(service)], ["HTTP 状态", validNumber(service.httpStatus) ? String(service.httpStatus) : "不适用于此项检查"], ["响应耗时", validNumber(service.latencyMs) ? `${Math.round(service.latencyMs)} ms` : "—"]], footnote: service.kind === "tcp" ? "仅证明本机 TCP 端口可连接，未验证业务功能。" : service.kind === "process" ? "仅证明进程运行或数据库就绪，不能代替业务功能检查。" : "HTTP 3xx、401、403 仅说明端点可达；认证跳转不直接判为故障。所有结果均为服务器本机视角。" });
-  }
-  function containerDetail(container) {
-    setDetail({ eyebrow: "容器详情", title: container.name, tone: container.state === "running" && container.health !== "unhealthy" ? "success" : container.state === "unknown" ? "neutral" : "warning", status: containerState(container.state), snapshotAt: checksCollectedAt, snapshotStale: checksStale, copy: `健康检查：${containerHealth(container.health)}。容器运行状态与应用健康分别观察。`, rows: [["运行镜像", container.image || "—"], ["CPU 使用率", percentage(container.cpuPercent)], ["内存使用", bytes(container.memoryBytes)], ["内存占比", percentage(container.memoryPercent)], ["报告内存上限", container.memoryLimitBytes > 0 ? bytes(container.memoryLimitBytes) : "—"], ["重启次数", container.restartCount ?? "—"]], footnote: "容器 CPU 按单个核心计量，多核可以超过 100%；报告的内存上限不代表已预留内存。" });
+    setLoggingOut(true); setLogoutError("");
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 12000);
+    try { await requestJson("/api/monitor/auth/logout", controller.signal, { method: "POST" }); clearPrivateState(); }
+    catch { setLogoutError("退出失败，请重试。"); }
+    finally { clearTimeout(timer); setLoggingOut(false); }
   }
 
-  return <div className={styles.page} data-scene={scene}><Background /><div className={styles.shell}>
-    <header className={styles.topbar}>
-      <Link className={styles.brand} href="/" aria-label="Huang 首页"><span className={styles["brand-mark"]}><svg width="25" height="25" viewBox="0 0 30 30" fill="none" aria-hidden="true"><ellipse cx="15" cy="15" rx="5" ry="11" transform="rotate(35 15 15)" stroke="currentColor" strokeWidth="1.3" /><ellipse cx="15" cy="15" rx="5" ry="11" transform="rotate(-35 15 15)" stroke="currentColor" strokeWidth="1.3" /><circle cx="15" cy="15" r="2.7" fill="currentColor" /></svg></span><span className={styles["brand-title"]}>Huang<span className={styles["brand-subtitle"]}>SERVER MONITOR</span></span></Link>
-      {session?.authenticated && <nav className={styles.topnav} aria-label="监控导航">{[["monitor-overview", "概览"], ["monitor-history", "资源"], ["monitor-services", "服务"], ["monitor-containers", "容器"]].map(([id, label]) => <a key={id} href={`#${id}`} aria-current={nav === id ? "page" : undefined} onClick={() => setNav(id)}>{label}</a>)}</nav>}
-      <div className={styles["top-actions"]}>{session?.authenticated && <span className={styles["top-label"]}>{session.email}</span>}<button type="button" className={styles["icon-button"]} onClick={toggleScene} aria-label={scene === "ocean" ? "切换为晨光外观" : "切换为深海外观"} title="切换监控外观">{scene === "ocean" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>{session?.authenticated && <><button type="button" className={styles["icon-button"]} disabled={currentLoading && historyLoading} onClick={() => setRefresh((previous) => previous + 1)} aria-label="刷新监控数据"><RefreshCw className={loading ? styles.spin : ""} aria-hidden="true" /></button><button type="button" className={styles["icon-button"]} disabled={loggingOut} onClick={logout} aria-label={loggingOut ? "正在退出" : "退出监控"}>{loggingOut ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <LogOut aria-hidden="true" />}</button></>}</div>
-    </header>
-    <main id="monitor-overview"><section className={styles.hero} aria-labelledby="monitor-title"><div><div className={styles.eyebrow}><i className={styles["tiny-dot"]} />Cloud · Private space</div><h1 id="monitor-title">服务器，尽在眼前。</h1><p>{host ? `${host.hostname || sample.hostId} · ${uptime(host.uptimeSeconds)}` : "一个安静、私密的服务器观察窗口。"}</p></div><div className={styles["hero-status"]}>{session?.authenticated ? <><Status tone={!sample ? "neutral" : stale ? "warning" : "success"} className={styles.pill}>{!sample ? currentLoading ? "读取采样中" : "等待采样" : stale ? "主机数据已过期" : "主机采样更新"}</Status><time>{sample ? dateLabel(sample.collectedAt, false, true) : "—"}</time></> : <span className={styles.pill}><LockKeyhole size={11} aria-hidden="true" />私有访问</span>}</div></section>
-    {!session?.authenticated ? <section className={css("glass", "login-panel")} aria-labelledby="monitor-private-title"><div className={styles["login-copy"]}><ShieldCheck className={styles["private-icon"]} size={29} aria-hidden="true" /><p className={styles["login-eyebrow"]}>ONLY FOR THE OWNER</p><h2 id="monitor-private-title">一台服务器，<br />一个安静的观察窗口。</h2><p>资源趋势、应用检查与容器状态，集中在这里。监控数据仅在授权账号登录后可见。</p><div className={styles["login-facts"]}><span>主机 3 秒</span><span>Docker / 服务 15 秒</span><span>7 天历史</span><span>本机视角</span></div></div><div className={styles["login-action"]}><LockKeyhole size={25} aria-hidden="true" /><h3>{!session && !sessionError ? "正在确认访问权限" : "登录私有看板"}</h3><p>仅限已授权的 Google 账号。</p>{loginError && <p className={styles["inline-error"]} role="alert">{loginError}</p>}{sessionError ? <><p className={styles["inline-error"]} role="alert">{sessionError}</p><button className={styles["primary-button"]} onClick={() => setSessionAttempt((previous) => previous + 1)}><RefreshCw size={15} aria-hidden="true" />重试</button></> : !session ? <span className={styles["auth-loading"]}><LoaderCircle className={styles.spin} size={17} aria-hidden="true" />读取登录状态…</span> : session.configured ? <a href="/api/monitor/auth/google/start" className={styles["primary-button"]}>使用 Google 登录<ArrowRight size={16} aria-hidden="true" /></a> : <p className={styles["config-notice"]}>Google 登录尚未配置，当前无法访问监控数据。</p>}<small>身份验证通过后才会请求监控数据。</small></div></section> : <>
-      {logoutError && <p className={styles["error-banner"]} role="alert">{logoutError}</p>}{currentError && <p className={styles["error-banner"]} role="alert">{currentError}{sample ? " 当前保留最近一次采样。" : ""}</p>}<div className={styles["sample-bar"]} role="status"><Status tone={!sample ? "neutral" : stale ? "warning" : "success"}>{!sample ? currentLoading ? "正在读取采样" : "等待首条采样" : stale ? "主机数据已过期" : "主机采样更新"}</Status><span>{sample ? `主机采样 ${dateLabel(sample.collectedAt)}${age !== null ? ` · ${Math.floor(age)} 秒前` : ""}` : "主机每 3 秒采样；超过 45 秒无新主机数据会标记为过期。"}</span><small>北京时间 · 服务器本机</small></div><div className={styles["refresh-cadence"]}><span>主机采样 <strong>3 秒</strong></span><span>Docker / 服务 <strong>15 秒</strong></span><span>历史刷新 <strong>30 秒</strong></span></div>{stale && <p className={styles["stale-notice"]}>主机采样超过 45 秒未更新，资源卡片为历史快照。Docker 与服务请分别查看检查时间。</p>}
-      <div className={styles.dashboard}>
-        <Gauge title="CPU" icon={Cpu} metric="cpu" value={host?.cpu?.percent} note={validNumber(host?.cpu?.percent) ? "宿主机使用率" : "等待有效采样"} selected={focus === "cpuPercent"} onClick={() => toggleFocus("cpuPercent")} footer={<><span><strong>{host?.cpu?.cores ?? "—"}</strong> 核心</span><span className={styles["small-value"]}>负载 <strong>{plainNumber(host?.cpu?.load1)}</strong></span></>} extra={`1 / 5 / 15 分钟：${plainNumber(host?.cpu?.load1)} / ${plainNumber(host?.cpu?.load5)} / ${plainNumber(host?.cpu?.load15)}`} />
-        <Gauge title="内存" icon={MemoryStick} metric="memory" value={host?.memory?.usedPercent} note={`${bytes(host?.memory?.usedBytes)} / ${bytes(host?.memory?.totalBytes)}`} selected={focus === "memoryPercent"} onClick={() => toggleFocus("memoryPercent")} footer={<><span>可用 <strong>{bytes(host?.memory?.availableBytes)}</strong></span><span className={styles["small-value"]}>Swap <strong>{host?.swap?.totalBytes === 0 ? "未启用" : percentage(host?.swap?.usedPercent)}</strong></span></>} extra={`Swap ${bytes(host?.swap?.usedBytes)} / ${bytes(host?.swap?.totalBytes)}`} />
-        <HistoryChart {...sharedChart} primary percent series={RESOURCE_SERIES} title={focus ? `${RESOURCE_SERIES.find((item) => item.key === focus)?.label || "资源"} 趋势` : "资源趋势"} focus={focus} onFocus={toggleFocus} onRange={setRange} />
-        <section className={css("glass", "disk-card")} aria-labelledby="monitor-disk-title"><div className={styles["card-top"]}><h2 id="monitor-disk-title" className={styles["card-title"]}><HardDrive aria-hidden="true" />磁盘空间</h2><span className={styles["sub-label"]}>{host?.disk?.mount || "—"}</span></div><div className={styles["disk-main"]}><strong>{diskUsed.value}</strong><span>{diskUsed.unit}{diskUsed.unit && " / "}{bytes(diskTotal)}</span></div><p className={styles["disk-caption"]}>已使用 {percentage(host?.disk?.usedPercent)}</p><div className={styles["storage-bar"]} role="img" aria-label={`磁盘已用 ${bytes(host?.disk?.usedBytes)}，可用 ${bytes(host?.disk?.availableBytes)}`}><span className={styles["storage-used"]} style={{ width: `${usedWidth}%` }} /><span className={styles["storage-available"]} style={{ width: `${freeWidth}%` }} /><span className={styles["storage-reserved"]} /></div><div className={styles["storage-legend"]}><span><i />已用 {bytes(host?.disk?.usedBytes)}</span><span><i />可用 {bytes(host?.disk?.availableBytes)}</span></div><div className={styles["io-row"]}><span>读 <b>{rate(host?.disk?.readBytesPerSecond)}</b></span><span>写 <b>{rate(host?.disk?.writeBytesPerSecond)}</b></span></div></section>
-        <section className={css("glass", "network-card")} aria-labelledby="monitor-network-title"><div className={styles["card-top"]}><h2 className={styles["card-title"]} id="monitor-network-title"><Network aria-hidden="true" />网络流量</h2><span className={styles["sub-label"]}>{host?.network?.interface || "—"}</span></div><div className={styles["network-primary"]}><ArrowDown aria-label="接收" /><strong>{rx.value}</strong><span>{rx.unit ? `${rx.unit}/s` : ""}</span></div><div className={styles["network-secondary"]}><ArrowUp aria-label="发送" /><strong>{rate(host?.network?.txBytesPerSecond)}</strong><span>发送</span></div><NetworkBars points={points} /><div className={styles["network-caption"]}><span>当前历史范围</span><strong>{RANGES.find((item) => item.value === range).label}</strong></div></section>
-        <section className={css("glass", "services-card")} id="monitor-services" aria-labelledby="monitor-services-title"><div className={styles["card-top"]}><h2 className={styles["card-title"]} id="monitor-services-title"><Grid2X2 aria-hidden="true" />应用与服务</h2><Status className={styles.pill} tone={checksAge === null ? "neutral" : checksStale ? "warning" : abnormal ? "danger" : !services.length || unknown ? "neutral" : "success"}>{checksStale ? checksLabel : services.length ? `${services.length} 项 · ${abnormal} 异常${unknown ? ` · ${unknown} 未知` : ""}` : "暂无检查项"}</Status></div><div className={css("checks-meta", checksStale && "checks-expired")}><span>{checksTimeLabel}</span><span>每 15 秒检查</span></div><div className={styles["service-grid"]}>{services.map((service) => { const status = serviceState(service); return <button type="button" className={styles["service-button"]} key={service.id} onClick={() => serviceDetail(service)} aria-label={`查看${service.name}详情，${checksStale ? "检查快照已过期，" : ""}${status.label}`}><span className={css("service-indicator", checksStale ? "warning" : status.tone)} /><span className={styles["service-name"]}>{service.name}</span><span className={styles["service-status"]}>{validNumber(service.httpStatus) ? `HTTP ${service.httpStatus}` : status.label}</span><ChevronRight aria-hidden="true" /></button>; })}</div>{!services.length && <p className={styles["empty-list"]}>{!currentLoaded && currentLoading ? "正在读取检查结果…" : checksAge === null ? "等待首条服务检查快照" : "暂无服务检查结果"}</p>}<p className={styles["scope-note"]}>服务器本机视角 · HTTP / 进程 / TCP 分别解释</p></section>
-        <section className={css("glass", "containers-card")} id="monitor-containers" aria-labelledby="monitor-containers-title"><div className={styles["card-top"]}><h2 className={styles["card-title"]} id="monitor-containers-title"><Box aria-hidden="true" />容器</h2><span className={styles["sub-label"]}>{checksStale && checksAge !== null ? "旧快照 · " : ""}{containers.filter((container) => container.state === "running").length} / {containers.length} 个运行中</span></div><div className={css("checks-meta", checksStale && "checks-expired")}><Status tone={checksAge === null ? "neutral" : checksStale ? "warning" : "success"}>{checksLabel}</Status><span>{checksTimeLabel}</span></div><div className={styles["table-scroll"]}><table className={styles["container-table"]}><caption className={styles.sr}>Docker 容器资源、健康状态、重启次数与运行镜像。点击名称查看详情。</caption><thead><tr><th scope="col">名称 / 运行版本</th><th scope="col">状态 / 健康</th><th scope="col">CPU</th><th scope="col">内存</th><th scope="col">重启</th><th scope="col"><span className={styles.sr}>详情</span></th></tr></thead><tbody>{containers.map((container) => <tr key={container.name}><td><button type="button" className={styles["container-name"]} onClick={() => containerDetail(container)} aria-label={`查看容器 ${container.name} 详情`}><span className={styles["container-icon"]}><Box aria-hidden="true" /></span><span className={styles["container-name-text"]}><span className={styles.name}>{container.name}</span><small title={container.image || undefined}>{imageVersion(container.image)}</small></span></button></td><td><Status tone={checksStale ? "warning" : container.state === "running" ? "success" : ["exited", "dead"].includes(container.state) ? "danger" : "neutral"}>{containerState(container.state)}</Status><small className={container.health === "unhealthy" ? styles.danger : ""}>{containerHealth(container.health)}</small></td><td><span className={styles["table-number"]}>{percentage(container.cpuPercent)}</span>{validNumber(container.cpuPercent) && <div className={styles["cpu-mini"]} aria-hidden="true"><span style={{ width: `${Math.min(100, container.cpuPercent)}%` }} /></div>}</td><td className={styles["table-number"]}>{bytes(container.memoryBytes)}<small>{percentage(container.memoryPercent)}{container.memoryLimitBytes > 0 ? ` / 上限 ${bytes(container.memoryLimitBytes)}` : ""}</small></td><td>{container.restartCount ?? "—"}</td><td><button type="button" className={styles["container-info"]} onClick={() => containerDetail(container)} aria-label={`打开 ${container.name} 详情`}><ChevronRight aria-hidden="true" /></button></td></tr>)}</tbody></table>{!containers.length && <p className={styles["empty-list"]}>{checksAge === null ? "等待首条容器检查快照" : "暂无容器采样"}</p>}</div></section>
-        <section className={css("glass", "collector-card")} aria-labelledby="monitor-host-title"><div className={styles["collector-heading"]}><span className={styles["collector-orb"]}><Activity aria-hidden="true" /></span><div><h2 id="monitor-host-title">持续采样，安静守候。</h2><p>{sample?.hostId || "等待主机采样"}</p></div></div><div className={styles["collector-stats"]}><div className={styles["collector-stat"]}><span>主机已运行</span><strong>{validNumber(host?.uptimeSeconds) ? Math.floor(host.uptimeSeconds / 86400) : "—"}<small>天</small></strong><p>{validNumber(host?.uptimeSeconds) ? `${Math.floor(host.uptimeSeconds % 86400 / 3600)} 小时 ${Math.floor(host.uptimeSeconds % 3600 / 60)} 分钟` : "运行时间未知"}</p></div><div className={styles["collector-stat"]}><span>最近采样</span><strong>{age === null ? "—" : Math.floor(age)}<small>秒前</small></strong><p>{stale ? "数据已过期" : sample ? "来自最近一次采样" : "等待第一条数据"}</p></div></div><div className={styles["collector-divider"]} /><div className={styles["collector-bottom"]}><div><span>主机 / 检查周期</span><strong>3 秒 / 15 秒</strong></div><div><span>历史刷新 / 保留</span><strong>30 秒 / 7 天</strong></div></div><div className={css("queue-good", stale ? "warning" : !sample ? "neutral" : "success")}>{sample && !stale ? <Check aria-hidden="true" /> : <Activity aria-hidden="true" />}{stale ? "快照已过期，请留意采集状态" : sample ? "仅展示真实采样数据" : "暂无主机数据"}</div></section>
-        <HistoryChart {...sharedChart} title="网络收发趋势" series={NETWORK_SERIES} /><HistoryChart {...sharedChart} title="磁盘读写趋势" series={DISK_SERIES} />
-      </div>
-    </>}
-    </main><footer className={styles.footer}><span><ShieldCheck aria-hidden="true" />服务器本机视角，<strong>不等于公网独立可用性。</strong></span><span className={styles["preview-label"]}>PRIVATE MONITOR · 数据缺失保留断点</span></footer><DetailDialog detail={session?.authenticated ? detail : null} now={now + clockOffset} onClose={() => setDetail(null)} />
-  </div></div>;
+  const sample = current?.sample, hostFreshness = freshness(sample?.collectedAt, current?.stale, now + clockOffset);
+  const checksFreshness = freshness(sample?.checksCollectedAt, current?.checksStale, now + clockOffset);
+  const authPending = !session && !sessionError;
+  return <div className={styles.page} data-theme={theme}>
+    <div className={styles.backdrop} aria-hidden="true" />
+    <div className={styles.wrap}>
+      <a className={styles.skip} href="#monitor-main">跳到监控看板</a>
+      <header className={styles.topbar}>
+        <Link href="/" className={styles.brand} aria-label="返回 Huang 首页"><span className={styles.brandMark}><Activity size={21} aria-hidden="true" /></span><span><strong>Huang</strong><small>服务监控</small></span></Link>
+        <div className={styles.topActions}>
+          {session?.authenticated && <span className={styles.identity} title={session.email}><ShieldCheck size={13} aria-hidden="true" />{session.email}</span>}
+          <button className={styles.iconButton} type="button" onClick={toggleTheme} aria-label={theme === "dark" ? "切换浅色外观" : "切换深色外观"} title={theme === "dark" ? "切换浅色外观" : "切换深色外观"}>{theme === "dark" ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}</button>
+          {session?.authenticated && <><button className={styles.iconButton} type="button" onClick={refresh} disabled={loggingOut} aria-label="刷新当前看板" title="刷新当前看板"><RefreshCw size={16} aria-hidden="true" /></button><button className={styles.iconButton} type="button" onClick={logout} disabled={loggingOut} aria-label={loggingOut ? "正在退出监控" : "退出监控"} title="退出监控">{loggingOut ? <LoaderCircle size={17} className={styles.spin} aria-hidden="true" /> : <LogOut size={17} aria-hidden="true" />}</button></>}
+        </div>
+      </header>
+      <main id="monitor-main">
+        <section className={styles.heading} aria-labelledby="monitor-title">
+          <div><p className={styles.eyebrow}><span />PRIVATE OBSERVABILITY</p><h1 id="monitor-title">{session?.authenticated ? board.title : "让服务器的状态，清晰可见。"}</h1><p className={styles.description}>{session?.authenticated ? board.description : "运行状态、资源趋势与基础设施，集中在一个私有看板。"}</p></div>
+          <span className={styles.scope}><Server size={14} aria-hidden="true" />服务器本机视角</span>
+        </section>
+
+        {!session?.authenticated ? <section className={styles.loginPanel} aria-labelledby="monitor-login-title">
+          <div className={styles.loginCopy}><span className={styles.lockMark}><LockKeyhole size={27} aria-hidden="true" /></span><p className={styles.eyebrow}>YOUR PRIVATE WORKSPACE</p><h2 id="monitor-login-title">一台服务器。<br />一个专注的观察窗口。</h2><p>登录后进入完整的 Grafana 看板，查看服务状态、资源变化和运行细节。</p><div className={styles.loginFacts}><span>主机 3 秒</span><span>服务 15 秒</span><span>7 天历史</span></div></div>
+          <div className={styles.loginAction}><ShieldCheck size={27} aria-hidden="true" /><h3>{authPending ? "正在确认访问权限" : "登录私有看板"}</h3><p>使用已授权的 Google 账号继续。</p>{loginError && <p className={styles.formError} role="alert">{loginError}</p>}
+            {sessionError ? <><p className={styles.formError} role="alert">{sessionError}</p><button className={styles.primaryButton} type="button" onClick={() => setSessionAttempt((value) => value + 1)}><RefreshCw size={16} aria-hidden="true" />重新确认登录状态</button></> : authPending ? <p className={styles.loadingLabel} role="status"><LoaderCircle size={18} className={styles.spin} aria-hidden="true" />读取登录状态…</p> : session?.configured ? <a className={styles.primaryButton} href="/api/monitor/auth/google/start" onClick={() => rememberSelection()}>使用 Google 登录<ArrowRight size={16} aria-hidden="true" /></a> : <p className={styles.formError}>Google 登录尚未配置，暂时无法访问看板。</p>}
+            <small>身份验证通过后才加载监控内容。</small>
+          </div>
+        </section> : <>
+          {logoutError && <p className={styles.errorBanner} role="alert"><CircleAlert size={16} aria-hidden="true" />{logoutError}</p>}
+          {currentError && <p className={styles.errorBanner} role="alert"><CircleAlert size={16} aria-hidden="true" />{currentError}<button type="button" onClick={() => setCurrentAttempt((value) => value + 1)}>重试</button></p>}
+          <div className={styles.freshnessStrip}>
+            <div><span className={styles.statusDot} data-state={!sample ? "unknown" : hostFreshness.stale ? "stale" : "fresh"} /><span>主机采样</span><strong>{hostFreshness.text}</strong><time dateTime={sample?.collectedAt || undefined} title="北京时间">{sample ? timeLabel(sample.collectedAt) : "—"}</time></div>
+            <div><span className={styles.statusDot} data-state={checksFreshness.age === null ? "unknown" : checksFreshness.stale ? "stale" : "fresh"} /><span>服务检查</span><strong>{checksFreshness.text}</strong><time dateTime={sample?.checksCollectedAt || undefined} title="北京时间">{timeLabel(sample?.checksCollectedAt)}</time></div>
+            <span className={styles.sr} role="status">{!sample ? "等待主机采样" : hostFreshness.stale ? "主机数据已过期" : "主机采样正常"}。{checksFreshness.stale ? "服务检查数据已过期" : "服务检查采样正常"}。</span>
+            <p>采集 <b>3 秒 / 15 秒</b><span> · </span>历史刷新 <b>30 秒</b></p>
+          </div>
+          <section className={styles.workspace} aria-label="Grafana 服务监控">
+            <div className={styles.toolbar}>
+              <div className={styles.tabs} role="tablist" aria-label="监控看板">{MONITOR_GRAFANA_VIEWS.map((item, index) => { const Icon = ICONS[item.id]; return <button key={item.id} ref={(element) => { tabs.current[index] = element; }} id={`monitor-tab-${item.id}`} type="button" role="tab" aria-selected={selection.view === item.id} aria-controls="monitor-grafana-panel" tabIndex={selection.view === item.id ? 0 : -1} onClick={() => navigate(item.id)} onKeyDown={(event) => tabKey(event, index)}><Icon size={16} aria-hidden="true" />{item.label}</button>; })}</div>
+              <div className={styles.boardControls}><div className={styles.ranges} role="group" aria-label="看板时间范围">{MONITOR_GRAFANA_RANGES.map((item) => <button key={item.id} type="button" aria-pressed={selection.range === item.id} onClick={() => navigate(selection.view, item.id)}>{item.label}</button>)}</div><a className={styles.openButton} href={fullUrl} target="_blank" rel="noopener noreferrer" aria-label="在新标签中打开完整 Grafana 看板" title="在新标签中打开"><ArrowUpRight size={18} aria-hidden="true" /></a></div>
+            </div>
+            <div className={styles.boardMeta}><span><span className={styles.grafanaDot} />GRAFANA<span className={styles.boardMetaSeparator}>/</span>{board.label}</span><span>{board.refresh === "3s" ? "实时数值 · 3 秒刷新" : "趋势与诊断 · 30 秒刷新"}</span></div>
+            <div id="monitor-grafana-panel" className={styles.framePanel} role="tabpanel" aria-labelledby={`monitor-tab-${selection.view}`} aria-busy={frameState === "checking" || frameState === "loading" || loggingOut}>
+              {frameAllowed && !loggingOut && <iframe key={`${frameUrl}:${frameVersion}`} ref={frame} className={styles.frame} data-view={selection.view} title={`${board.label} · Grafana 服务器监控`} src={frameUrl} loading="eager" referrerPolicy="same-origin" allowFullScreen onLoad={frameLoaded} onError={() => { setFrameState("error"); setFrameError("看板连接失败，请重新载入。"); }} />}
+              {(!frameAllowed || frameState !== "ready" || loggingOut) && <div className={styles.frameOverlay}>
+                {frameState === "error" ? <div className={styles.frameMessage} role="alert"><CircleAlert size={28} aria-hidden="true" /><h2>看板暂时未能打开</h2><p>{frameError || "请重新载入，或在新标签中打开看板。"}</p><div><button className={styles.primaryButton} type="button" onClick={refresh}><RefreshCw size={15} aria-hidden="true" />重新载入</button><a className={styles.secondaryButton} href={fullUrl} target="_blank" rel="noopener noreferrer">新标签打开<ArrowUpRight size={15} aria-hidden="true" /></a></div></div> : <div className={styles.frameMessage} role="status"><LoaderCircle size={27} className={styles.spin} aria-hidden="true" /><h2>{loggingOut ? "正在退出监控" : frameState === "checking" ? "正在校验看板访问权限" : "正在打开看板"}</h2><p>{loggingOut ? "正在结束当前登录会话。" : "完整监控视图即将呈现。"}</p></div>}
+              </div>}
+            </div>
+          </section>
+        </>}
+      </main>
+      <footer className={styles.footer}><Link href="/" className={styles.homeLink}><ChevronLeft size={14} aria-hidden="true" />返回个人网站</Link><span><Check size={12} aria-hidden="true" />Google 私有访问<span className={styles.footerSeparator}>·</span>Prometheus + Grafana</span><span>本机检查视角 · 缺失采样保留断点</span></footer>
+    </div>
+  </div>;
 }

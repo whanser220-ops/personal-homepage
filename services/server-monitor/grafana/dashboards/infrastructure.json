@@ -1,0 +1,1535 @@
+{
+  "uid": "monitor-sre-infrastructure",
+  "title": "根因定位 · 主机与服务",
+  "description": "服务表现优先，资源压力用于定位。真实入口 HTTP 与本机探测分开解释；缺失值保留为空，不补造接入前的数据。",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "timezone": "Asia/Shanghai",
+  "refresh": "30s",
+  "tags": [
+    "server-monitor",
+    "sre",
+    "provisioned"
+  ],
+  "links": [
+    {
+      "title": "Google SRE · 监控分布式系统",
+      "url": "https://sre.google/sre-book/monitoring-distributed-systems/",
+      "targetBlank": true,
+      "type": "link"
+    }
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "3s",
+      "15s",
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "入口服务",
+        "type": "custom",
+        "query": "个人网站 : website,学习白板 : whiteboard,Study Agent : study-agent",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "hide": 0
+      },
+      {
+        "name": "resolution",
+        "type": "custom",
+        "query": "3s,5m,30m",
+        "current": {
+          "selected": true,
+          "text": "3s",
+          "value": "3s"
+        },
+        "options": [],
+        "hide": 2,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "根因定位 · 主机、容器与采集链路",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "把这里作为解释服务症状的证据：CPU / 内存 / IO 压力、容器资源与重启、进程及探测结果。资源高不自动等于用户受损；探测可达不代表完整业务成功。"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "CPU 使用率",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "server_monitor_host_cpu_percent{host_id=\"cloud-primary\"} and (timestamp(server_monitor_host_cpu_percent{host_id=\"cloud-primary\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}))) and on (host_id) (server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"} > time() - 45)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "内存使用率",
+      "description": "",
+      "gridPos": {
+        "x": 6,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "server_monitor_host_memory_used_percent{host_id=\"cloud-primary\"} and (timestamp(server_monitor_host_memory_used_percent{host_id=\"cloud-primary\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}))) and on (host_id) (server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"} > time() - 45)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "根磁盘使用率",
+      "description": "",
+      "gridPos": {
+        "x": 12,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "server_monitor_host_disk_used_percent{host_id=\"cloud-primary\"} and (timestamp(server_monitor_host_disk_used_percent{host_id=\"cloud-primary\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}))) and on (host_id) (server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"} > time() - 45)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "主机运行时间",
+      "description": "",
+      "gridPos": {
+        "x": 18,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "server_monitor_host_uptime_seconds{host_id=\"cloud-primary\"} and (timestamp(server_monitor_host_uptime_seconds{host_id=\"cloud-primary\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}))) and on (host_id) (server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"} > time() - 45)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "负载 / CPU 核心",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "avg_over_time(server_monitor_host_load1{host_id=\"cloud-primary\"}[$__interval]) / on (host_id) avg_over_time(server_monitor_host_cpu_cores{host_id=\"cloud-primary\"}[$__interval])",
+          "legendFormat": "1分钟",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "avg_over_time(server_monitor_host_load5{host_id=\"cloud-primary\"}[$__interval]) / on (host_id) avg_over_time(server_monitor_host_cpu_cores{host_id=\"cloud-primary\"}[$__interval])",
+          "legendFormat": "5分钟",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "avg_over_time(server_monitor_host_load15{host_id=\"cloud-primary\"}[$__interval]) / on (host_id) avg_over_time(server_monitor_host_cpu_cores{host_id=\"cloud-primary\"}[$__interval])",
+          "legendFormat": "15分钟",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 7,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "axisPlacement": "auto",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "maxDataPoints": 1201,
+      "interval": "15s"
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "CPU / 内存 / IO 等待压力",
+      "description": "",
+      "gridPos": {
+        "x": 12,
+        "y": 7,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "(100 * rate(node_pressure_cpu_waiting_seconds_total{job=\"server-monitor-node\",host_id=\"cloud-primary\"}[1m])) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-node\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-node\"}) > time() - 45) and (timestamp(node_pressure_cpu_waiting_seconds_total{job=\"server-monitor-node\",host_id=\"cloud-primary\"}) == on (host_id) group_left timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-node\"}))",
+          "legendFormat": "CPU 等待",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "(100 * rate(node_pressure_memory_waiting_seconds_total{job=\"server-monitor-node\",host_id=\"cloud-primary\"}[1m])) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-node\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-node\"}) > time() - 45) and (timestamp(node_pressure_memory_waiting_seconds_total{job=\"server-monitor-node\",host_id=\"cloud-primary\"}) == on (host_id) group_left timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-node\"}))",
+          "legendFormat": "内存等待",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "(100 * rate(node_pressure_io_waiting_seconds_total{job=\"server-monitor-node\",host_id=\"cloud-primary\"}[1m])) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-node\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-node\"}) > time() - 45) and (timestamp(node_pressure_io_waiting_seconds_total{job=\"server-monitor-node\",host_id=\"cloud-primary\"}) == on (host_id) group_left timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-node\"}))",
+          "legendFormat": "IO 等待",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 7,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisCenteredZero": false,
+            "axisPlacement": "auto",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "maxDataPoints": 1201,
+      "interval": "15s"
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "容器 CPU · 1 分钟速率",
+      "description": "按完整容器ID连接元数据；多核可超过100%。",
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "sum by (host_id,container_id) (label_replace(label_replace(rate(container_cpu_usage_seconds_total{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}[1m]) and ((container_cpu_usage_seconds_total{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_cpu_usage_seconds_total{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) and on (host_id,id) ((container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) > time() - 45)), \"container_id\", \"$1\", \"id\", \"^.*/([0-9a-f]{64})$\"), \"container_id\", \"$1\", \"id\", \"^.*docker-([0-9a-f]{64})[.]scope$\")) * on (host_id,container_id) group_left (name) ((server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} and (timestamp(server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45)) * 100",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.labels.name}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "容器内存 · working set",
+      "description": "按完整ID关联，旧同名容器的数据不会接到新容器。",
+      "gridPos": {
+        "x": 8,
+        "y": 14,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "sum by (host_id,container_id) (label_replace(label_replace((container_memory_working_set_bytes{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_memory_working_set_bytes{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) and on (host_id,id) ((container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) > time() - 45), \"container_id\", \"$1\", \"id\", \"^.*/([0-9a-f]{64})$\"), \"container_id\", \"$1\", \"id\", \"^.*docker-([0-9a-f]{64})[.]scope$\")) * on (host_id,container_id) group_left (name) ((server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} and (timestamp(server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.labels.name}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "容器内存 / 有效上限",
+      "description": "未限制的cgroup上限0使用宿主机总内存；有限上限同样不超过主机内存。",
+      "gridPos": {
+        "x": 16,
+        "y": 14,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "100 * (sum by (host_id,container_id) (label_replace(label_replace((container_memory_working_set_bytes{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_memory_working_set_bytes{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) and on (host_id,id) ((container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) > time() - 45), \"container_id\", \"$1\", \"id\", \"^.*/([0-9a-f]{64})$\"), \"container_id\", \"$1\", \"id\", \"^.*docker-([0-9a-f]{64})[.]scope$\")) * on (host_id,container_id) group_left (name) ((server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} and (timestamp(server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45))) / (((((sum by (host_id,container_id) (label_replace(label_replace((container_spec_memory_limit_bytes{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_spec_memory_limit_bytes{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) and on (host_id,id) ((container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) > time() - 45), \"container_id\", \"$1\", \"id\", \"^.*/([0-9a-f]{64})$\"), \"container_id\", \"$1\", \"id\", \"^.*docker-([0-9a-f]{64})[.]scope$\")) * on (host_id,container_id) group_left (name) ((server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} and (timestamp(server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45))) > 0) or (((sum by (host_id,container_id) (label_replace(label_replace((container_spec_memory_limit_bytes{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_spec_memory_limit_bytes{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) and on (host_id,id) ((container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) > time() - 45), \"container_id\", \"$1\", \"id\", \"^.*/([0-9a-f]{64})$\"), \"container_id\", \"$1\", \"id\", \"^.*docker-([0-9a-f]{64})[.]scope$\")) * on (host_id,container_id) group_left (name) ((server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} and (timestamp(server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45))) == 0) + on (host_id) group_left () (server_monitor_host_memory_total_bytes{host_id=\"cloud-primary\"} and (timestamp(server_monitor_host_memory_total_bytes{host_id=\"cloud-primary\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}))) and on (host_id) (server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"} > time() - 45)))) < on (host_id) group_left () (server_monitor_host_memory_total_bytes{host_id=\"cloud-primary\"} and (timestamp(server_monitor_host_memory_total_bytes{host_id=\"cloud-primary\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}))) and on (host_id) (server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"} > time() - 45))) or (((((sum by (host_id,container_id) (label_replace(label_replace((container_spec_memory_limit_bytes{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_spec_memory_limit_bytes{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) and on (host_id,id) ((container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) > time() - 45), \"container_id\", \"$1\", \"id\", \"^.*/([0-9a-f]{64})$\"), \"container_id\", \"$1\", \"id\", \"^.*docker-([0-9a-f]{64})[.]scope$\")) * on (host_id,container_id) group_left (name) ((server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} and (timestamp(server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45))) > 0) or (((sum by (host_id,container_id) (label_replace(label_replace((container_spec_memory_limit_bytes{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_spec_memory_limit_bytes{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) and on (host_id,id) ((container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} and (timestamp(container_last_seen{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) == on (host_id) group_left max by (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-cadvisor\"}) > time() - 45)) > time() - 45), \"container_id\", \"$1\", \"id\", \"^.*/([0-9a-f]{64})$\"), \"container_id\", \"$1\", \"id\", \"^.*docker-([0-9a-f]{64})[.]scope$\")) * on (host_id,container_id) group_left (name) ((server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} and (timestamp(server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45))) == 0) + on (host_id) group_left () (server_monitor_host_memory_total_bytes{host_id=\"cloud-primary\"} and (timestamp(server_monitor_host_memory_total_bytes{host_id=\"cloud-primary\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}))) and on (host_id) (server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"} > time() - 45)))) >= on (host_id) group_left () (server_monitor_host_memory_total_bytes{host_id=\"cloud-primary\"} and (timestamp(server_monitor_host_memory_total_bytes{host_id=\"cloud-primary\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}))) and on (host_id) (server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"} > time() - 45))) * 0 + on (host_id) group_left () (server_monitor_host_memory_total_bytes{host_id=\"cloud-primary\"} and (timestamp(server_monitor_host_memory_total_bytes{host_id=\"cloud-primary\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}))) and on (host_id) (server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"} > time() - 45))))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.labels.name}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "容器重启次数",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 8,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "(server_monitor_custom_container_restart_count{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} and (timestamp(server_monitor_custom_container_restart_count{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.labels.name}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "HTTP 响应",
+      "description": "",
+      "gridPos": {
+        "x": 8,
+        "y": 20,
+        "w": 16,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "probe_http_status_code{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\",kind=\"http\"} and (timestamp(probe_http_status_code{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\",kind=\"http\"}) == on (host_id,id) group_left max by (host_id,id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\"}))) and on (host_id,id) (up{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\"} == 1) and on (host_id,id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\"}) > time() - 45)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "未响应",
+                  "color": "red"
+                },
+                "200": {
+                  "text": "200 · 检查通过",
+                  "color": "green"
+                },
+                "303": {
+                  "text": "303 · 认证跳转",
+                  "color": "blue"
+                },
+                "401": {
+                  "text": "401 · 认证入口可达",
+                  "color": "blue"
+                },
+                "403": {
+                  "text": "403 · 认证入口可达",
+                  "color": "blue"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 201,
+                "to": 299,
+                "result": {
+                  "text": "2xx · 检查通过",
+                  "color": "green"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 300,
+                "to": 399,
+                "result": {
+                  "text": "3xx · 入口可达",
+                  "color": "blue"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 400,
+                "to": 599,
+                "result": {
+                  "text": "HTTP 错误",
+                  "color": "red"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.labels.name}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "进程 / 就绪检查",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 16,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "max by (id,name) ((((server_monitor_custom_service_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\",status=\"healthy\"} and (timestamp(server_monitor_custom_service_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\",status=\"healthy\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45)) * 1) or (((server_monitor_custom_service_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\",status=\"unhealthy\"} and (timestamp(server_monitor_custom_service_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\",status=\"unhealthy\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45)) * 0) or (((server_monitor_custom_service_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\",status=\"unknown\"} and (timestamp(server_monitor_custom_service_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\",status=\"unknown\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45)) * -1))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "进程异常",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "进程运行",
+                  "color": "green"
+                },
+                "-1": {
+                  "text": "未知",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.labels.name}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "TCP 连接",
+      "description": "",
+      "gridPos": {
+        "x": 16,
+        "y": 25,
+        "w": 8,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "probe_success{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\",kind=\"tcp\"} and (timestamp(probe_success{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\",kind=\"tcp\"}) == on (host_id,id) group_left max by (host_id,id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\"}))) and on (host_id,id) (up{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\"} == 1) and on (host_id,id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-blackbox\"}) > time() - 45)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "连接失败",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "端口可达",
+                  "color": "blue"
+                },
+                "-1": {
+                  "text": "未知",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "displayName": "${__field.labels.name}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "容器身份、版本与健康状态",
+      "description": "Docker健康状态未配置时显示unknown，不把它等同于进程退出。",
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "(server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} and (timestamp(server_monitor_custom_container_info{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) == on (host_id) group_left max by (host_id) (timestamp(server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}))) and on (host_id) (up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} == 1) and on (host_id) (timestamp(up{host_id=\"cloud-primary\",job=\"server-monitor-custom\"}) > time() - 45)) and on (host_id) (server_monitor_custom_collected_at_seconds{host_id=\"cloud-primary\",job=\"server-monitor-custom\"} > time() - 45)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "host_id": true,
+              "job": true,
+              "instance": true,
+              "container_id": true,
+              "exported_host_id": true
+            },
+            "renameByName": {
+              "name": "容器",
+              "image": "运行版本",
+              "state": "状态",
+              "health": "健康检查"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "采集目标 · up",
+      "description": "采集端可抓取与业务健康分开。任何数据源失败都应结合指标是否缺失解释。",
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 16,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "up{job=~\"server-monitor-(node|cadvisor|blackbox|custom|http)\",host_id=\"cloud-primary\"}",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 17,
+      "type": "stat",
+      "title": "主机采样年龄",
+      "description": "超过45秒视为过期；这里使用指标内记录的真实主机采样时间。",
+      "gridPos": {
+        "x": 16,
+        "y": 37,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "monitor-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "monitor-prometheus"
+          },
+          "expr": "time() - server_monitor_host_collected_at_seconds{host_id=\"cloud-primary\"}",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "暂无数据",
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "暂无样本",
+                  "color": "#8e8e8e"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+/var/log/personal-homepage-monitor/traffic.jsonl {
+    hourly
+    maxsize 10M
+    rotate 2
+    missingok
+    notifempty
+    copytruncate
+    compress
+    delaycompress
+    su root www-data
+}

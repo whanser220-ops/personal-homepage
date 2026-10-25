@@ -106,10 +106,12 @@ class OfficialExporterInstallationTests(unittest.TestCase):
     def test_shadow_config_references_only_shadow_rules(self):
         rendered = installer.render_prometheus(shadow=True)
         self.assertIn(installer.SHADOW_RULES.as_posix(), rendered)
+        self.assertIn(installer.SHADOW_HTTP_RULES.as_posix(), rendered)
         self.assertNotIn('  - /etc/personal-homepage-prometheus/node-host.rules.yml', rendered)
+        self.assertNotIn('  - /etc/personal-homepage-prometheus/http-sre.rules.yml', rendered)
         self.assertNotIn('job_name: server-monitor-host', rendered)
         self.assertNotIn('job_name: server-monitor-checks', rendered)
-        for name in ('node', 'cadvisor', 'blackbox', 'custom'):
+        for name in ('node', 'cadvisor', 'blackbox', 'custom', 'http'):
             self.assertIn('job_name: server-monitor-' + name, rendered)
 
     def test_node_unit_allows_netlink_and_overrides_partition_exclusion(self):
@@ -118,12 +120,15 @@ class OfficialExporterInstallationTests(unittest.TestCase):
         self.assertIn('RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK', value)
         self.assertIn('--collector.diskstats.device-include=^vda2$', value)
         self.assertIn('--collector.diskstats.device-exclude=', value)
+        self.assertIn('--collector.pressure', value)
         self.assertNotIn('__ROOT_DEVICE__', value)
 
     def test_up_and_fresh_capture_cannot_hide_missing_normalized_rate(self):
         def query(expression, base):
             if expression.startswith('up{'):
                 return [{'value': [1000, '1']}] * (6 if 'blackbox' in expression else 1)
+            if expression.startswith('server_monitor_http_parse_errors_total{'):
+                return [{'value': [1000, '0']}]
             if expression.startswith(('server_monitor_host_collected_at_seconds{', 'server_monitor_custom_collected_at_seconds{')):
                 return [{'value': [1000, '1000']}]
             if expression.startswith('node_scrape_collector_success{'):
