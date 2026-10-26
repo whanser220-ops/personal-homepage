@@ -85,7 +85,7 @@ printf 'SOURCE_COMMIT_SHA=%s\n' "$(git rev-parse --short HEAD)" > .ci/source.env
                 // Deployment runs on a fresh ephemeral agent, so carry the
                 // runtime manifest explicitly instead of relying on stale
                 // server-side copies.
-                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf,deploy/nginx-learning-whiteboard.conf,deploy/install-whiteboard-nginx.py,deploy/nginx-server-monitor.conf,deploy/nginx-monitor-http.conf,deploy/install-monitor-nginx.py,deploy/install-server-monitor.py,deploy/install-prometheus.py,deploy/install-monitor-exporters.py,deploy/install-grafana.py,deploy/install-grafana-history.py,deploy/install-http-metrics.py,deploy/verify-grafana.py,deploy/verify-grafana-proxy.py,deploy/verify-monitor-logrotate.py,deploy/verify-server-monitor.py,deploy/verify-monitor-runtime.py,deploy/monitor-runtime-fixture.mjs,deploy/monitor-runtime-probe.mjs,services/server-monitor/**,tests/monitor-*-rules.test.yml,tests/verify_grafana_queries.py'
+                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf,deploy/nginx-learning-whiteboard.conf,deploy/install-whiteboard-nginx.py,deploy/nginx-server-monitor.conf,deploy/nginx-monitor-http.conf,deploy/install-monitor-nginx.py,deploy/install-server-monitor.py,deploy/install-prometheus.py,deploy/install-monitor-exporters.py,deploy/install-monitor-logrotate.py,deploy/retire-grafana.py,deploy/install-http-metrics.py,deploy/verify-monitor-logrotate.py,deploy/verify-monitor-retirement.py,deploy/verify-server-monitor.py,deploy/verify-monitor-runtime.py,deploy/monitor-runtime-fixture.mjs,deploy/monitor-runtime-probe.mjs,services/server-monitor/**,tests/monitor-*-rules.test.yml'
             }
         }
 
@@ -144,6 +144,17 @@ docker build "${build_args[@]}" \
     -t "$latest_image_ref" \
     .
 
+# Generate semantic PromQL fixtures from the exact release source. The native
+# target runtime provides Node; no host Node, database or network is required.
+tar -cf - package.json tests/verify_monitor_signals.mjs \
+    src/server/monitorSignals.js src/server/monitorPrometheus.js \
+    src/server/monitorValidation.js src/server/monitorStandardChecks.js \
+    | docker run --rm -i --network none --memory 128m --cpus 0.5 \
+        --label "personal-homepage.monitor-query-fixture=${commit_sha}" \
+        --entrypoint sh "$image_ref" -c \
+        'set -eu; mkdir /tmp/query-fixture; tar -xf - -C /tmp/query-fixture; node /tmp/query-fixture/tests/verify_monitor_signals.mjs --write-fixture /tmp/queries.json >/dev/null; cat /tmp/queries.json' \
+        > .ci/monitor-signals-queries.json
+
 docker push "$image_ref"
 docker push "$latest_image_ref"
 
@@ -171,7 +182,7 @@ while IFS= read -r local_image_ref; do
 done < <(docker image ls "$whiteboard_repository" --format '{{.Repository}}:{{.Tag}}')
 docker image prune --force --filter 'until=168h' >/dev/null 2>&1 || true
 '''
-                    stash name: 'build-metadata', includes: '.ci/image.env'
+                    stash name: 'build-metadata', includes: '.ci/image.env,.ci/monitor-signals-queries.json'
                 }
             }
         }
@@ -204,6 +215,7 @@ set -euo pipefail
 . .ci/image.env
 
 deploy_files=(
+    .ci/monitor-signals-queries.json
     compose.yml
     deploy/deploy-from-image.sh
     deploy/nginx-personal-homepage.conf
@@ -214,12 +226,11 @@ deploy_files=(
     deploy/install-server-monitor.py
     deploy/install-prometheus.py
     deploy/install-monitor-exporters.py
-    deploy/install-grafana.py
-    deploy/install-grafana-history.py
+    deploy/install-monitor-logrotate.py
+    deploy/retire-grafana.py
     deploy/install-http-metrics.py
-    deploy/verify-grafana.py
-    deploy/verify-grafana-proxy.py
     deploy/verify-monitor-logrotate.py
+    deploy/verify-monitor-retirement.py
     deploy/nginx-monitor-http.conf
     deploy/verify-server-monitor.py
     deploy/verify-monitor-runtime.py
@@ -235,26 +246,17 @@ deploy_files=(
     services/server-monitor/personal-homepage-blackbox-exporter.service
     services/server-monitor/personal-homepage-monitor-custom.service
     services/server-monitor/personal-homepage-prometheus-shadow.service
-    services/server-monitor/personal-homepage-grafana.service
     services/server-monitor/personal-homepage-monitor-logrotate.service
     services/server-monitor/personal-homepage-monitor-logrotate.timer
     services/server-monitor/personal-homepage-http-metrics.service
     services/server-monitor/http-log-exporter.yml
     services/server-monitor/http-sre.rules.yml
-    services/server-monitor/grafana/grafana.ini
-    services/server-monitor/grafana/traffic.logrotate
-    services/server-monitor/grafana/provisioning/datasources/prometheus.yml
-    services/server-monitor/grafana/provisioning/datasources/history.yml
-    services/server-monitor/grafana/provisioning/dashboards/monitor.yml
-    services/server-monitor/grafana/dashboards/overview.json
-    services/server-monitor/grafana/dashboards/trends.json
-    services/server-monitor/grafana/dashboards/infrastructure.json
+    services/server-monitor/traffic.logrotate
     services/server-monitor/prometheus.yml
     services/server-monitor/node-host.rules.yml
     services/server-monitor/blackbox.yml
     tests/monitor-node-rules.test.yml
     tests/monitor-http-sre-rules.test.yml
-    tests/verify_grafana_queries.py
 )
 for deploy_file in "${deploy_files[@]}"; do
     if [ ! -f "$deploy_file" ]; then
@@ -335,6 +337,8 @@ grep -q 'software-atlas' whiteboard.json
 curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
     https://warmhanser.com/server-monitor -o /dev/null
 test "$(curl --silent --output /dev/null --write-out '%{http_code}' https://warmhanser.com/api/monitor/current)" = 401
+test "$(curl --silent --output /dev/null --write-out '%{http_code}' https://warmhanser.com/api/monitor/signals/current)" = 401
+test "$(curl --silent --output /dev/null --write-out '%{http_code}' https://warmhanser.com/server-monitor/grafana/)" = 404
 test "$(curl --silent --output /dev/null --write-out '%{http_code}' https://warmhanser.com/api/monitor/ingest)" = 404
 '''
                 }

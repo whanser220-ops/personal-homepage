@@ -1,6 +1,6 @@
 # 宿主机服务监控采集组件
 
-标准模式使用同机独立的 Prometheus 3.13.5 保存 7 天指标；主看板已改为 [Grafana 13.2.4](grafana/README.md)，保留原 Google 登录和网站导航，以四个黄金信号组织实时概览、趋势与基础设施三块原生看板。Grafana 仅监听 `127.0.0.1:19110`，Nginx 每次请求校验原会话并固定 Viewer 权限。真实 HTTP 指标 exporter 监听 19111，见 [HTTP 指标说明](HTTP_METRICS.md)。Prometheus 监听 `127.0.0.1:19090`；原 Next.js 兼容接口继续通过 Docker 私网 gateway 的 `19091` relay 查询，网站容器不挂载 Docker socket。全部服务探测均为服务器本机视角，不承诺服务器整体失联时的外部告警。
+标准模式使用同机独立的 Prometheus 3.13.5 保存 7 天指标；主看板为网站自有 React/SVG 页面，保留原 Google 登录和网站导航，以流量、延迟、错误、饱和度展示实际数据。页面不再加载 Grafana iframe 或第三方运行时。真实 HTTP 指标 exporter 监听 19111，见 [HTTP 指标说明](HTTP_METRICS.md)。Prometheus 监听 `127.0.0.1:19090`；Next.js 通过 Docker 私网 gateway 的 `19091` relay 查询，网站容器不挂载 Docker socket。全部服务探测均为服务器本机视角，不承诺服务器整体失联时的外部告警。
 
 | 组件 | 回环端口 | Prometheus 节拍 | 当前职责 |
 | --- | --- | --- | --- |
@@ -18,6 +18,8 @@ node unit 允许 netdev 所需的 `AF_NETLINK`；安装器从真实 MAJ:MIN/sysf
 blackbox HTTP 不跟随重定向、响应体限 64 KB，仅保存成功标志、状态码与耗时。2xx 表示 HTTP 检查通过；3xx/401/403 只表示认证或跳转入口可达，Study Agent 303 不判为故障。TCP 成功只证明连接可达；systemd active 只证明进程运行；pg_isready 只说明 PostgreSQL 接受连接。来源失败或缺失显示未知/断点，最旧或缺失检查超过 45 秒标为过期，不用零或前值填补。
 
 完整部署、Google 登录配置、文件权限、事务回退及发布验收见[服务监控运维说明](../../docs/server-monitor-operations.md)。
+
+HTTP 日志和轮转由独立 `install-monitor-logrotate.py` 管理：策略 `/etc/personal-homepage-monitor/traffic.logrotate`，timer/oneshot 与 exporter 生命周期均不依赖旧仪表盘。发布先验证候选自有页面及资源/信号 API，再关闭旧仪表盘服务与专用数据库角色 LOGIN；原 Grafana 数据、配置和二进制保留用于匹配旧版本回退，不再有公网代理路由。
 
 ## Python custom 的边界与指标
 

@@ -1,6 +1,7 @@
 import { readCurrentMonitorSample as readLegacyCurrent, readMonitorHistory as readLegacyHistory, readMonitorHistoryRows } from "./monitorDb.js";
 import { mergeMonitorHistoryRows, readPrometheusCurrent, readPrometheusHistoryRows } from "./monitorPrometheus.js";
 import { MONITOR_HISTORY_RANGES } from "./monitorValidation.js";
+import { readPrometheusSignalsCurrent, readPrometheusSignalsHistory } from "./monitorSignals.js";
 
 export function monitorDataBackend(env = process.env) {
   const backend = env.MONITOR_DATA_BACKEND?.trim() || "postgres";
@@ -32,4 +33,14 @@ export async function readMonitorHistory(range, now = Date.now()) {
     readPrometheusHistoryRows(range, now, { after: cutoff }),
   ]);
   return mergeMonitorHistoryRows(legacy, prometheus, range, now);
+}
+
+export async function readMonitorSignalsCurrent(service = "all", now = Date.now()) {
+  if (monitorDataBackend() !== "prometheus") throw new Error("monitor_not_configured");
+  return readPrometheusSignalsCurrent(service, now);
+}
+
+export async function readMonitorSignalsHistory(service, range, now = Date.now()) {
+  if (monitorDataBackend() !== "prometheus") throw new Error("monitor_not_configured");
+  return readPrometheusSignalsHistory(service, range, now);
 }

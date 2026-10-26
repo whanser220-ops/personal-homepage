@@ -18,7 +18,7 @@ import uuid
 
 REPO = Path(__file__).resolve().parent.parent
 LOG_PATH = '/var/log/personal-homepage-monitor/traffic.jsonl'
-SOURCE = REPO / 'services/server-monitor/grafana/traffic.logrotate'
+SOURCE = REPO / 'services/server-monitor/traffic.logrotate'
 UNIT = REPO / 'services/server-monitor/personal-homepage-monitor-logrotate.service'
 
 
@@ -49,7 +49,7 @@ def rotation_command(state, configuration):
     original = shlex.split(parser['Service']['ExecStart'])
     if (len(original) != 4 or original[:2] != ['/usr/sbin/logrotate','--state'] or
             original[2] != '/var/lib/personal-homepage-monitor-logrotate/status' or
-            original[3] != '/etc/personal-homepage-grafana/traffic.logrotate'):
+            original[3] != '/etc/personal-homepage-monitor/traffic.logrotate'):
         raise RuntimeError('Unexpected production rotation command')
     return [original[0], '--force', '--state', state.as_posix(), configuration.as_posix()]
 

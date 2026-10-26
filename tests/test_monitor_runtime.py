@@ -29,7 +29,9 @@ class CompiledRuntimeGateTests(unittest.TestCase):
         if args[0] == 'run':
             return self.response(stdout='candidate-container-id\n')
         if args[0] == 'exec':
-            return self.response(stdout=json.dumps({'test': 'compiled-next-runtime', 'current': 200}))
+            return self.response(stdout=json.dumps({'test': 'compiled-next-runtime', 'current': 200,
+                'customPage':200,'retiredAuthorization':404,
+                'signals':{key:{} for key in ('all','website','whiteboard','study-agent')}}))
         if args[0] == 'inspect':
             return self.response(stdout=json.dumps({runtime.LABEL: self.identity}))
         if args[:2] == ('rm', '--force'):

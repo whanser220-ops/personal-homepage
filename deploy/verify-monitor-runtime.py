@@ -75,12 +75,14 @@ def verify_runtime(image, network='personal-homepage-net', *, exporter_mode='leg
         arguments.extend([image, '--import', '/probe/monitor-runtime-fixture.mjs', '/app/server.js'])
         try:
             docker(*arguments, timeout=30)
-            result = docker('exec', name, 'node', '/probe/monitor-runtime-probe.mjs', timeout=120, check=False)
+            result = docker('exec', name, 'node', '/probe/monitor-runtime-probe.mjs', timeout=180, check=False)
             if result.returncode:
                 code = next((line for line in result.stderr.splitlines() if re.fullmatch(r'runtime_[A-Za-z0-9_]+', line)), 'runtime_candidate_probe_failed')
                 raise RuntimeError(code)
             summary = json.loads(result.stdout)
-            if summary.get('test') != 'compiled-next-runtime' or summary.get('current') != 200:
+            if (summary.get('test') != 'compiled-next-runtime' or summary.get('current') != 200 or
+                    summary.get('customPage') != 200 or summary.get('retiredAuthorization') != 404 or
+                    set(summary.get('signals', {})) != {'all','website','whiteboard','study-agent'}):
                 raise RuntimeError('runtime_probe_invalid_summary')
             print('Monitor candidate compiled runtime passed: ' + json.dumps(summary, separators=(',', ':')))
         finally:

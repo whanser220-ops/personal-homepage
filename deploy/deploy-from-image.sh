@@ -148,8 +148,8 @@ previous_whiteboard_image="$(docker_cli inspect --format '{{.Config.Image}}' lea
 monitor_prepared=0
 prometheus_prepared=0
 exporters_prepared=0
-grafana_prepared=0
-grafana_history_prepared=0
+rotation_prepared=0
+retirement_prepared=0
 http_metrics_prepared=0
 runtime_switched=0
 nginx_backup=""
@@ -173,11 +173,12 @@ deployment_exit() {
         if [ "$http_metrics_prepared" -eq 1 ]; then
             sudo python3 deploy/install-http-metrics.py rollback
         fi
-        if [ "$grafana_prepared" -eq 1 ]; then
-            sudo python3 deploy/install-grafana.py rollback
+        if [ "$retirement_prepared" -eq 1 ]; then
+            # Restores the dedicated role LOGIN before the prior service starts.
+            sudo python3 deploy/retire-grafana.py rollback
         fi
-        if [ "$grafana_history_prepared" -eq 1 ]; then
-            sudo python3 deploy/install-grafana-history.py rollback
+        if [ "$rotation_prepared" -eq 1 ]; then
+            sudo python3 deploy/install-monitor-logrotate.py rollback
         fi
         if [ "$exporters_prepared" -eq 1 ]; then
             sudo python3 deploy/install-monitor-exporters.py rollback
@@ -267,13 +268,13 @@ docker_cli pull "$APP_IMAGE"
 docker_cli pull "$WHITEBOARD_IMAGE"
 sudo python3 deploy/install-server-monitor.py prepare
 monitor_prepared=1
-# Prepare the independent private dashboard and its bounded metric log before
-# the HTTP exporter starts. No public Grafana route is enabled at this stage.
-sudo python3 deploy/install-grafana-history.py prepare
-grafana_history_prepared=1
-sudo python3 deploy/install-grafana.py prepare
-grafana_prepared=1
-sudo python3 deploy/verify-grafana-proxy.py
+# Snapshot the retired service without stopping it before the candidate passes.
+sudo python3 deploy/verify-monitor-retirement.py
+sudo python3 deploy/retire-grafana.py prepare
+retirement_prepared=1
+# HTTP traffic collection and rotation have an independent lifecycle.
+sudo python3 deploy/install-monitor-logrotate.py prepare
+rotation_prepared=1
 sudo python3 deploy/install-http-metrics.py prepare
 http_metrics_prepared=1
 # New exporters and a separate Prometheus validate the replacement while the
@@ -404,19 +405,23 @@ curl --fail --silent --show-error "$HEALTH_URL" >/dev/null
 curl --fail --silent --show-error "$METRICS_URL" >/dev/null
 curl --fail --silent --show-error https://warmhanser.com/whiteboard/health >/dev/null
 sudo python3 deploy/verify-server-monitor.py
-sudo python3 deploy/verify-grafana.py
+sudo python3 deploy/install-monitor-logrotate.py verify
 # Only retire the push collector after the website, login configuration,
 # private reads and Prometheus samples have all passed release verification.
 sudo python3 deploy/install-prometheus.py finalize
 sudo python3 deploy/install-monitor-exporters.py finalize
+# The replacement page, private reads, public boundaries and source freshness
+# have passed. Preserve all dashboard data/configuration for reversible rollback.
+sudo python3 deploy/retire-grafana.py finalize
+sudo python3 deploy/retire-grafana.py verify
 sudo python3 deploy/install-monitor-exporters.py commit
 exporters_prepared=0
 sudo python3 deploy/install-http-metrics.py commit
 http_metrics_prepared=0
-sudo python3 deploy/install-grafana.py commit
-grafana_prepared=0
-sudo python3 deploy/install-grafana-history.py commit
-grafana_history_prepared=0
+sudo python3 deploy/install-monitor-logrotate.py commit
+rotation_prepared=0
+sudo python3 deploy/retire-grafana.py commit
+retirement_prepared=0
 sudo python3 deploy/install-prometheus.py commit
 prometheus_prepared=0
 sudo python3 deploy/install-server-monitor.py commit

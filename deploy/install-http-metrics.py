@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Transactional native log exporter; does not alter Nginx or website access.
 
-The Nginx/Grafana transaction owns the four-field privacy log and its rotation.
+The independent rotation installer owns the four-field privacy log lifecycle.
 This transaction never truncates, replays, removes, or changes that log.
 Stage the immutable upstream archive before invoking prepare.
 """

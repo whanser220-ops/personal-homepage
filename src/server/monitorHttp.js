@@ -4,11 +4,11 @@ const failureLogTimes = new Map();
 const safeFailureMessages = new Set([
   "invalid_monitor_data_backend", "invalid_monitor_prometheus_url", "invalid_monitor_prometheus_cutover",
   "prometheus_unavailable", "prometheus_response_too_large", "invalid_prometheus_response",
-  "ambiguous_prometheus_series", "monitor_not_configured", "invalid_range",
+  "ambiguous_prometheus_series", "monitor_not_configured", "invalid_range", "invalid_service",
 ]);
 
 export function logMonitorReadFailure(operation, error, now = Date.now()) {
-  if (!["current", "history"].includes(operation)) return;
+  if (!["current", "history", "signals_current", "signals_history"].includes(operation)) return;
   const previous = failureLogTimes.get(operation);
   if (previous !== undefined && now - previous < 30_000) return;
   failureLogTimes.set(operation, now);

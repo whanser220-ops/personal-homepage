@@ -78,6 +78,12 @@ function context(options, history = false) {
   };
 }
 
+// Shared only by fixed server-side monitor queries. No HTTP route accepts a
+// PromQL expression, backend address, proxy target or transport option.
+export function monitorPrometheusQuery(options = {}, history = false) {
+  return context(options, history);
+}
+
 function value(number, max = Number.MAX_SAFE_INTEGER) {
   if ((typeof number !== "string" && typeof number !== "number") || number === "") return null;
   const parsed = Number(number);

@@ -102,9 +102,14 @@ def verify_prometheus_stack():
 
 def main():
     for base in ['http://127.0.0.1:3000', 'https://warmhanser.com']:
-        for path in ['/api/monitor/current', '/api/monitor/history?range=1h']:
+        for path in ['/api/monitor/current', '/api/monitor/history?range=1h',
+                     '/api/monitor/signals/current', '/api/monitor/signals/history?range=1h']:
             assert get(base + path)[0] == 401, 'Anonymous monitor read must return 401'
     for base in ['http://1.117.232.198', 'http://warmhanser.com', 'https://warmhanser.com']:
+        for path in ['/server-monitor/grafana','/server-monitor/grafana/',
+                     '/server-monitor/grafana/api/health','/_monitor_grafana_auth',
+                     '/api/monitor/auth/grafana','/api/monitor/auth/grafana/']:
+            assert get(base+path,follow_redirects=False)[0]==404, 'Retired dashboard route must be closed without redirecting'
         for path in ['/api/monitor/ingest', '/api/monitor/ingest/', '/api/monitor/ing%65st', '/api//monitor/ingest']:
             for method in ['GET', 'POST']:
                 assert get(base + path, method=method, follow_redirects=False)[0] == 404, 'Public monitor ingestion must be closed without redirecting'

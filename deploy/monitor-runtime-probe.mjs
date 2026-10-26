@@ -2,6 +2,7 @@
 const base = "http://127.0.0.1:3000";
 const ownerCookie = "__Host-server-monitor-session=" + "r".repeat(43);
 const fields = ["cpuPercent", "memoryPercent", "swapPercent", "diskPercent", "diskReadBytesPerSecond", "diskWriteBytesPerSecond", "rxBytesPerSecond", "txBytesPerSecond"];
+const signalFields = ["requestsPerSecond", "serverErrorPercent", "clientErrorPercent", "successP95Ms", "successP99Ms", "failureP95Ms", "failureP99Ms", "responseBytesPerSecond"];
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 function requireCondition(condition, code) { if (!condition) throw new Error(code); }
 async function request(path, cookie) {
@@ -29,15 +30,14 @@ try {
   const wrong = await request("/api/monitor/current", "__Host-server-monitor-session=" + "z".repeat(43));
   requireCondition(wrong.status === 401, "runtime_wrong_session_rejected");
   privateResponse(wrong);
-  for (const cookie of [undefined, "__Host-server-monitor-session=" + "z".repeat(43)]) {
+  for (const cookie of [undefined, ownerCookie]) {
     const response = await request("/api/monitor/auth/grafana", cookie);
-    requireCondition(response.status === 401 && !response.headers.has("x-monitor-user"), "runtime_grafana_unauthorized");
-    privateResponse(response);
+    requireCondition(response.status === 404 && !response.headers.has("x-monitor-user"), "runtime_retired_auth_route_open");
   }
-  const grafanaOwner = await request("/api/monitor/auth/grafana", ownerCookie);
-  requireCondition(grafanaOwner.status === 204 && grafanaOwner.headers.get("x-monitor-user") === "whanser220@gmail.com",
-    "runtime_grafana_owner_identity_invalid");
-  privateResponse(grafanaOwner);
+  const page = await request("/server-monitor");
+  requireCondition(page.status === 200, "runtime_custom_page_unavailable");
+  const pageHtml = await page.text();
+  requireCondition(!pageHtml.includes("<iframe") && !pageHtml.includes("/server-monitor/grafana/"), "runtime_custom_page_embeds_retired_dashboard");
   let current;
   const standard = process.env.MONITOR_EXPORTER_MODE === "standard";
   const attempts = standard ? 40 : 7;
@@ -75,6 +75,28 @@ try {
     await delay(1000);
   }
   const history = {};
+  const signals = {};
+  for (const path of ["/api/monitor/signals/current?service=invalid", "/api/monitor/signals/history?range=invalid"]) {
+    for (const cookie of [undefined, "__Host-server-monitor-session=" + "z".repeat(43), ownerCookie]) {
+      const response = await request(path, cookie);
+      requireCondition(response.status === (cookie === ownerCookie ? 400 : 401), "runtime_signals_auth_order_invalid");
+      privateResponse(response);
+    }
+  }
+  for (const service of ["all", "website", "whiteboard", "study-agent"]) {
+    const response = await request("/api/monitor/signals/current?service=" + service, ownerCookie);
+    requireCondition(response.status === 200, "runtime_signals_current_http_" + response.status);
+    privateResponse(response);
+    const data = await response.json();
+    requireCondition(data.service === service && data.stale === false && data.staleAfterSeconds === 9 &&
+      data.exporterUp === true && data.parseErrorsTotal === 0 && Number.isFinite(Date.parse(data.collectedAt)) &&
+      Number.isFinite(Date.parse(data.recordedAt)) && Date.now() - Date.parse(data.collectedAt) <= 9000 &&
+      Date.now() - Date.parse(data.recordedAt) <= 9000 &&
+      ["no_data", "no_traffic", "observed"].includes(data.trafficState) &&
+      signalFields.every((field) => data.metrics?.[field] === null || Number.isFinite(data.metrics?.[field])),
+      "runtime_signals_current_contract_invalid");
+    signals[service] = { status: response.status, trafficState: data.trafficState };
+  }
   for (const [range, count] of [["1h", 1201], ["24h", 289], ["7d", 337]]) {
     const anonymous = await request("/api/monitor/history?range=" + range);
     requireCondition(anonymous.status === 401, "runtime_history_anonymous_http_" + anonymous.status);
@@ -90,9 +112,21 @@ try {
     requireCondition(populated > 0, "runtime_history_" + range + "_empty");
     requireCondition(data.points[0].memoryPercent === null, "runtime_history_" + range + "_fabricated_history");
     history[range] = { status: response.status, points: count, populated };
+    const signalAnonymous = await request("/api/monitor/signals/history?range=" + range);
+    requireCondition(signalAnonymous.status === 401, "runtime_signals_history_anonymous");
+    privateResponse(signalAnonymous);
+    const signalResponse = await request("/api/monitor/signals/history?range=" + range, ownerCookie);
+    requireCondition(signalResponse.status === 200, "runtime_signals_history_" + range + "_http_" + signalResponse.status);
+    privateResponse(signalResponse);
+    const signalData = await signalResponse.json();
+    requireCondition(signalData.range === range && signalData.points?.length === count &&
+      signalData.points.every((point) => Number.isFinite(Date.parse(point.collectedAt)) &&
+        signalFields.every((field) => point[field] === null || Number.isFinite(point[field]))),
+      "runtime_signals_history_" + range + "_invalid_points");
   }
   console.log(JSON.stringify({ test: "compiled-next-runtime", anonymous: 401, wrongSession: 401,
-    current: 200, grafanaAuthorization: 204, exporterMode: standard ? "standard" : "legacy", containers: 3, services: 11, history }));
+    current: 200, retiredAuthorization: 404, customPage: 200, signals,
+    exporterMode: standard ? "standard" : "legacy", containers: 3, services: 11, history }));
 } catch (error) {
   console.error(/^runtime_[A-Za-z0-9_]+$/.test(error.message || "") ? error.message : "runtime_probe_failed_" + error.name);
   process.exitCode = 1;

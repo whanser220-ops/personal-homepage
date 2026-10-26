@@ -2,7 +2,7 @@
 
 The independent, pinned [prometheus-nginxlog-exporter v1.11.0](https://github.com/martin-helmich/prometheus-nginxlog-exporter/releases/tag/v1.11.0) tails one dedicated Nginx log. The ordinary website monitoring APIs and Google sessions do not change.
 
-The log contains exactly `service`, `status`, `request_time`, and `body_bytes_sent`. It contains no address, URL, query string, request header, user agent, cookie, or request body. Service values are fixed to `website`, `whiteboard`, and `study-agent`; unknown values are rejected by Prometheus. The Nginx transaction owns classification, exclusions, log permissions, and rotation. The exporter only reads the file.
+The log contains exactly `service`, `status`, `request_time`, and `body_bytes_sent`. It contains no address, URL, query string, request header, user agent, cookie, or request body. Service values are fixed to `website`, `whiteboard`, and `study-agent`; unknown values are rejected by Prometheus. The Nginx transaction owns classification and exclusions; `install-monitor-logrotate.py` independently owns the private log permissions and rotation. The exporter only reads the file.
 
 Prometheus scrapes `127.0.0.1:19111/metrics` every 3 seconds as `server-monitor-http`. Only these request metric families enter its TSDB:
 
@@ -27,6 +27,6 @@ There is no HTTP request history before instrumentation. Low traffic produces sp
 
 The service runs as `monitor-http`, reads the root-owned `www-data` group log, listens only on loopback, and cannot write the log. Its unit caps memory at 96 MiB and CPU at 10% of one core. Log rotation is hourly or at 10 MiB with two retained files; copytruncate and exporter restart behavior are exercised against the actual pinned Linux binary by `tests/verify_http_exporter_native.py`.
 
-Stage `prometheus-nginxlog-exporter_1.11.0_linux_amd64.tar.gz` in `/opt/personal-homepage-prometheus/downloads`. Its upstream SHA-256 is `ab640b73b7e22d1f46197a98c3a06c548d66f9e3fb36b9437011997643569aa6`. `deploy/install-http-metrics.py prepare` checks the privacy log, validates the immutable binary and configuration, records the previous unit/config, and starts only this exporter. `verify` checks its private parser endpoint; `rollback` restores its own unit/config without altering traffic logs; `commit` accepts the transaction. The Nginx/Grafana deployment owns the log lifecycle and route cutover.
+Stage `prometheus-nginxlog-exporter_1.11.0_linux_amd64.tar.gz` in `/opt/personal-homepage-prometheus/downloads`. Its upstream SHA-256 is `ab640b73b7e22d1f46197a98c3a06c548d66f9e3fb36b9437011997643569aa6`. `deploy/install-http-metrics.py prepare` checks the privacy log, validates the immutable binary and configuration, records the previous unit/config, and starts only this exporter. `verify` checks its private parser endpoint; `rollback` restores its own unit/config without altering traffic logs; `commit` accepts the transaction. Run `install-monitor-logrotate.py prepare` first; its policy is `/etc/personal-homepage-monitor/traffic.logrotate`, with the existing independent state file. No active Grafana component is required.
 
 Optional node_exporter PSI counters describe host CPU, memory, and I/O waiting or stalled time. They remain unavailable when the kernel does not support pressure accounting; the existing nine required host collectors remain required independently.

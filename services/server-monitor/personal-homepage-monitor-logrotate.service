@@ -3,7 +3,7 @@ Description=Rotate the private bounded monitoring request log
 
 [Service]
 Type=oneshot
-ExecStart=/usr/sbin/logrotate --state /var/lib/personal-homepage-monitor-logrotate/status /etc/personal-homepage-grafana/traffic.logrotate
+ExecStart=/usr/sbin/logrotate --state /var/lib/personal-homepage-monitor-logrotate/status /etc/personal-homepage-monitor/traffic.logrotate
 StateDirectory=personal-homepage-monitor-logrotate
 StateDirectoryMode=0700
 NoNewPrivileges=true
