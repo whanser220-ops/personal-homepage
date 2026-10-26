@@ -85,7 +85,7 @@ printf 'SOURCE_COMMIT_SHA=%s\n' "$(git rev-parse --short HEAD)" > .ci/source.env
                 // Deployment runs on a fresh ephemeral agent, so carry the
                 // runtime manifest explicitly instead of relying on stale
                 // server-side copies.
-                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf,deploy/nginx-learning-whiteboard.conf,deploy/install-whiteboard-nginx.py,deploy/nginx-server-monitor.conf,deploy/nginx-monitor-http.conf,deploy/install-monitor-nginx.py,deploy/install-server-monitor.py,deploy/install-prometheus.py,deploy/install-monitor-exporters.py,deploy/install-grafana.py,deploy/install-grafana-history.py,deploy/install-http-metrics.py,deploy/verify-grafana.py,deploy/verify-grafana-proxy.py,deploy/verify-server-monitor.py,deploy/verify-monitor-runtime.py,deploy/monitor-runtime-fixture.mjs,deploy/monitor-runtime-probe.mjs,services/server-monitor/**,tests/monitor-*-rules.test.yml,tests/verify_grafana_queries.py'
+                stash name: 'deploy-manifest', includes: 'compose.yml,deploy/deploy-from-image.sh,deploy/nginx-personal-homepage.conf,deploy/nginx-learning-whiteboard.conf,deploy/install-whiteboard-nginx.py,deploy/nginx-server-monitor.conf,deploy/nginx-monitor-http.conf,deploy/install-monitor-nginx.py,deploy/install-server-monitor.py,deploy/install-prometheus.py,deploy/install-monitor-exporters.py,deploy/install-grafana.py,deploy/install-grafana-history.py,deploy/install-http-metrics.py,deploy/verify-grafana.py,deploy/verify-grafana-proxy.py,deploy/verify-monitor-logrotate.py,deploy/verify-server-monitor.py,deploy/verify-monitor-runtime.py,deploy/monitor-runtime-fixture.mjs,deploy/monitor-runtime-probe.mjs,services/server-monitor/**,tests/monitor-*-rules.test.yml,tests/verify_grafana_queries.py'
             }
         }
 
@@ -219,6 +219,7 @@ deploy_files=(
     deploy/install-http-metrics.py
     deploy/verify-grafana.py
     deploy/verify-grafana-proxy.py
+    deploy/verify-monitor-logrotate.py
     deploy/nginx-monitor-http.conf
     deploy/verify-server-monitor.py
     deploy/verify-monitor-runtime.py

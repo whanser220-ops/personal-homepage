@@ -51,6 +51,15 @@ timer checks hourly/10MiB rotation, retaining two rotations; file size can grow
 between checks. Rotation uses its own state file and is not also registered in
 the global daily logrotate configuration.
 
+Rotation runs as root without a `su` directive: the 0750 parent is owned by root
+and is not group-writable, so no identity switch is necessary. The unit retains
+only CHOWN, DAC_OVERRIDE and FOWNER capabilities. Deployment first exercises the
+real sandbox in isolated transient units, including three forced rotations and
+private ownership/inode/retention checks. After installing the policy it runs
+the production oneshot normally, without `--force`, and requires
+`Result=success` and `ExecMainStatus=0`. A running timer or `logrotate --debug`
+alone is insufficient evidence that rotation works.
+
 ## Deployment and rollback
 
 The website deployment prepares the restricted history role, private Grafana,
@@ -72,6 +81,7 @@ Check service state without printing environment secrets:
 
 ```sh
 systemctl status personal-homepage-grafana personal-homepage-http-metrics personal-homepage-monitor-logrotate.timer
+systemctl show personal-homepage-monitor-logrotate.service -p Result -p ExecMainStatus
 sudo python3 deploy/install-grafana.py verify
 sudo python3 deploy/install-grafana-history.py verify
 sudo python3 deploy/verify-grafana.py
@@ -80,3 +90,14 @@ sudo python3 deploy/verify-grafana.py
 Native Grafana and Prometheus keep their independent state and versioned
 binaries across website image deployments. No Grafana admin account is exposed
 on the public proxy; dashboard definitions are reviewed in Git.
+
+## Browser loading
+
+Only successful GET/HEAD responses for content-hashed Grafana code, fonts and
+images use a private immutable browser cache. HTML, API/data queries, redirects
+and errors remain no-store; every network request still passes the Google
+session check. The scoped HTTPS installer enables HTTP/2 on the deployed Nginx
+1.24 vhost while preserving other servers and application routes. Cold visits
+still download Grafana and lazy components; no fixed loading time is promised.
+The shell keeps one iframe, and a slow load stays in progress instead of being
+reported as a failure after 20 seconds.

@@ -5,10 +5,12 @@ Loopback-only synthetic authorization replaces Next for this component test.
 The compiled candidate gate independently exercises the actual Next auth route.
 """
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import html
 import json
 import os
 from pathlib import Path
 import signal
+import re
 import socket
 import subprocess
 import sys
@@ -31,6 +33,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 class AuthStub(BaseHTTPRequestHandler):
     valid = True
+    failure = False
     calls = 0
     forwarded_identity = False
 
@@ -39,9 +42,9 @@ class AuthStub(BaseHTTPRequestHandler):
         type(self).forwarded_identity |= any(self.headers.get(name) for name in (
             'X-WEBAUTH-USER', 'X-WEBAUTH-EMAIL', 'X-WEBAUTH-ROLE', 'X-WEBAUTH-NAME', 'X-WEBAUTH-GROUPS', 'X-Monitor-User', 'Authorization'))
         allowed = self.path == '/api/monitor/auth/grafana' and self.valid and COOKIE in self.headers.get('Cookie', '').split('; ')
-        self.send_response(204 if allowed else 401)
+        self.send_response(503 if self.failure else 204 if allowed else 401)
         self.send_header('Cache-Control', 'private, no-store')
-        if allowed:
+        if allowed and not self.failure:
             self.send_header('X-Monitor-User', OWNER)
         self.end_headers()
 
@@ -49,21 +52,22 @@ class AuthStub(BaseHTTPRequestHandler):
         pass
 
 
-def request(path, headers=None, data=None):
+def request(path, headers=None, data=None, method=None):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
     values = {'Host': 'warmhanser.com', **(headers or {})}
     if data is not None:
         values['Content-Type'] = 'application/json'
     try:
         with opener.open(urllib.request.Request('http://127.0.0.1:19112' + path, headers=values,
-                                                data=json.dumps(data).encode() if data is not None else None), timeout=10) as response:
+                                                data=json.dumps(data).encode() if data is not None else None,
+                                                method=method), timeout=10) as response:
             return response.status, response.headers, response.read(256 * 1024)
     except urllib.error.HTTPError as error:
         return error.code, error.headers, b''
 
 
 def verify():
-    AuthStub.valid, AuthStub.calls, AuthStub.forwarded_identity = True, 0, False
+    AuthStub.valid, AuthStub.failure, AuthStub.calls, AuthStub.forwarded_identity = True, False, 0, False
     # Fail closed rather than stop an unknown listener at either test port.
     for port in (19112, 19113):
         with socket.socket() as probe:
@@ -127,7 +131,7 @@ http {{
                 owner_headers = {'Cookie': COOKIE + '; grafana_session=forged', 'X-WEBAUTH-USER': 'admin', 'X-WEBAUTH-ROLE': 'Admin'}
                 status, headers, body = request('/server-monitor/grafana/api/user', owner_headers)
                 owner = json.loads(body)
-                if status != 200 or owner.get('email') != OWNER or owner.get('isGrafanaAdmin') or headers.get('Set-Cookie'):
+                if status != 200 or owner.get('email') != OWNER or owner.get('isGrafanaAdmin') or headers.get('Set-Cookie') or headers.get('Cache-Control') != 'no-store':
                     raise RuntimeError('Nginx did not replace browser identity with the verified owner')
                 status, _, body = request('/server-monitor/grafana/api/user/orgs', owner_headers)
                 if status != 200 or any(item.get('role') != 'Viewer' for item in json.loads(body)):
@@ -135,11 +139,57 @@ http {{
                 if AuthStub.forwarded_identity:
                     raise RuntimeError('Browser identity was forwarded to the authorization subrequest')
                 now = int(time.time() * 1000)
-                status, _, body = request('/server-monitor/grafana/api/ds/query', {**owner_headers, 'Origin':'https://warmhanser.com'},
+                status, received, body = request('/server-monitor/grafana/api/ds/query', {**owner_headers, 'Origin':'https://warmhanser.com'},
                     {'from':str(now-60000),'to':str(now),'queries':[{'refId':'A','datasource':{'type':'prometheus','uid':'monitor-prometheus'},
                      'expr':'up{job="server-monitor-node"}','instant':True,'range':False,'format':'time_series','intervalMs':3000,'maxDataPoints':10}]})
                 if status != 200 or not json.loads(body).get('results', {}).get('A', {}).get('frames'):
                     raise RuntimeError('Viewer POST queries failed through the per-request auth proxy')
+                if received.get('Cache-Control') != 'no-store':
+                    raise RuntimeError('Datasource API response was cacheable')
+                # Discover real content-addressed build assets from Grafana's
+                # own document, rather than baking a release-specific hash in
+                # the test. A private synthetic session authorizes every GET.
+                status, received, document = request('/server-monitor/grafana/d/monitor-sre-overview/overview', owner_headers)
+                if status != 200 or received.get('Cache-Control') != 'no-store':
+                    raise RuntimeError('Authorized Grafana HTML was cacheable')
+                assets = []
+                for value in re.findall(r'''(?:src|href)=["']([^"']+)["']''', document.decode('utf-8')):
+                    path = urllib.parse.urlsplit(urllib.parse.urljoin('http://127.0.0.1:19112/server-monitor/grafana/', html.unescape(value))).path
+                    if path.startswith('/server-monitor/grafana/public/build/') and re.search(r'\.[0-9a-f]{8,64}\.(js|css)$', path):
+                        assets.append(path)
+                assets = list(dict.fromkeys(assets))
+                if not any(path.endswith('.js') for path in assets):
+                    raise RuntimeError('Real Grafana hashed JavaScript asset discovery failed')
+                asset = next(path for path in assets if path.endswith('.js'))
+                stylesheet = next((path for path in assets if path.endswith('.css')), None)
+                tested_assets = [asset, stylesheet] if stylesheet else assets[:2]
+                # At least two request types and two independent network loads
+                # must still reach auth_request; this fixture has no HTTP cache.
+                immutable = 'private, max-age=31536000, immutable'
+                asset_auth_before = AuthStub.calls
+                for path in tested_assets:
+                    for method in ['GET', 'HEAD']:
+                        status, received, _ = request(path, owner_headers, method=method)
+                        if status != 200 or received.get_all('Cache-Control') != [immutable] or received.get('Expires') or received.get('Set-Cookie'):
+                            raise RuntimeError('Hashed Grafana asset cache policy or cookie boundary failed')
+                if AuthStub.calls - asset_auth_before != 2 * len(tested_assets):
+                    raise RuntimeError('Static network requests skipped session authorization')
+                for forged in [{}, {'X-WEBAUTH-USER': OWNER, 'X-WEBAUTH-ROLE': 'Admin'},
+                               {'Cookie': 'grafana_session=forged', 'Authorization': 'Bearer synthetic-only'}]:
+                    status, received, _ = request(asset, forged)
+                    if status != 401 or received.get_all('Cache-Control') != ['no-store']:
+                        raise RuntimeError('Static asset accepted forged identity or cached an authorization error')
+                for path in ['/server-monitor/grafana/public/img/grafana_icon.svg',
+                             '/server-monitor/grafana/public/build/missing.00000000000000000000.js',
+                             '/server-monitor/grafana/api/missing.00000000000000000000.js']:
+                    status, received, _ = request(path, owner_headers)
+                    if status not in (200, 404) or received.get_all('Cache-Control') != ['no-store']:
+                        raise RuntimeError('Unhashed asset, missing asset or API response was cached')
+                AuthStub.failure = True
+                status, received, _ = request(asset, owner_headers)
+                AuthStub.failure = False
+                if status != 500 or received.get_all('Cache-Control') != ['no-store']:
+                    raise RuntimeError('Authorization backend error was cached as an immutable asset')
                 status, received, _ = request('/server-monitor/grafana/d/monitor-sre-overview/overview', {'Accept': 'text/html'})
                 if status != 302 or urllib.parse.urlsplit(received.get('Location', '')).path != '/server-monitor':
                     raise RuntimeError('Anonymous Grafana document did not return to the login shell')
@@ -148,6 +198,11 @@ http {{
                 AuthStub.valid = False
                 if request('/server-monitor/grafana/api/user', owner_headers)[0] != 401:
                     raise RuntimeError('Revoked website authorization remained valid through Grafana')
+                status, received, _ = request(asset, owner_headers)
+                if status != 401 or received.get_all('Cache-Control') != ['no-store']:
+                    raise RuntimeError('Revoked session retained static network access')
+                if AuthStub.forwarded_identity:
+                    raise RuntimeError('Static request identity reached the authorization subrequest')
                 for path in ['/__contract_website?query=synthetic-only', '/whiteboard/__contract', '/study/__contract']:
                     if request(path)[0] != 200:
                         raise RuntimeError('Synthetic privacy-log response failed')
@@ -165,7 +220,10 @@ http {{
                     raise RuntimeError('Nginx privacy log fields or stream/monitor exclusions failed')
                 print(json.dumps({'test':'isolated-nginx-grafana-proxy','anonymous':401,'forged':401,'owner':200,
                     'role':'Viewer','queryPost':200,'document':302,'internal':404,'revoked':401,'setCookie':False,
-                    'authRequests':AuthStub.calls,'privacyLogServices':3,'privacyLogFields':4,'excludedMonitoringHealthStreams':True}))
+                    'authRequests':AuthStub.calls,'privateImmutableAssets':len(tested_assets),'staticAuthorization':'every-network-request',
+                    'staticAnonymous':401,'staticForged':401,'staticRevoked':401,'staticAuthError':500,
+                    'apiAndHtmlNoStore':True,'assetErrorsNoStore':True,'upstreamCacheHeadersReplaced':True,
+                    'privacyLogServices':3,'privacyLogFields':4,'excludedMonitoringHealthStreams':True}))
             finally:
                 # nginx is our daemon-off child in its own session, never the
                 # system Nginx service or another task's existing listener.

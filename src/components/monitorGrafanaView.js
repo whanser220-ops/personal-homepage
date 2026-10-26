@@ -27,3 +27,13 @@ export function monitorGrafanaUrl(view, range, theme, embedded = true) {
   if (embedded) query.set("kiosk", "tv");
   return `/server-monitor/grafana/d/${board.uid}/${board.id}?${query}`;
 }
+
+// Elapsed bootstrap time is a progress hint, never evidence of a failed
+// request. A late load can still complete after a cold asset download.
+export function monitorGrafanaLoadTransition(previous, event) {
+  if (event === "start") return "loading";
+  if (event === "slow") return previous === "loading" ? "slow" : previous;
+  if (event === "loaded") return "ready";
+  if (event === "failed") return "error";
+  return previous;
+}

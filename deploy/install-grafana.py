@@ -242,11 +242,22 @@ def install_runtime():
     run('systemctl', 'enable', UNIT, TIMER)
     run('systemctl', 'restart' if changed or not unit_state(UNIT)['active'] else 'start', UNIT)
     run('systemctl', 'start', TIMER)
+    # Validate the real scheduled policy immediately after installing it. A
+    # failed previous oneshot must not remain unnoticed until the next tick.
+    run('systemctl', 'start', ROTATE)
+    verify_rotation_result()
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, request, response, code, message, headers, location):
         return None
+
+
+def verify_rotation_result():
+    values = dict(line.split('=',1) for line in run('systemctl','show',ROTATE,
+        '-p','Result','-p','ExecMainStatus').stdout.splitlines() if '=' in line)
+    if values.get('Result') != 'success' or values.get('ExecMainStatus') != '0':
+        raise RuntimeError('The scheduled privacy rotation did not complete successfully')
 
 
 def request(path, authenticated=False, method='GET', data=None):
@@ -264,6 +275,7 @@ def request(path, authenticated=False, method='GET', data=None):
 
 
 def verify():
+    verify_rotation_result()
     for attempt in range(60):
         try:
             status, health = request('/api/health')
@@ -347,6 +359,7 @@ def prepare():
     # Reject invalid dashboard queries before snapshotting or restarting an
     # already-serving Grafana. The fixture reads the exact versioned JSON.
     validate_dashboards()
+    validate_rotation()
     snapshot()
     try:
         install_runtime()
@@ -359,6 +372,10 @@ def prepare():
 def validate_dashboards():
     run(sys.executable, str(REPO / 'tests/verify_grafana_queries.py'), '--promtool',
         '/opt/personal-homepage-prometheus/releases/3.13.5/promtool', timeout=60)
+
+
+def validate_rotation():
+    run(sys.executable, str(REPO / 'deploy/verify-monitor-logrotate.py'), timeout=90)
 
 
 def commit():

@@ -7,5 +7,4 @@
     copytruncate
     compress
     delaycompress
-    su root www-data
 }

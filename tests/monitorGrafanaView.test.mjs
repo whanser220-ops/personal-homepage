@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MONITOR_GRAFANA_VIEWS, monitorGrafanaHash, monitorGrafanaUrl, parseMonitorGrafanaHash } from "../src/components/monitorGrafanaView.js";
+import { MONITOR_GRAFANA_VIEWS, monitorGrafanaHash, monitorGrafanaLoadTransition, monitorGrafanaUrl, parseMonitorGrafanaHash } from "../src/components/monitorGrafanaView.js";
 
 test("the Grafana main views keep the agreed UIDs and separate live/history refresh cadence", () => {
   for (const board of MONITOR_GRAFANA_VIEWS) {
@@ -33,4 +33,26 @@ test("untrusted hash state cannot change the same-origin destination, theme or r
   assert.equal(url.searchParams.get("refresh"), "3s");
   assert.equal(url.searchParams.get("orgId"), "1");
   assert.equal(url.searchParams.has("kiosk"), false);
+});
+
+test("a slow cold bootstrap remains in progress and recovers on the actual load event", () => {
+  let state = monitorGrafanaLoadTransition("checking", "start");
+  assert.equal(state, "loading");
+  state = monitorGrafanaLoadTransition(state, "slow");
+  assert.equal(state, "slow");
+  assert.notEqual(state, "error");
+  state = monitorGrafanaLoadTransition(state, "slow");
+  assert.equal(state, "slow");
+  state = monitorGrafanaLoadTransition(state, "loaded");
+  assert.equal(state, "ready");
+  assert.equal(monitorGrafanaLoadTransition(state, "slow"), "ready");
+});
+
+test("only real failures enter the retry state and a late timer cannot mask that failure", () => {
+  let state = monitorGrafanaLoadTransition("loading", "failed");
+  assert.equal(state, "error");
+  assert.equal(monitorGrafanaLoadTransition(state, "slow"), "error");
+  state = monitorGrafanaLoadTransition(state, "start");
+  assert.equal(state, "loading");
+  assert.equal(monitorGrafanaLoadTransition(state, "loaded"), "ready");
 });

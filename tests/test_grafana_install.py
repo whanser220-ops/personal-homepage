@@ -71,7 +71,7 @@ class GrafanaInstallationTests(unittest.TestCase):
             self.assertFalse(installer.RELEASE.exists())
 
     def test_failed_private_gate_rolls_back_without_nginx_activation(self):
-        with patch.object(installer, 'validate_dashboards'), patch.object(installer, 'snapshot') as snapshot, patch.object(installer, 'install_runtime') as install, \
+        with patch.object(installer, 'validate_dashboards'), patch.object(installer, 'validate_rotation'), patch.object(installer, 'snapshot') as snapshot, patch.object(installer, 'install_runtime') as install, \
                 patch.object(installer, 'verify', side_effect=RuntimeError('gate')), patch.object(installer, 'rollback') as rollback:
             with self.assertRaisesRegex(RuntimeError, 'gate'):
                 installer.prepare()
@@ -88,6 +88,23 @@ class GrafanaInstallationTests(unittest.TestCase):
             snapshot.assert_not_called()
             runtime.assert_not_called()
             rollback.assert_not_called()
+
+    def test_invalid_rotation_fixture_never_snapshots_or_mutates_live_units(self):
+        with patch.object(installer, 'validate_dashboards'), \
+                patch.object(installer, 'validate_rotation', side_effect=RuntimeError('rotation failed')), \
+                patch.object(installer, 'snapshot') as snapshot, patch.object(installer, 'install_runtime') as runtime:
+            with self.assertRaisesRegex(RuntimeError, 'rotation failed'):
+                installer.prepare()
+            snapshot.assert_not_called()
+            runtime.assert_not_called()
+
+    def test_live_rotation_gate_rejects_failed_oneshot_even_when_timer_could_be_active(self):
+        for stdout in ['Result=exit-code\nExecMainStatus=1\n','Result=success\nExecMainStatus=1\n']:
+            with patch.object(installer,'run',return_value=subprocess.CompletedProcess([],0,stdout,'')):
+                with self.assertRaisesRegex(RuntimeError,'rotation did not complete'):
+                    installer.verify_rotation_result()
+        with patch.object(installer,'run',return_value=subprocess.CompletedProcess([],0,'Result=success\nExecMainStatus=0\n','')):
+            installer.verify_rotation_result()
 
     def test_shadow_commits_only_private_prepare(self):
         with patch.object(installer.os, 'geteuid', create=True, return_value=0), \

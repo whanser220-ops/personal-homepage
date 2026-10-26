@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, ArrowRight, ArrowUpRight, ChartNoAxesCombined, Check, ChevronLeft, CircleAlert, LoaderCircle, LockKeyhole, LogOut, Moon, RefreshCw, Server, ShieldCheck, Sun } from "lucide-react";
-import { MONITOR_GRAFANA_RANGES, MONITOR_GRAFANA_VIEWS, monitorGrafanaHash, monitorGrafanaUrl, parseMonitorGrafanaHash } from "./monitorGrafanaView.js";
+import { MONITOR_GRAFANA_RANGES, MONITOR_GRAFANA_VIEWS, monitorGrafanaHash, monitorGrafanaLoadTransition, monitorGrafanaUrl, parseMonitorGrafanaHash } from "./monitorGrafanaView.js";
 import styles from "./ServerMonitorDashboard.module.css";
 
 const ICONS = { overview: Activity, trends: ChartNoAxesCombined, infrastructure: Server };
@@ -118,10 +118,9 @@ export function ServerMonitorDashboard() {
 
   useEffect(() => {
     if (!frameAllowed || !session?.authenticated || loggingOut) return;
-    setFrameState("loading"); setFrameError("");
+    setFrameState((previous) => monitorGrafanaLoadTransition(previous, "start")); setFrameError("");
     frameTimer.current = setTimeout(() => {
-      setFrameError("看板加载时间较长，请重新载入或在新标签中打开。");
-      setFrameState("error");
+      setFrameState((previous) => monitorGrafanaLoadTransition(previous, "slow"));
     }, 20000);
     return () => clearTimeout(frameTimer.current);
   }, [frameAllowed, frameUrl, frameVersion, session?.authenticated, loggingOut]);
@@ -147,7 +146,12 @@ export function ServerMonitorDashboard() {
     try { localStorage.setItem(THEME_STORAGE, next); } catch {}
   }
   function refresh() {
-    setCurrentAttempt((value) => value + 1); setFrameVersion((value) => value + 1); setAccessAttempt((value) => value + 1);
+    setCurrentAttempt((value) => value + 1);
+    // The proxy still checks the existing Google session on every Grafana
+    // request. Re-authorizing here would remove an already allowed frame and
+    // add a second serial round trip before an explicit document reload.
+    if (frameAllowed) setFrameVersion((value) => value + 1);
+    else setAccessAttempt((value) => value + 1);
   }
   async function frameLoaded() {
     const generation = epoch.current;
@@ -164,11 +168,11 @@ export function ServerMonitorDashboard() {
       const failedTitle = /bad gateway|service unavailable|gateway timeout|not found|^error|^[45]\d\d/i.test(document.title);
       const failedBody = /Grafana has failed to load|Dashboard not found|Permission denied|^\s*Unauthorized\s*$/i.test(document.body?.textContent?.slice(0, 800) || "");
       if (failedTitle || failedBody) throw new Error("看板暂时不可用，请重新载入。");
-      if (generation === epoch.current) setFrameState("ready");
+      if (generation === epoch.current) setFrameState((previous) => monitorGrafanaLoadTransition(previous, "loaded"));
     } catch (error) {
       if (generation !== epoch.current) return;
       if (error.status === 401) clearPrivateState(error.message);
-      else { setFrameState("error"); setFrameError(error.name === "SecurityError" ? "看板连接未完成，请重新载入。" : error.message || "看板加载失败，请重试。"); }
+      else { setFrameState((previous) => monitorGrafanaLoadTransition(previous, "failed")); setFrameError(error.name === "SecurityError" ? "看板连接未完成，请重新载入。" : error.message || "看板加载失败，请重试。"); }
     }
   }
   async function logout() {
@@ -191,7 +195,7 @@ export function ServerMonitorDashboard() {
         <div className={styles.topActions}>
           {session?.authenticated && <span className={styles.identity} title={session.email}><ShieldCheck size={13} aria-hidden="true" />{session.email}</span>}
           <button className={styles.iconButton} type="button" onClick={toggleTheme} aria-label={theme === "dark" ? "切换浅色外观" : "切换深色外观"} title={theme === "dark" ? "切换浅色外观" : "切换深色外观"}>{theme === "dark" ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}</button>
-          {session?.authenticated && <><button className={styles.iconButton} type="button" onClick={refresh} disabled={loggingOut} aria-label="刷新当前看板" title="刷新当前看板"><RefreshCw size={16} aria-hidden="true" /></button><button className={styles.iconButton} type="button" onClick={logout} disabled={loggingOut} aria-label={loggingOut ? "正在退出监控" : "退出监控"} title="退出监控">{loggingOut ? <LoaderCircle size={17} className={styles.spin} aria-hidden="true" /> : <LogOut size={17} aria-hidden="true" />}</button></>}
+          {session?.authenticated && <><button className={styles.iconButton} type="button" onClick={refresh} disabled={loggingOut} aria-label="重新载入当前看板" title="重新载入当前看板"><RefreshCw size={16} aria-hidden="true" /></button><button className={styles.iconButton} type="button" onClick={logout} disabled={loggingOut} aria-label={loggingOut ? "正在退出监控" : "退出监控"} title="退出监控">{loggingOut ? <LoaderCircle size={17} className={styles.spin} aria-hidden="true" /> : <LogOut size={17} aria-hidden="true" />}</button></>}
         </div>
       </header>
       <main id="monitor-main">
@@ -221,9 +225,10 @@ export function ServerMonitorDashboard() {
               <div className={styles.boardControls}><div className={styles.ranges} role="group" aria-label="看板时间范围">{MONITOR_GRAFANA_RANGES.map((item) => <button key={item.id} type="button" aria-pressed={selection.range === item.id} onClick={() => navigate(selection.view, item.id)}>{item.label}</button>)}</div><a className={styles.openButton} href={fullUrl} target="_blank" rel="noopener noreferrer" aria-label="在新标签中打开完整 Grafana 看板" title="在新标签中打开"><ArrowUpRight size={18} aria-hidden="true" /></a></div>
             </div>
             <div className={styles.boardMeta}><span><span className={styles.grafanaDot} />GRAFANA<span className={styles.boardMetaSeparator}>/</span>{board.label}</span><span>{board.refresh === "3s" ? "实时数值 · 3 秒刷新" : "趋势与诊断 · 30 秒刷新"}</span></div>
-            <div id="monitor-grafana-panel" className={styles.framePanel} role="tabpanel" aria-labelledby={`monitor-tab-${selection.view}`} aria-busy={frameState === "checking" || frameState === "loading" || loggingOut}>
-              {frameAllowed && !loggingOut && <iframe key={`${frameUrl}:${frameVersion}`} ref={frame} className={styles.frame} data-view={selection.view} title={`${board.label} · Grafana 服务器监控`} src={frameUrl} loading="eager" referrerPolicy="same-origin" allowFullScreen onLoad={frameLoaded} onError={() => { setFrameState("error"); setFrameError("看板连接失败，请重新载入。"); }} />}
-              {(!frameAllowed || frameState !== "ready" || loggingOut) && <div className={styles.frameOverlay}>
+            {frameAllowed && !loggingOut && (frameState === "loading" || frameState === "slow") && <div className={styles.frameLoadNotice} role="status"><LoaderCircle size={14} className={styles.spin} aria-hidden="true" /><span>{frameState === "slow" ? "看板仍在加载，请继续等待，无需反复刷新。" : "正在载入看板…"}</span><a href={fullUrl} target="_blank" rel="noopener noreferrer">新标签打开<ArrowUpRight size={13} aria-hidden="true" /></a></div>}
+            <div id="monitor-grafana-panel" className={styles.framePanel} role="tabpanel" aria-labelledby={`monitor-tab-${selection.view}`} aria-busy={frameState === "checking" || frameState === "loading" || frameState === "slow" || loggingOut}>
+              {frameAllowed && !loggingOut && <iframe key={frameVersion} ref={frame} className={styles.frame} data-view={selection.view} title={`${board.label} · Grafana 服务器监控`} src={frameUrl} loading="eager" referrerPolicy="same-origin" allowFullScreen onLoad={frameLoaded} onError={() => { clearTimeout(frameTimer.current); setFrameState((previous) => monitorGrafanaLoadTransition(previous, "failed")); setFrameError("看板连接失败，请重新载入。"); }} />}
+              {(!frameAllowed || frameState === "checking" || frameState === "error" || loggingOut) && <div className={styles.frameOverlay}>
                 {frameState === "error" ? <div className={styles.frameMessage} role="alert"><CircleAlert size={28} aria-hidden="true" /><h2>看板暂时未能打开</h2><p>{frameError || "请重新载入，或在新标签中打开看板。"}</p><div><button className={styles.primaryButton} type="button" onClick={refresh}><RefreshCw size={15} aria-hidden="true" />重新载入</button><a className={styles.secondaryButton} href={fullUrl} target="_blank" rel="noopener noreferrer">新标签打开<ArrowUpRight size={15} aria-hidden="true" /></a></div></div> : <div className={styles.frameMessage} role="status"><LoaderCircle size={27} className={styles.spin} aria-hidden="true" /><h2>{loggingOut ? "正在退出监控" : frameState === "checking" ? "正在校验看板访问权限" : "正在打开看板"}</h2><p>{loggingOut ? "正在结束当前登录会话。" : "完整监控视图即将呈现。"}</p></div>}
               </div>}
             </div>

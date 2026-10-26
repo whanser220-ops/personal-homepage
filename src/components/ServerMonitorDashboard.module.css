@@ -91,6 +91,10 @@
 .boardMeta > span:first-child { display: inline-flex; align-items: center; gap: 8px; font-size: 10px; letter-spacing: .025em; }
 .grafanaDot { width: 6px; height: 6px; border-radius: 2px; background: #ed9b53; transform: rotate(15deg); }
 .boardMetaSeparator { opacity: .4; padding: 0 3px; }
+.frameLoadNotice { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-height: 35px; padding: 8px 22px; color: var(--muted); border-bottom: 1px solid var(--line); font-size: 10px; }
+.frameLoadNotice > svg { color: var(--accent); }
+.frameLoadNotice > a { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: var(--accent); }
+.frameLoadNotice > a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .framePanel { position: relative; min-height: 760px; }
 .frame { display: block; width: 100%; height: calc(100dvh - 285px); min-height: 760px; border: 0; background: var(--frame); }
 .frame[data-view="trends"], .frame[data-view="infrastructure"] { min-height: 940px; }
@@ -157,6 +161,7 @@
   .ranges button { padding: 4px 14px; }
   .boardMeta { padding: 8px 13px; gap: 10px; font-size: 8px; }
   .boardMeta > span:first-child { font-size: 9px; gap: 6px; }
+  .frameLoadNotice { padding: 8px 13px; gap: 7px; font-size: 9px; }
   .frame, .frame[data-view="trends"], .frame[data-view="infrastructure"] { height: 1280px; min-height: 1280px; }
   .framePanel { min-height: 700px; }
   .frameOverlay { padding-top: 105px; }
