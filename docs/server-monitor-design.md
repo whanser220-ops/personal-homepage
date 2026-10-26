@@ -4,7 +4,7 @@
 
 ## 参考正本与用途
 
-参考 [Lieflat Charts](https://github.com/larashero3-dotcom/lieflat-charts)，固定版本 `ed436ba56b3cbeee20b9b9966b38a9a9689e239c`。先读取该版本的 `SKILL.md`、`catalog.md`、`mono-tokens.js`，再检查真实 gallery 卡片与对应脚本。Mono 的纸色 `#F0EFEB`、墨色 `#1C1C1A`、七级灰阶、Inter、24px 卡片圆角与无材质装饰的结构为基础。小字号改用 ladder 的 `#6A6963`，提高与纸色背景的对比度。
+参考 [Lieflat Charts](https://github.com/larashero3-dotcom/lieflat-charts)，固定版本 `ed436ba56b3cbeee20b9b9966b38a9a9689e239c`。先读取该版本的 `SKILL.md`、`catalog.md`、`mono-tokens.js`，再检查真实 gallery 卡片与对应脚本。结构沿用 Mono 的 Inter、24px 卡片圆角与实色、无阴影的布局；当前全局颜色采用上游 `color-presets.js` 的 **Porcelain 青瓷蓝**，并对照 `templates/basics-porcelain.html` 的对应 F2/F3/F5/F11 渲染。颜色正本在预设，几何正本仍是原版 gallery。
 
 先比较 Lupi Editorial，随后比较 Basics，候选记录如下。卡片路径均相对于上游仓库。
 
@@ -18,6 +18,17 @@
 | F11 Tick Gauge | `templates/basics-gallery.html` / How far to the quarter's goal | 采用真实 `gauge` 的 210°、100 根刻线、25/50/75/100 辅助点、端点珠与中央读数；用于 CPU 容量，不套用季度目标和剩余业绩。 |
 
 概览只出现 F11、F5 两个图块，CPU 不在容量队列重复。趋势视图最多四个图块：可选一个 HTTP 指标、容量百分比、磁盘速率、网络速率。时间序列沿用同一 F2 骨架，以相同读数交互比较不同物理量；磁盘用 F3 的发丝结构区分速率形态。没有为了轮换图型加入不适合监控的饼图、网络图或装饰图。版面为应用界面而非单文件图表报告，来源行说明数据来源，模板编号保留在本说明与源码注释。
+
+## Porcelain 颜色语义与对比度
+
+所有页面 CSS 变量与 SVG 颜色集中于 `src/components/monitorPalette.js`，只使用同一 Porcelain 预设，不混入 Mono、Palm、Wire 的颜色。背景为 `BG #F7F2EB`，正文为 `TXT #081F5C`，主数据 `DATA #334EAC`，中间蓝 `DATA2 #7096D1`，浅蓝 `FAINTDATA #BAD6EB`。小字号使用预设 `LAB rgba(8,31,92,.72)`；未采用对纸色背景仅约 4.20:1 的 `MUT .60`。统一保留现有字号、留白、刻度、折线断点、键盘读数和低频历史更新。
+
+- CPU 与容量队列的已用刻线按固定百分比位置划分三等份，由浅蓝、中蓝至深蓝，色深只表示刻度沿 0–100% 方向的位置；不代表告警阈值或“健康/危险”等级。未用容量的 `TRACK` 是安静的结构底轨，不画深色轮廓；未启用 Swap 和未知值不填充。
+- 历史曲线的蓝阶对应固定图例系列与阅读层次，数值仍由纵向位置读取，不拿不同物理量的深浅比较大小。系列同时保留标签与不同虚实线，图例显示与数据线一致的真实线型。选中点有深色轮廓，来源行注明颜色与线型的口径。
+- 彩色数据线宽相对于原版统一乘 `1.8`，数据层静态不透明度为 `1`，高于 `.85` 下限；网格、时间刻度与未用容量底轨使用预设辅助角色，表示图表结构。
+- 浅蓝 `DATA2` 与 `FAINTDATA` 对纸色的对比度分别约 `2.70:1`、`1.36:1`，因此关键浅蓝数据线、图例线和孤立点均加 `DATA` 深色轮廓；浅色已用刻线也有深色轮廓。加粗本身不被当作达到对比度要求的替代。
+
+按 WCAG 相对亮度公式计算并独立复核：`TXT/BG ≈13.86:1`，`LAB/BG ≈6.09:1`，`DATA/BG ≈6.67:1`。正文与小字超过 `4.5:1`，关键数据轮廓超过 `3:1`。此换肤不新增图表依赖、外部字体、请求或数据计算，也不改认证、轮询和服务检查规则。
 
 ## 数据与交互边界
 

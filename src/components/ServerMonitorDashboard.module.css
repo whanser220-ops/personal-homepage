@@ -1,7 +1,7 @@
-/* Mono tokens: Lieflat Charts, ed436ba56b3cbeee20b9b9966b38a9a9689e239c.
+/* Porcelain palette + Mono geometry: Lieflat Charts, ed436ba56b3cbeee20b9b9966b38a9a9689e239c.
    PolyForm Noncommercial 1.0.0 — https://polyformproject.org/licenses/noncommercial/1.0.0/ */
 @font-face { font-family:"Monitor Inter"; src:url("/fonts/InterVariable.woff2") format("woff2"); font-weight:100 900; font-style:normal; font-display:swap; }
-.page { --paper:#F0EFEB; --ink:#1C1C1A; --secondary:#4A4944; --muted:#6A6963; --soft:#8F8E88; --faint:#C6C5BF; --grid:#DEDDD6; min-height:100dvh; min-width:320px; background:var(--paper); color:var(--ink); color-scheme:light; font:14px/1.6 "Monitor Inter","PingFang SC","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+.page { min-height:100dvh; min-width:320px; background:var(--paper); color:var(--ink); color-scheme:light; font:14px/1.6 "Monitor Inter","PingFang SC","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
 .page *, .page *::before, .page *::after { box-sizing:border-box; }
 .page button,.page select { font:inherit; color:inherit; }
 .page button,.page a,.page select { -webkit-tap-highlight-color:transparent; }
@@ -21,7 +21,7 @@
 .identity { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--muted); }
 .privateLabel { font-size:9px; letter-spacing:.12em; margin-left:14px; white-space:nowrap; }
 .iconButton { display:grid; place-items:center; width:32px; height:32px; padding:0; border:0; background:transparent; }
-.iconButton:hover { background:var(--grid); }
+.iconButton:hover { background:var(--track); }
 .heading { display:flex; justify-content:space-between; align-items:flex-end; padding:55px 0 43px; gap:32px; }
 .eyebrow { font-size:10px; font-weight:600; letter-spacing:.13em; margin-bottom:13px!important; }
 .eyebrow>span { color:var(--soft); margin:0 8px; }
@@ -56,7 +56,7 @@
 .statTop { display:flex; align-items:center; gap:9px; }
 .statTop>span { font-size:10px; color:var(--soft); }
 .stat h2 { font-size:11px; font-weight:600; }
-.statValue { font-size:clamp(30px,3.3vw,49px); font-weight:800; letter-spacing:-.055em; font-variant-numeric:tabular-nums; line-height:1.35; margin-top:12px!important; }
+.statValue { font-size:clamp(30px,3.3vw,49px); font-weight:800; letter-spacing:-.055em; font-variant-numeric:tabular-nums; line-height:1.35; margin-top:12px!important; color:var(--data); }
 .statValue>small { margin-left:8px; font-size:11px; font-weight:500; letter-spacing:0; }
 .statNote { font-size:10.5px; color:var(--muted); margin-top:5px!important; }
 .signalNote { font-size:10px; color:var(--muted); padding-bottom:28px; }
@@ -100,8 +100,7 @@
 .chartHeading>span { font-size:10px; color:var(--muted); white-space:nowrap; }
 .legend { display:flex; flex-wrap:wrap; gap:15px; margin:13px 0 8px; min-height:17px; }
 .legend>span { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:9px; }
-.legend i { display:inline-block; width:14px; height:2px; }
-.legend i[data-dashed="true"] { width:11px; outline:1px solid var(--paper); outline-offset:-1px; }
+.legend svg { display:block; flex-shrink:0; overflow:visible; }
 .historySvg { width:100%; height:auto; display:block; touch-action:pan-y; }
 .chartReading { display:flex; flex-wrap:wrap; gap:7px 17px; min-height:43px; padding-top:7px; }
 .chartReading>time { width:100%; font-size:9px; color:var(--muted); font-variant-numeric:tabular-nums; }

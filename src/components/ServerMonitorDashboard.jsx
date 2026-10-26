@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, CircleAlert, LoaderCircle, LockKeyhole, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
 import { CpuGauge, HistoryChart, ResourceTicks } from "./MonitorCharts.jsx";
 import { createMonitorPoller } from "./monitorPolling.js";
+import { MONITOR_PALETTE_CSS } from "./monitorPalette.js";
 import { MONITOR_RANGES, MONITOR_SERVICES, MONITOR_VIEWS, SIGNAL_METRICS, bytesLabel, effectiveContainer, effectiveService, finite, monitorFreshness, monitorTime, monitorViewHash, numberLabel, parseMonitorView, signalMessage, uptimeLabel } from "./monitorView.js";
 import styles from "./ServerMonitorDashboard.module.css";
 
@@ -97,7 +98,7 @@ export function ServerMonitorDashboard() {
   const activeFormat = useCallback((value) => numberLabel(value, activeMetric.digits), [activeMetric]);
   const authPending = !session && !sessionError, period = MONITOR_RANGES.find((item) => item.id === selection.range)?.label;
 
-  return <div className={styles.page}>
+  return <div className={styles.page} style={MONITOR_PALETTE_CSS} data-palette="porcelain">
     <a href="#monitor-main" className={styles.skip} onClick={(event) => { event.preventDefault(); document.getElementById("monitor-main")?.focus(); }}>跳到监控内容</a>
     <div className={styles.wrap}>
       <header className={styles.topbar}><Link href="/" className={styles.brand} aria-label="返回个人网站"><span className={styles.brandMark}>H.</span><span>HUANG<span className={styles.brandDivider}>/</span>服务监控</span></Link><div className={styles.topActions}>{session?.authenticated && <><span className={styles.identity}><ShieldCheck size={13} aria-hidden="true" />{session.email}</span><button type="button" onClick={retry} disabled={loggingOut} className={styles.iconButton} title="重新读取监控数据" aria-label="重新读取监控数据"><RefreshCw size={16} aria-hidden="true" /></button><button type="button" onClick={logout} disabled={loggingOut} className={styles.iconButton} title="退出监控" aria-label="退出监控">{loggingOut ? <LoaderCircle size={16} className={styles.spin} /> : <LogOut size={16} aria-hidden="true" />}</button></>}<span className={styles.privateLabel}>PRIVATE / 私有</span></div></header>
