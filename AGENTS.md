@@ -13,9 +13,9 @@ For every new website code or content task in this repository:
 - Run `npm run build` and validate affected behavior. The Dockerfile also runs `node --test tests/home-render*.test.mjs tests/monitor*.test.mjs tests/studyAgentDocs.test.mjs`; reuse those checks rather than assuming a nonexistent `npm test` or lint script.
 - UI changes require desktop/narrow layout, navigation, interaction and browser-error checks. APIs, auth, database and SSE changes require success and rejection paths. Preserve resource cleanup, reduced-motion support and scene loading failure behavior.
 - Keep database access, tokens and private configuration on the server; never commit credentials or real environment files.
-- Ready PRs and new commits receive `pr-ci` and `ai-review`; main changes invalidate old combinations. Draft PRs do not run. Review priorities are in `REVIEW.md`.
+- Ready PRs and new commits first receive `ai-review`. Only a successful review starts `pr-ci`, which merges that PR with the current main in a temporary isolated checkout. This merge is never pushed to the feature branch or main. Main changes invalidate old combinations and restart review. Draft PRs do not run. Review priorities are in `REVIEW.md`.
 - The private shared gate is maintained under Study Agent's `deploy/pr-gate/`. PR workers receive no production or GitHub App credentials.
 - Once both current checks pass, the repository owner comments `/merge`. The gate revalidates head/main and executes one SHA-bound squash merge. A development agent must not post `/merge` without explicit authorization for that particular PR.
-- The owner can use `/recheck`, or `/review-dismiss <full-head-SHA> <finding-ID> <specific reason>` to record a false positive for that exact commit.
+- The owner can use `/recheck` to restart from AI review, or `/review-dismiss <full-head-SHA> <finding-ID> <specific reason>` to record a false positive for that exact commit. Dismissing the last blocking finding starts CI once; it never bypasses CI or merges automatically.
 - This is a process gate on GitHub Free private repositories; the manual merge button remains available. Do not use it to bypass failed or missing checks.
 - Preserve main-only image publication, deployment, health checks and rollback. PR CI must never publish images or deploy.
