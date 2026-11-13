@@ -19,7 +19,7 @@ export function Projects() {
           return (
             <ProjectLink className={styles.archiveProjectCard} href={project.links[0].href} key={project.title}>
               <div className={styles.archiveProjectIllustration}>
-                <img alt={project.imageAlt} src={project.image} />
+                <img alt={project.imageAlt} src={project.image} style={project.imageFit ? { objectFit: project.imageFit } : undefined} />
               </div>
               <div className={styles.archiveProjectContent}>
                 <div className={styles.projectMeta}>

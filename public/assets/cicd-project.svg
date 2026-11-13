@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="620" viewBox="0 0 720 620" role="img" aria-labelledby="title description">
+  <title id="title">CI/CD 自动化交付部署概览</title>
+  <desc id="description">GitHub 顶部分出 Codex 审查与本地 Jenkins 两条路径，Windows 内嵌套 WSL 构建环境，下方云服务器接收发布产物。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="m1 1 5 3-5 3" fill="none" stroke="#8d9195" stroke-width="1.2"/></marker>
+    <style>text { font-family: "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #0058a8; text-anchor: middle; font-size: 20px; font-weight: 600; }.group-title { fill: #343a40; font-size: 17px; font-weight: 400; }.node { fill: #e5f3ff; stroke: #d6dfe6; stroke-width: 1.4; }.edge { fill: none; stroke: #8d9195; stroke-width: 1.4; marker-end: url(#arrow); }</style>
+  </defs>
+  <path fill="#fff" d="M0 0h720v620H0z"/>
+  <rect x="292" y="181" width="386" height="297" fill="none" stroke="#e5e7eb"/>
+  <rect x="370" y="224" width="286" height="245" fill="none" stroke="#e5e7eb"/>
+  <path class="edge" d="M444 112V145H145V196"/>
+  <path class="edge" d="M517 112V251"/>
+  <path class="edge" d="M517 313V333"/>
+  <path class="edge" d="M517 395V402"/>
+  <path class="edge" d="M517 455V516"/>
+  <rect class="node" x="344" y="44" width="302" height="68" rx="21"/>
+  <text x="495" y="85">GitHub · 两个仓库</text>
+  <rect class="node" x="40" y="206" width="210" height="68" rx="21"/>
+  <text x="145" y="247">Codex 审查</text>
+  <rect x="370" y="188" width="230" height="26" fill="#fff"/>
+  <text class="group-title" x="485" y="208">Windows 电脑</text>
+  <rect x="405" y="227" width="216" height="21" fill="#fff"/>
+  <text class="group-title" x="513" y="244">WSL Docker Engine</text>
+  <rect class="node" x="394" y="259" width="238" height="54" rx="18"/>
+  <text x="513" y="293">Jenkins</text>
+  <rect class="node" x="394" y="343" width="238" height="52" rx="18"/>
+  <text x="513" y="376" font-size="18">按需 CI / 构建容器</text>
+  <rect class="node" x="394" y="412" width="238" height="43" rx="16"/>
+  <text x="513" y="440" font-size="18">Harbor 镜像仓库</text>
+  <rect class="node" x="40" y="526" width="638" height="64" rx="21"/>
+  <text x="359" y="566">云服务器 · 主页 / 白板 / Agent / 安装包</text>
+</svg>
