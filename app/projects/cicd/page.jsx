@@ -73,21 +73,21 @@ export default function CicdProjectPage() {
           </p>
 
           <figure aria-describedby="diagram-caption" className={styles.diagram}>
-            <div aria-label="部署结构图，可横向滚动查看" className={styles.diagramViewport} role="region" tabIndex={0}>
-              <img
-                alt="CI/CD 部署结构：GitHub PR 分别进入 OpenAI 的 Codex 审查和本地 WSL 的 Jenkins 隔离测试；main 发布任务构建镜像到 Harbor，云服务器拉取镜像，并通过 SSH 接收后端与安装包。云端 Nginx 连接主页、白板、私有 Agent 和下载目录。"
-                className={styles.diagramImage}
-                height={1018}
-                src="/assets/cicd-deployment.svg"
-                width={1302}
-              />
-            </div>
             <figcaption id="diagram-caption">
               <span>部署结构 · 根据 2026 年 11 月 13 日的部署核对记录整理。窄屏可横向滚动。</span>
               <a href="/assets/cicd-deployment.svg" rel="noopener noreferrer" target="_blank">
                 打开完整图 <ArrowUpRight aria-hidden="true" size={15} />
               </a>
             </figcaption>
+            <div aria-label="部署结构图，可横向滚动查看" className={styles.diagramViewport} role="region" tabIndex={0}>
+              <img
+                alt="纵向 CI/CD 部署结构：顶部 GitHub 分别连接左侧 OpenAI Codex 审查和 Windows 电脑内的 Jenkins。Windows 内嵌套 WSL Docker Engine，其中包含 Jenkins、按需 CI / 构建容器与 Harbor；桌面客户端位于 WSL 外。下方云服务器接收镜像、后端和安装包，Nginx 连接网站、私有 Agent 与下载目录。"
+                className={styles.diagramImage}
+                height={1510}
+                src="/assets/cicd-deployment.svg"
+                width={1240}
+              />
+            </div>
           </figure>
 
           <dl className={styles.locations}>

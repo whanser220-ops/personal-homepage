@@ -121,6 +121,7 @@
   flex-wrap: wrap;
   gap: 12px 24px;
   padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
   color: var(--muted-foreground);
   font-size: 0.8rem;
 }
