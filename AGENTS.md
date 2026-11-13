@@ -21,5 +21,6 @@ For every new website code or content task in this repository:
 
 ## Code Review Rules
 
+- 审查意见的标题、问题说明和总结使用简体中文；代码、命令、文件路径、标识符和严重性标记保留原文。
 - Read `REVIEW.md` for repository-specific constraints. Report introduced defects with a concrete trigger, current file and line, and call-path or data-flow evidence. Distinguish existing behavior and style advice, and avoid duplicate root causes.
 - Prioritize route and article consistency, private monitor authentication, aggregation units and windows, SSE and Three.js cleanup, narrow layouts, reduced motion, and tested-image rollback.
