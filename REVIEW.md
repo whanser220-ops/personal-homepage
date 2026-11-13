@@ -7,4 +7,4 @@ Start with the number of confirmed findings; explicitly say when there are none.
 - SSE subscriptions, event listeners, timers and Three.js resources must be cleaned up. Loading failure, first-frame fallback, narrow layouts and reduced-motion behavior must remain usable.
 - Monitor aggregation and query changes must preserve units, time windows, access filtering and empty/error behavior; use the existing monitor fixtures as evidence.
 - Deployment must use the tested image and manifest, retain previous-image rollback and validate health. PR CI must not receive publication or deployment credentials.
-- Shared PR-gate integration must not let outdated checks, untrusted findings or unauthorized comments authorize a merge.
+- PR CI must use the administrator-pinned pipeline and worker image, preserve isolation, and report the actual tested merge revision. Review comments and CI do not authorize an automatic merge.
