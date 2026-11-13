@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="620" viewBox="0 0 720 620" role="img" aria-labelledby="title desc">
+  <title id="title">CI/CD 自动化交付</title>
+  <desc id="desc">GitHub PR 分别进入 Codex 审查和 Jenkins 测试，main 的更新在 WSL 构建，经 Harbor 和 SSH 发布到云端。</desc>
+  <defs>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" stroke="#1e3a5f" stroke-opacity=".06"/></pattern>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="m1 1 5 3-5 3" fill="none" stroke="#1e3a5f" stroke-width="1.5"/></marker>
+  </defs>
+  <path fill="#fff" d="M0 0h720v620H0z"/>
+  <path fill="url(#grid)" d="M0 0h720v620H0z"/>
+  <g fill="#64748b" font-family="'Microsoft YaHei',sans-serif" font-size="15" letter-spacing="3"><text x="52" y="62">CODE → CHECK → SHIP</text></g>
+  <g fill="#1e3a5f" font-family="'Microsoft YaHei',sans-serif">
+    <text x="52" y="114" font-size="36" font-weight="700">一次提交，持续交付。</text>
+    <rect x="52" y="157" width="616" height="76" rx="8" fill="#dbeafe" stroke="#1e3a5f" stroke-width="2"/>
+    <text x="360" y="202" text-anchor="middle" font-size="25" font-weight="700">GitHub · PR / main</text>
+    <g fill="none" stroke="#1e3a5f" stroke-width="2" marker-end="url(#arrow)"><path d="M226 234v47"/><path d="M494 234v47"/></g>
+    <rect x="52" y="291" width="294" height="92" rx="8" fill="#ddd6fe" stroke="#6d28d9" stroke-width="2"/>
+    <text x="199" y="329" text-anchor="middle" font-size="21" font-weight="700">Codex Code Review</text>
+    <text x="199" y="359" text-anchor="middle" font-size="17" fill="#64748b">独立审查 · 意见回到 PR</text>
+    <rect x="374" y="291" width="294" height="92" rx="8" fill="#dbeafe" stroke="#1e3a5f" stroke-width="2"/>
+    <text x="521" y="329" text-anchor="middle" font-size="24" font-weight="700">Jenkins · WSL</text>
+    <text x="521" y="359" text-anchor="middle" font-size="17" fill="#64748b">PR 测试 / main 构建发布</text>
+    <path d="M521 385v61" fill="none" stroke="#1e3a5f" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="505" y="422" text-anchor="end" font-size="17" fill="#64748b">Harbor 镜像 / SSH 产物</text>
+    <rect x="52" y="458" width="616" height="95" rx="8" fill="#a7f3d0" stroke="#047857" stroke-width="2"/>
+    <text x="80" y="496" font-size="25" font-weight="700">云服务器</text>
+    <text x="80" y="530" font-size="18" fill="#374151">Nginx → 主页 · 白板 · Agent · 安装包</text>
+    <text x="52" y="590" font-size="15" fill="#64748b">本地负责构建，云端负责运行。</text>
+  </g>
+</svg>
