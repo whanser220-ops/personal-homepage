@@ -159,11 +159,11 @@ export const projects = [
     year: "2026",
     status: "持续运行",
     subtitle: "Code review / Build / Deploy",
-    summary: "连接 GitHub、Codex Code Review 与 Jenkins：PR 独立审查和测试，合入 main 后构建发布。本地 WSL 承担构建，云服务器运行业务。",
+    summary: "按类别梳理 CI 检查与测试，展示从 PR 审查、测试到 main 发布的交付过程，以及本地 WSL 构建、云端运行的部署结构。",
     image: "/assets/cicd-project.svg",
     imageFit: "contain",
     imageAlt: "GitHub 提交经过独立审查和 Jenkins 测试，由本地 WSL 构建并发布到云服务器的示意图",
     tags: ["Jenkins", "Docker", "Harbor", "Codex Code Review"],
-    links: [{ href: "/projects/cicd", label: "查看交付流程与部署结构" }],
+    links: [{ href: "/projects/cicd", label: "查看测试分类与交付结构" }],
   },
 ];

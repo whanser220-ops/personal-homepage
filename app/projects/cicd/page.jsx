@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { ArrowDown, ArrowLeft, ArrowUpRight, GitPullRequest, PackageCheck, Server } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUpRight, GitPullRequest, ListChecks, PackageCheck, Server } from "lucide-react";
 
+import { CiTestCategories } from "../../../src/components/CiTestCategories.jsx";
 import { IllustratedPageFrame } from "../../../src/components/IllustratedPageFrame.jsx";
 import styles from "./page.module.css";
 
 export const metadata = {
-  title: "CI/CD 自动化交付 · 部署结构 | Huang",
-  description: "GitHub、Codex Code Review、Jenkins 与 Harbor 组成的自动化交付系统：PR 隔离测试、本地 WSL 构建和云端部署结构。",
+  title: "CI/CD 自动化交付 · 测试分类与部署结构 | Huang",
+  description: "按类别查看 CI 检查与测试的目的、项目例子和配置范围，了解 GitHub、Codex Code Review、Jenkins 与 Harbor 组成的交付流程和部署结构。",
 };
 
 const locations = [
@@ -55,15 +56,30 @@ export default function CicdProjectPage() {
             Jenkins 独立测试并调度发布，Harbor 保存镜像。构建放在本地 WSL，业务运行在云服务器。
           </p>
           <nav aria-label="项目内容" className={styles.sectionLinks}>
+            <a href="#ci-tests">测试分类 <ArrowDown aria-hidden="true" size={15} /></a>
             <a href="#deployment">部署结构 <ArrowDown aria-hidden="true" size={15} /></a>
             <a href="#delivery">交付流程 <ArrowDown aria-hidden="true" size={15} /></a>
           </nav>
         </header>
 
+        <section aria-labelledby="ci-tests" className={styles.section}>
+          <div className={styles.sectionHeading}>
+            <div>
+              <p className={styles.eyebrow}>01 / CI CHECKS</p>
+              <h2 id="ci-tests">CI 检查与测试分类</h2>
+            </div>
+            <ListChecks aria-hidden="true" size={28} />
+          </div>
+          <p className={styles.sectionIntro}>
+            以 Study Agent 的 Jenkins 配置为例，将检查分成三个验证层次。每一类分别说明要验证什么、项目中怎样检查，以及配置在哪个阶段执行。
+          </p>
+          <CiTestCategories />
+        </section>
+
         <section aria-labelledby="deployment" className={styles.section}>
           <div className={styles.sectionHeading}>
             <div>
-              <p className={styles.eyebrow}>01 / DEPLOYMENT</p>
+              <p className={styles.eyebrow}>02 / DEPLOYMENT</p>
               <h2 id="deployment">三处环境，各自承担一段工作</h2>
             </div>
             <Server aria-hidden="true" size={28} />
@@ -107,7 +123,7 @@ export default function CicdProjectPage() {
         <section aria-labelledby="delivery" className={styles.section}>
           <div className={styles.sectionHeading}>
             <div>
-              <p className={styles.eyebrow}>02 / DELIVERY</p>
+              <p className={styles.eyebrow}>03 / DELIVERY</p>
               <h2 id="delivery">PR 检查与 main 发布</h2>
             </div>
             <GitPullRequest aria-hidden="true" size={28} />
@@ -146,7 +162,7 @@ export default function CicdProjectPage() {
         <section aria-labelledby="decisions" className={`${styles.section} ${styles.decisions}`}>
           <div className={styles.sectionHeading}>
             <div>
-              <p className={styles.eyebrow}>03 / OPERATING NOTES</p>
+              <p className={styles.eyebrow}>04 / OPERATING NOTES</p>
               <h2 id="decisions">这套结构的取舍</h2>
             </div>
             <PackageCheck aria-hidden="true" size={28} />
