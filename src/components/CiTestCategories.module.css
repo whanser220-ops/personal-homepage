@@ -1,0 +1,242 @@
+.map {
+  margin-top: 24px;
+}
+
+.scope {
+  margin: 0 0 28px;
+  color: var(--muted-foreground);
+  font-size: 0.83rem;
+}
+
+.groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.group {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: auto 1fr;
+  gap: 20px;
+}
+
+.groupHeader {
+  display: flex;
+  min-height: 78px;
+  align-items: center;
+  gap: 12px;
+}
+
+.groupIcon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.groupQuestion {
+  margin: 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  line-height: 1.65;
+}
+
+.testStack {
+  display: grid;
+  position: relative;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 0 0 0 20px;
+  padding: 0 0 0 18px;
+  border-left: 1px solid var(--border);
+  list-style: none;
+}
+
+.testNode {
+  position: relative;
+  min-width: 0;
+}
+
+.testNode::before {
+  position: absolute;
+  top: 32px;
+  left: -18px;
+  width: 18px;
+  height: 1px;
+  background: var(--border);
+  content: "";
+}
+
+.testCard {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+}
+
+.stage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.exampleLabel {
+  color: var(--muted-foreground);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.testCard .example {
+  margin-top: 7px;
+  font-size: 0.87rem;
+  line-height: 1.85;
+}
+
+.testFooter {
+  margin-top: auto;
+}
+
+.testFooter code {
+  overflow-wrap: anywhere;
+  color: var(--muted-foreground);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.74rem;
+  line-height: 1.7;
+}
+
+.selectionNote {
+  margin: 24px 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.84rem;
+}
+
+.gaps {
+  margin-top: 34px;
+  padding-top: 26px;
+  border-top: 1px solid var(--border);
+}
+
+.gapsHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.gapsHeading h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.gapList {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+  margin: 22px 0 0;
+}
+
+.gapList dt {
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.gapList dd {
+  margin: 8px 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.86rem;
+}
+
+.gapList p {
+  margin: 0;
+  line-height: 1.85;
+}
+
+.gapList .gapQuestion {
+  margin-bottom: 8px;
+  color: var(--foreground);
+}
+
+.evidence {
+  margin-top: 30px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.evidence summary {
+  width: fit-content;
+  color: var(--foreground);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.evidence summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 5px;
+}
+
+.evidence > div {
+  max-width: 850px;
+  margin-top: 16px;
+}
+
+.evidence ul {
+  margin: 10px 0;
+  padding-left: 22px;
+}
+
+.evidence p {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .groups {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+
+  .groupHeader {
+    min-height: 0;
+  }
+
+  .testStack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto;
+  }
+
+  .gapList {
+    gap: 22px;
+  }
+}
+
+@media (max-width: 600px) {
+  .testStack,
+  .gapList {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .testStack {
+    margin-left: 12px;
+    padding-left: 14px;
+  }
+
+  .testNode::before {
+    left: -14px;
+    width: 14px;
+  }
+}
